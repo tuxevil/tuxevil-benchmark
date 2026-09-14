@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ModelProvider, TestRun } from "@/lib/contracts";
 import { useTheme } from "@/components/theme-provider";
+import { PROJECT_BRAND } from "@/lib/brand";
 
 export type ActiveTab = "analytics" | "suites" | "monitor" | "settings" | "wizard" | "history";
 
@@ -43,9 +44,9 @@ export function TopbarNav({
     <header className="topbar-nav">
       <div className="topbar-left">
         <Link href="/" className="brand-link" onClick={() => handleNav("analytics")}>
-          <div className="brand-mark">SLM</div>
+          <div className="brand-mark">{PROJECT_BRAND.mark}</div>
           <div className="brand-title-group">
-            <span className="brand-title">SLMarena</span>
+            <span className="brand-title">{PROJECT_BRAND.displayName}</span>
             <span className="brand-badge">v2.0</span>
           </div>
         </Link>

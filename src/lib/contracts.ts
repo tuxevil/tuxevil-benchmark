@@ -191,6 +191,12 @@ export type TurnResult = Telemetry & {
   thinking: string | null;
   finishReason?: string | null;
   truncated?: boolean;
+  /** Raw SSE wire capture and parsed counters. Only populated when debugWireCapture=true. */
+  wireDiagnostics?: import("@/lib/providers/openai-client").WireDiagnostics | null;
+  /** Protocol-level anomaly flags derived from the SSE stream. Always populated for OpenAI-compatible providers. */
+  protocolDiagnostics?: import("@/lib/providers/openai-client").ProtocolDiagnostics | null;
+  /** Exact request body sent to the provider (no API key). Populated for OpenAI-compatible providers. */
+  requestBody?: Record<string, unknown> | null;
 };
 
 export type Evaluation = {
@@ -326,6 +332,7 @@ export type SecurityRadarMetrics = {
 
 export type LeaderboardModelRow = {
   modelName: string;
+  provider?: ModelProvider;
   reasoningEffort?: ReasoningEffort;
   paramSizeLabel: string;
   paramSizeValue: number;

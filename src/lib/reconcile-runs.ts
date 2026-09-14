@@ -4,9 +4,10 @@ import { enqueueBenchmark } from "@/lib/benchmark-queue";
 import { benchmarkStore } from "@/lib/benchmark-store";
 import { loadPersistedState } from "@/lib/database";
 import { redisConnection } from "@/lib/redis-connection";
+import { LEGACY_QUEUE_NAME, LEGACY_RECOVERY_KEY_PREFIX } from "@/lib/legacy-identifiers";
 
-const QUEUE_NAME = "slmarena-benchmarks";
-const RECOVERY_KEY_PREFIX = "slmarena:recovery:";
+const QUEUE_NAME = LEGACY_QUEUE_NAME;
+const RECOVERY_KEY_PREFIX = LEGACY_RECOVERY_KEY_PREFIX;
 const RECOVERY_TTL_SECONDS = 7 * 24 * 60 * 60;
 const MAX_RECOVERIES = 3;
 const STALLED_ERROR_MESSAGE = "STALLED: worker interrupted after repeated recoveries";

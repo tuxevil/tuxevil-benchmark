@@ -1,6 +1,7 @@
 "use client";
 
 import type { PublicSnapshot } from "@/types/snapshot";
+import { PROJECT_BRAND } from "@/lib/brand";
 
 interface HeaderProps {
   snapshot: PublicSnapshot;
@@ -29,11 +30,11 @@ export function Header({ snapshot }: HeaderProps) {
       <div className="hero-brand-row">
         <div className="hero-brand">
           <span className="hero-logo" aria-hidden="true">
-            SLM
+            {PROJECT_BRAND.mark}
           </span>
           <div>
             <h1 className="hero-title">
-              SLMarena <span className="hero-sub">— Public Leaderboard</span>
+              {PROJECT_BRAND.displayName} <span className="hero-sub">— Public Leaderboard</span>
             </h1>
             <p className="hero-tagline">
               Local small language models benchmarked under adversarial scenarios, judged by a
@@ -49,7 +50,7 @@ export function Header({ snapshot }: HeaderProps) {
       <div className="hero-actions">
         <a
           className="btn-export btn-repo"
-          href="https://github.com/tuxevil/SLMarena"
+          href={PROJECT_BRAND.repositoryUrl}
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -85,7 +86,7 @@ export function Header({ snapshot }: HeaderProps) {
 
         <div className="kpi-card">
           <div className="kpi-header">
-            <span className="kpi-title">Top Overall SLM</span>
+            <span className="kpi-title">Top Overall Model</span>
             <span className="kpi-badge green">🏆 Arena</span>
           </div>
           <div className="kpi-value-row kpi-model">

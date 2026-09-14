@@ -1,6 +1,6 @@
-# SLMarena landing — static export built in Docker, served by nginx.
+# tuxevil Benchmark landing — static export built in Docker, served by nginx.
 # NOTE: `next build` here must NOT run `landing:export`: the public snapshot
-# is generated locally from compare.db and committed to
+# is generated locally from the benchmark database and committed to
 # landing/public/data/public-snapshot.json.
 
 # --- Stage 1: static export ---

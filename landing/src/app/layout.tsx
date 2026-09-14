@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
+import { PROJECT_BRAND } from "@/lib/brand";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SLMarena — Public Leaderboard",
+  title: `${PROJECT_BRAND.displayName} — Public Leaderboard`,
   description:
-    "Public leaderboard of local small language models benchmarked under adversarial, SecOps and general scenarios.",
+    "Public leaderboard from tuxevil Benchmark: local small language models benchmarked under adversarial, SecOps and general scenarios.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

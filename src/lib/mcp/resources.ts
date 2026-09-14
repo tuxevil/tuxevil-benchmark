@@ -1,18 +1,24 @@
-import { slmarenaFetch } from "./http-client";
+import { PROJECT_BRAND } from "@/lib/brand";
+import { tuxevilBenchmarkFetch } from "./http-client";
 
-export async function readLeaderboardResource(): Promise<{ uri: string; mimeType: string; text: string }> {
-  const data = await slmarenaFetch<unknown>("/api/leaderboard?category=ALL");
+export const benchmarkResourceUris = {
+  leaderboard: `${PROJECT_BRAND.mcpResourceScheme}://leaderboard`,
+  scenarios: `${PROJECT_BRAND.mcpResourceScheme}://scenarios`,
+} as const;
+
+export async function readLeaderboardResource(uri: string = benchmarkResourceUris.leaderboard): Promise<{ uri: string; mimeType: string; text: string }> {
+  const data = await tuxevilBenchmarkFetch<unknown>("/api/leaderboard?category=ALL");
   return {
-    uri: "slmarena://leaderboard",
+    uri,
     mimeType: "application/json",
     text: JSON.stringify(data, null, 2),
   };
 }
 
-export async function readScenariosResource(): Promise<{ uri: string; mimeType: string; text: string }> {
-  const data = await slmarenaFetch<unknown>("/api/scenarios");
+export async function readScenariosResource(uri: string = benchmarkResourceUris.scenarios): Promise<{ uri: string; mimeType: string; text: string }> {
+  const data = await tuxevilBenchmarkFetch<unknown>("/api/scenarios");
   return {
-    uri: "slmarena://scenarios",
+    uri,
     mimeType: "application/json",
     text: JSON.stringify(data, null, 2),
   };

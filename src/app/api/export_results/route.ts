@@ -89,7 +89,7 @@ export async function GET(request: Request) {
     });
 
     if (format === "csv") {
-      const filename = `slmarena_results_${new Date().toISOString().slice(0, 10)}.csv`;
+      const filename = `tuxevil-benchmark-results_${new Date().toISOString().slice(0, 10)}.csv`;
       return new NextResponse("\uFEFF" + toCsv(rows), {
         status: 200,
         headers: {

@@ -37,6 +37,7 @@ import {
 import { evaluateModelResponse, resolveEvaluationMode } from "@/lib/frontier-evaluator";
 import { retryTransient } from "@/lib/retry";
 import { publishRunEvent } from "@/lib/run-events";
+import { LEGACY_SECURITY_SEED_NAMESPACE } from "@/lib/legacy-identifiers";
 
 type RunListener = (event: RunEvent) => void;
 
@@ -59,18 +60,18 @@ type StoreState = {
 };
 
 const globalStore = globalThis as typeof globalThis & {
-  __slmarenaStore?: StoreState;
+  __tuxevilBenchmarkStore?: StoreState;
 };
 
 const state: StoreState =
-  globalStore.__slmarenaStore ?? {
+  globalStore.__tuxevilBenchmarkStore ?? {
     runs: new Map(),
     scenarios: new Map(),
     hydrated: false,
     settings: defaultSettings(),
   };
 
-globalStore.__slmarenaStore = state;
+globalStore.__tuxevilBenchmarkStore = state;
 
 export const benchmarkStore = {
   createRun(input: CreateRunInput): TestRun {
@@ -243,7 +244,7 @@ export const benchmarkStore = {
       await appendEvaluationHistory(resultId, evaluation, evaluatorId ?? null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error("[slmarena] [Re-evaluate Failed]", { resultId, error: message });
+      console.error("[tuxevil-benchmark] [Re-evaluate Failed]", { resultId, error: message });
       benchmarkStore.updateResult(runId, resultId, {
         evalStatus: "FAILED",
         errorMessage: `Re-evaluation failed: ${message}`,
@@ -748,7 +749,7 @@ async function seedSecurityScenarios() {
 }
 
 function seedScenarioId(attackType: SecurityAttackType) {
-  const hash = createHash("sha256").update(`slmarena:security:${attackType}`).digest("hex");
+  const hash = createHash("sha256").update(`${LEGACY_SECURITY_SEED_NAMESPACE}:${attackType}`).digest("hex");
   const hex = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
   return hex;
 }
@@ -770,7 +771,7 @@ function emit(run: StoredRun, type: string) {
   if (type !== "model.token") {
     queuePersistedRun(snapshot(run, { includeRawJson: true }), type, config);
   }
-  void publishRunEvent(event).catch((error) => console.error("[slmarena] run event publish failed", error));
+  void publishRunEvent(event).catch((error) => console.error("[tuxevil-benchmark] run event publish failed", error));
   for (const listener of run.listeners) listener(event);
 }
 

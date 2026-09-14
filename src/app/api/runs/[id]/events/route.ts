@@ -61,7 +61,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           if (snapshot) send({ id: 0, type: "run.snapshot", run: snapshot });
         }
       })().catch((error) => {
-        if (!closed) console.error("[slmarena] SSE event setup failed", error);
+        if (!closed) console.error("[tuxevil-benchmark] SSE event setup failed", error);
       });
       if (process.env.REDIS_URL) {
         const poll = async () => {

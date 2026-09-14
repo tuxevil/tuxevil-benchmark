@@ -62,7 +62,7 @@ export function TestSuitesMatrix({
     numCtx: 8192,
     topP: 0.9,
     repeatPenalty: 1.1,
-    numPredict: 512,
+    numPredict: 2048,
     reasoningEffort: "off",
   });
   const [samplesPerModel, setSamplesPerModel] = useState(2);
@@ -716,6 +716,22 @@ export function TestSuitesMatrix({
                   <option value={8192}>8192 (8k)</option>
                   <option value={16384}>16384 (16k)</option>
                   <option value={32768}>32768 (32k)</option>
+                </select>
+              </div>
+
+              <div className="p-item">
+                <label>Max Tokens (numPredict)</label>
+                <select
+                  value={parameters.numPredict}
+                  onChange={(e) =>
+                    setParameters({ ...parameters, numPredict: Number(e.target.value) })
+                  }
+                >
+                  <option value={512}>512 (fast / no CoT)</option>
+                  <option value={1024}>1024</option>
+                  <option value={2048}>2048 (default)</option>
+                  <option value={4096}>4096 (CoT recommended)</option>
+                  <option value={8192}>8192 (heavy CoT)</option>
                 </select>
               </div>
 

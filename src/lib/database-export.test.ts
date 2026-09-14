@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-process.env.SQLITE_PATH = join(tmpdir(), `slmarena-export-test-${process.pid}-${crypto.randomUUID()}.db`);
+process.env.SQLITE_PATH = join(tmpdir(), `tuxevil-benchmark-export-test-${process.pid}-${crypto.randomUUID()}.db`);
 
 import { exportResults } from "./database";
 import { queuePersistedRun, waitForPersistedRun } from "./database";

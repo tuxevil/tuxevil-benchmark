@@ -1,6 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useSyncExternalStore, useState } from "react";
+import { PROJECT_BRAND } from "@/lib/brand";
+import { LEGACY_THEME_STORAGE_KEY } from "@/lib/legacy-identifiers";
 
 export type Theme = "light" | "dark" | "system";
 
@@ -18,7 +20,11 @@ function subscribe(callback: () => void) {
 }
 
 function getThemeSnapshot(): Theme {
-  return (localStorage.getItem("slmarena-theme") as Theme) || "system";
+  return (
+    (localStorage.getItem(PROJECT_BRAND.themeStorageKey) as Theme) ||
+    (localStorage.getItem(LEGACY_THEME_STORAGE_KEY) as Theme) ||
+    "system"
+  );
 }
 
 function getServerThemeSnapshot(): Theme {
@@ -58,7 +64,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = (newTheme: Theme) => {
     setInternalTheme(newTheme);
-    localStorage.setItem("slmarena-theme", newTheme);
+    localStorage.setItem(PROJECT_BRAND.themeStorageKey, newTheme);
   };
 
   return (

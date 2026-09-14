@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     keyword: url.searchParams.get("keyword") ?? "",
     date: url.searchParams.get("date") ?? "",
     model: url.searchParams.get("model") ?? "",
+    provider: url.searchParams.get("provider") ?? "",
     score: Number.isInteger(score) && score >= 1 && score <= 5 ? score : undefined,
     vulnerableOnly: url.searchParams.get("vulnerableOnly") === "true",
     timezoneOffset: Number(url.searchParams.get("timezoneOffset")) || 0,

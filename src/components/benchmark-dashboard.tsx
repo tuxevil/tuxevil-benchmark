@@ -88,7 +88,7 @@ export function BenchmarkDashboard() {
   const [historyModel, setHistoryModel] = useState("");
   const [historyVulnerableOnly, setHistoryVulnerableOnly] = useState(false);
   const [selectedRunForComparison, setSelectedRunForComparison] = useState<TestRun | null>(null);
-  const [selectedModelForProfile, setSelectedModelForProfile] = useState<string | null>(null);
+  const [selectedModelForProfile, setSelectedModelForProfile] = useState<{ name: string; provider?: string } | null>(null);
   const [modelProfileRuns, setModelProfileRuns] = useState<TestRun[]>([]);
   const [isLoadingProfileRuns, setIsLoadingProfileRuns] = useState(false);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
@@ -98,7 +98,10 @@ export function BenchmarkDashboard() {
     if (!selectedModelForProfile) return;
 
     let cancelled = false;
-    fetch(`/api/runs?pageSize=100&model=${encodeURIComponent(selectedModelForProfile)}`)
+    const providerQuery = selectedModelForProfile.provider
+      ? `&provider=${encodeURIComponent(selectedModelForProfile.provider)}`
+      : "";
+    fetch(`/api/runs?pageSize=100&model=${encodeURIComponent(selectedModelForProfile.name)}${providerQuery}`)
       .then((res) => res.json() as Promise<{ runs?: TestRun[] }>)
       .then((data) => {
         if (cancelled) return;
@@ -552,13 +555,13 @@ export function BenchmarkDashboard() {
               weights={weights}
               onWeightChange={(key, val) => setWeights((prev) => ({ ...prev, [key]: val }))}
               selectedRadarModels={selectedRadarModels}
-              onToggleRadarModel={(modelName) =>
+               onToggleRadarModel={(modelName) =>
                 setSelectedRadarModels((prev) =>
                   prev.includes(modelName) ? prev.filter((m) => m !== modelName) : [...prev, modelName]
                 )
               }
-              onSelectModelProfile={(modelName) => {
-                setSelectedModelForProfile(modelName);
+               onSelectModelProfile={(modelName, provider) => {
+                 setSelectedModelForProfile({ name: modelName, provider });
                 setModelProfileRuns([]);
                 setIsLoadingProfileRuns(true);
               }}
@@ -688,7 +691,10 @@ export function BenchmarkDashboard() {
                 <div className="header-title-group">
                   <div className="title-row">
                     <span className="icon">📊</span>
-                    <h2>Model Profile &amp; Test History: {selectedModelForProfile}</h2>
+                     <h2>
+                       Model Profile &amp; Test History: {selectedModelForProfile.name}
+                       {selectedModelForProfile.provider ? ` [${selectedModelForProfile.provider}]` : ""}
+                     </h2>
                   </div>
                 </div>
                 <button
@@ -707,8 +713,12 @@ export function BenchmarkDashboard() {
                   </div>
                 ) : (
                   <ModelDossier
-                    modelName={selectedModelForProfile}
-                    modelSummary={leaderboardModels.find((m) => m.modelName === selectedModelForProfile) ?? null}
+                     modelName={selectedModelForProfile.name}
+                     provider={selectedModelForProfile.provider}
+                     modelSummary={leaderboardModels.find((m) =>
+                       m.modelName === selectedModelForProfile.name &&
+                       (!selectedModelForProfile.provider || m.provider === selectedModelForProfile.provider)
+                     ) ?? null}
                     runs={modelProfileRuns}
                     hideBackLink={true}
                   />

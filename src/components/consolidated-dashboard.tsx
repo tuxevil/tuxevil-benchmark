@@ -69,7 +69,7 @@ export function ConsolidatedDashboard({ activeRun, history }: ConsolidatedDashbo
     return (
       <div style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
         <div style={{ margin: "0 auto 12px", width: "24px", height: "24px", border: "3px solid var(--accent)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
-        <p style={{ margin: 0, fontSize: "0.85rem" }}>Loading Consolidated Dashboard SLMArena v1.4...</p>
+        <p style={{ margin: 0, fontSize: "0.85rem" }}>Loading Consolidated Dashboard — tuxevil Benchmark v1.4...</p>
       </div>
     );
   }
@@ -254,12 +254,12 @@ export function ConsolidatedDashboard({ activeRun, history }: ConsolidatedDashbo
         </div>
       </div>
 
-      {/* 3. The SLM Leaderboard Table */}
+      {/* 3. The model leaderboard table */}
       <div className="leaderboard-card">
         <div className="leaderboard-header">
           <div>
             <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--ink)" }}>
-              🏆 The SLM Leaderboard
+              🏆 The Model Leaderboard
             </h3>
             <p style={{ margin: "2px 0 0", fontSize: "0.76rem", color: "var(--muted)" }}>
               Composite ranking using formula: Arena Index = (wq × Quality) + (ws × Security) + (wv × Speed)

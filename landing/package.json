@@ -1,8 +1,8 @@
 {
-  "name": "slmarena-landing",
+  "name": "tuxevil-benchmark-landing",
   "version": "1.0.0",
   "private": true,
-  "description": "SLMarena public static landing page — leaderboard and public scenarios showcase built with Next.js static export.",
+  "description": "tuxevil Benchmark public static landing page — leaderboard and public scenarios showcase built with Next.js static export.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

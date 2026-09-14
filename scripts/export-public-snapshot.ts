@@ -1,9 +1,10 @@
 /**
  * export-public-snapshot.ts
  *
- * Zero-trust static snapshot exporter for the SLMarena public landing page.
+ * Zero-trust static snapshot exporter for the tuxevil Benchmark public landing page.
  *
- * Reads the local benchmark database (SQLite `compare.db` by default, or
+ * Reads the local benchmark database (SQLite `tuxevil-benchmark.db` by default,
+ * with legacy `compare.db` auto-detection, or
  * PostgreSQL when DATABASE_URL is set) through the project's data layer and
  * writes a sanitized, whitelisted JSON snapshot to
  * `landing/public/data/public-snapshot.json`.
@@ -231,7 +232,7 @@ function main() {
       writeFileSync(outputPath, `${json}\n`, "utf8");
       console.log(`[export-public-snapshot] Wrote ${outputPath}`);
       console.log(
-        `[export-public-snapshot] Source: ${isPostgres() ? "PostgreSQL" : "SQLite (compare.db)"} | ` +
+        `[export-public-snapshot] Source: ${isPostgres() ? "PostgreSQL" : "SQLite"} | ` +
           `${snapshot.models.length} models, ${snapshot.scenarios.length} scenarios, ` +
           `${snapshot.global_stats.total_benchmarks} benchmark runs, generated ${snapshot.generated_at}`,
       );

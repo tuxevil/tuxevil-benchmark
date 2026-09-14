@@ -2,13 +2,13 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: slmarena
-      POSTGRES_USER: slmarena
+      POSTGRES_DB: tuxevil_benchmark
+      POSTGRES_USER: tuxevil_benchmark
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-55432}:5432"
     volumes:
-      - slmarena-postgres:/var/lib/postgresql/data
+      - tuxevil-benchmark-postgres:/var/lib/postgresql/data
 
   redis:
     image: redis:7-alpine
@@ -16,8 +16,8 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
-      - slmarena-redis:/data
+      - tuxevil-benchmark-redis:/data
 
 volumes:
-  slmarena-postgres:
-  slmarena-redis:
+  tuxevil-benchmark-postgres:
+  tuxevil-benchmark-redis:

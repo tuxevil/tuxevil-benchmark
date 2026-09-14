@@ -153,7 +153,7 @@ test.beforeEach(async ({ page }) => {
 
 test("renders the arena dashboard and displays top model winner", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("SLMArena")).toBeVisible();
+  await expect(page.getByText("tuxevil Benchmark")).toBeVisible();
   await expect(page.getByText("Overall Leader")).toBeVisible();
   await expect(page.locator(".winner-name", { hasText: "llama3.2" }).first()).toBeVisible();
 });

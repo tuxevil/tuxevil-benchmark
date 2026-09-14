@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-process.env.SQLITE_PATH = join(tmpdir(), `slmarena-leaderboard-test-${process.pid}-${crypto.randomUUID()}.db`);
+process.env.SQLITE_PATH = join(tmpdir(), `tuxevil-benchmark-leaderboard-test-${process.pid}-${crypto.randomUUID()}.db`);
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { aggregateLeaderboard, extractParamSize, queuePersistedRun, waitForPersistedRun } from "@/lib/database";
@@ -87,7 +87,7 @@ beforeEach(() => {
   db.exec("PRAGMA foreign_keys = OFF; DELETE FROM test_runs; DELETE FROM scenarios; PRAGMA foreign_keys = ON;");
 });
 
-describe("Leaderboard Unit Tests (SLMArena v1.3)", () => {
+describe("Leaderboard Unit Tests (tuxevil Benchmark v1.3)", () => {
   it("extracts model parameter sizes correctly from names", () => {
     expect(extractParamSize("Qwen-2.5-7B")).toEqual({ label: "7.6B", value: 7.6 });
     expect(extractParamSize("llama3.2:3b")).toEqual({ label: "3.2B", value: 3.2 });

@@ -38,7 +38,7 @@ export function TopModelKpi({ models }: TopModelKpiProps) {
         </div>
         <div className="kpi-single-value-body">
           <span className="kpi-big-number">{models.length}</span>
-          <span className="kpi-subtext">SLMs registered in system</span>
+          <span className="kpi-subtext">Models registered in system</span>
         </div>
       </div>
 

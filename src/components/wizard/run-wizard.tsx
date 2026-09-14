@@ -237,7 +237,7 @@ export function RunWizard({
         <div className="step-connector" />
         <div className={`step-pill ${step >= 2 ? "active" : ""}`} onClick={() => setStep(2)}>
           <span className="step-num">2</span>
-          <span className="step-title">SLM Models ({selectedModels.length})</span>
+          <span className="step-title">Models ({selectedModels.length})</span>
         </div>
         <div className="step-connector" />
         <div className={`step-pill ${step >= 3 ? "active" : ""}`} onClick={() => setStep(3)}>

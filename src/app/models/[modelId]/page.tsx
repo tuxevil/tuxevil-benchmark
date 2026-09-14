@@ -56,7 +56,7 @@ export default function ModelDossierPage({ params }: ModelPageProps) {
           <span className="dot pulse" /> Loading model profile...
         </div>
       ) : (
-        <ModelDossier modelName={modelName} modelSummary={modelSummary} runs={runs} />
+        <ModelDossier modelName={modelName} provider={modelSummary?.provider} modelSummary={modelSummary} runs={runs} />
       )}
     </main>
   );

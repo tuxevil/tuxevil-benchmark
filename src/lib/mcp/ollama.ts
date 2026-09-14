@@ -1,4 +1,4 @@
-import { slmarenaFetch } from "./http-client";
+import { tuxevilBenchmarkFetch } from "./http-client";
 
 export type OllamaModelInfo = {
   name: string;
@@ -18,7 +18,7 @@ type OllamaModelsPayload = {
 };
 
 export async function listOllamaModels(): Promise<unknown> {
-  const data = await slmarenaFetch<OllamaModelsPayload>("/api/ollama/models");
+  const data = await tuxevilBenchmarkFetch<OllamaModelsPayload>("/api/ollama/models");
   return {
     models: data.models ?? [],
     runningModels: data.runningModels ?? [],

@@ -1,4 +1,4 @@
-# Contributing to SLMarena
+# Contributing to tuxevil Benchmark
 
 Thanks for taking the time to contribute! This document covers how to set up
 the project, what to work on, and how to get changes merged.
@@ -86,4 +86,4 @@ PostgreSQL and Redis configuration.
 
 Use the [issue templates](.github/ISSUE_TEMPLATE/) — bug reports and feature
 requests. Include the reproduction steps, expected behavior, and the versions
-involved (Node.js, Next.js, Ollama, SLMarena).
+involved (Node.js, Next.js, Ollama, tuxevil Benchmark).

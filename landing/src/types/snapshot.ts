@@ -1,5 +1,5 @@
 /**
- * Public snapshot contract for the SLMarena static landing page.
+ * Public snapshot contract for the tuxevil Benchmark static landing page.
  *
  * This is the ONLY data shape the static site consumes. It is produced by
  * `scripts/export-public-snapshot.ts` and served from

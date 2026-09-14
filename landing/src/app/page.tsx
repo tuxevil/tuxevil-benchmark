@@ -9,6 +9,7 @@ import { MasterTable } from "@/components/MasterTable";
 import { LinkedAnalytics } from "@/components/LinkedAnalytics";
 import { ModelProfileModal } from "@/components/ModelProfileModal";
 import { ExportSection } from "@/components/ExportSection";
+import { PROJECT_BRAND } from "@/lib/brand";
 
 export default function HomePage() {
   const { data, error } = useSnapshot();
@@ -45,7 +46,7 @@ export default function HomePage() {
         <Navigation />
         <div className="loading-state">
           <div className="spinner" aria-hidden="true" />
-          <p>Loading SLMarena snapshot...</p>
+          <p>Loading {PROJECT_BRAND.displayName} snapshot...</p>
         </div>
       </div>
     );
@@ -68,11 +69,11 @@ export default function HomePage() {
       <footer className="site-footer">
         <a
           className="footer-link"
-          href="https://github.com/tuxevil/SLMarena"
+          href={PROJECT_BRAND.repositoryUrl}
           target="_blank"
           rel="noopener noreferrer"
         >
-          github.com/tuxevil/SLMarena ↗
+          github.com/tuxevil/tuxevil-benchmark ↗
         </a>
       </footer>
       <ModelProfileModal model={profileModel} onClose={() => setProfileModel(null)} />

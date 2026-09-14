@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { slmarenaFetch } from "./http-client";
+import { tuxevilBenchmarkFetch } from "./http-client";
 
 export const analysisInputSchema = {
   scenario_id: z
@@ -36,7 +36,7 @@ export async function getScenarioAnalysis(args: AnalysisInput): Promise<unknown>
   if (args.system_prompt) query.set("systemPrompt", args.system_prompt);
   if (args.user_messages?.length) query.set("userMessages", JSON.stringify(args.user_messages));
 
-  return slmarenaFetch<unknown>(`/api/analysis?${query.toString()}`);
+  return tuxevilBenchmarkFetch<unknown>(`/api/analysis?${query.toString()}`);
 }
 
 export const reviewResultInputSchema = {
@@ -54,7 +54,7 @@ export type ReviewResultInput = {
 };
 
 export async function reviewResult(args: ReviewResultInput): Promise<unknown> {
-  const data = await slmarenaFetch<{ run: unknown }>(`/api/results/${encodeURIComponent(args.result_id)}/review`, {
+  const data = await tuxevilBenchmarkFetch<{ run: unknown }>(`/api/results/${encodeURIComponent(args.result_id)}/review`, {
     method: "PATCH",
     body: JSON.stringify({ status: args.status, notes: args.notes ?? "" }),
   });

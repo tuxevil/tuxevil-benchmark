@@ -19,8 +19,8 @@ interface ArenaLeaderboardProps {
   weights: LeaderboardWeights;
   onWeightChange: (key: keyof LeaderboardWeights, val: number) => void;
   selectedRadarModels: string[];
-  onToggleRadarModel: (modelName: string) => void;
-  onSelectModelProfile?: (modelName: string) => void;
+  onToggleRadarModel: (modelName: string, provider?: string) => void;
+  onSelectModelProfile?: (modelName: string, provider?: string) => void;
 }
 
 type SortField =
@@ -125,7 +125,7 @@ export function ArenaLeaderboard({
           <span className="search-icon">🔍</span>
           <input
             type="text"
-            placeholder="Search SLM model..."
+            placeholder="Search model..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="search-input"
@@ -319,35 +319,53 @@ export function ArenaLeaderboard({
                 const isChecked = selectedRadarModels.includes(m.modelName);
 
                 return (
-                  <tr key={m.modelName + (m.reasoningEffort ? `::${m.reasoningEffort}` : "")} className={isChecked ? "row-selected" : ""}>
-                    <td style={{ textAlign: "center" }}>
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => onToggleRadarModel(m.modelName)}
-                        title="Link to chart analytics"
-                      />
-                    </td>
-                    <td className="model-cell">
-                      <strong className="model-name-text">{m.modelName}</strong>
-                      <span className="param-pill">{m.paramSizeLabel} Params</span>
-                      {m.reasoningEffort && m.reasoningEffort !== "off" && (
-                        <span
-                          className="badge info"
-                          style={{
-                            fontSize: "0.68rem",
-                            padding: "2px 6px",
-                            borderRadius: "4px",
-                            marginLeft: "4px",
-                            fontWeight: 600,
-                            textTransform: "uppercase",
-                          }}
-                        >
-                          🧠 CoT: {m.reasoningEffort}
-                        </span>
-                      )}
-                      {getEligibilityBadge(m)}
-                    </td>
+                   <tr key={m.modelName + (m.provider ? `::${m.provider}` : "") + (m.reasoningEffort ? `::${m.reasoningEffort}` : "")} className={isChecked ? "row-selected" : ""}>
+                     <td style={{ textAlign: "center" }}>
+                       <input
+                         type="checkbox"
+                         checked={isChecked}
+                         onChange={() => onToggleRadarModel(m.modelName, m.provider)}
+                         title="Link to chart analytics"
+                       />
+                     </td>
+                     <td className="model-cell">
+                       <strong className="model-name-text">{m.modelName}</strong>
+                       <span className="param-pill">{m.paramSizeLabel} Params</span>
+                       {m.provider && m.provider !== "ollama" && (
+                         <span
+                           className="badge"
+                           style={{
+                             fontSize: "0.68rem",
+                             padding: "2px 6px",
+                             borderRadius: "4px",
+                             marginLeft: "4px",
+                             fontWeight: 600,
+                             textTransform: "uppercase",
+                             background: m.provider === "freetoken" ? "rgba(234,179,8,0.15)" : "rgba(139,92,246,0.15)",
+                             color: m.provider === "freetoken" ? "#ca8a04" : "#7c3aed",
+                             border: `1px solid ${m.provider === "freetoken" ? "rgba(234,179,8,0.4)" : "rgba(139,92,246,0.4)"}`,
+                           }}
+                         >
+                           {m.provider === "freetoken" ? "⚡ FreeToken" : "🦙 llama.cpp"}
+                         </span>
+                       )}
+                       {m.reasoningEffort && m.reasoningEffort !== "off" && (
+                         <span
+                           className="badge info"
+                           style={{
+                             fontSize: "0.68rem",
+                             padding: "2px 6px",
+                             borderRadius: "4px",
+                             marginLeft: "4px",
+                             fontWeight: 600,
+                             textTransform: "uppercase",
+                           }}
+                         >
+                           🧠 CoT: {m.reasoningEffort}
+                         </span>
+                       )}
+                       {getEligibilityBadge(m)}
+                     </td>
                     <td style={{ textAlign: "center" }}>
                       <span className="arena-score-badge">{m.arenaIndex}</span>
                     </td>
@@ -387,7 +405,7 @@ export function ArenaLeaderboard({
                         <button
                           type="button"
                           className="btn-profile-link"
-                          onClick={() => onSelectModelProfile(m.modelName)}
+                           onClick={() => onSelectModelProfile(m.modelName, m.provider)}
                         >
                           [View Profile]
                         </button>

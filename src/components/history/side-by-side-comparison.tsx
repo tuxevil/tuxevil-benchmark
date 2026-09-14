@@ -104,7 +104,7 @@ export function SideBySideComparison({ run, onClose, onHumanReview }: SideBySide
 
                 {/* Output Text Body */}
                 <div className="output-content-box">
-                  <div className="output-label">SLM Model Response:</div>
+                  <div className="output-label">Model Response:</div>
                   <pre className="output-text">
                     {result.responseText || result.errorMessage || "(No response generated)"}
                   </pre>

@@ -1,6 +1,6 @@
 ---
 name: Question
-about: Ask a question about SLMarena
+about: Ask a question about tuxevil Benchmark
 title: "[Question]: "
 labels: question
 assignees: ""

@@ -1,16 +1,16 @@
 {
-  "name": "slmarena",
+  "name": "tuxevil-benchmark",
   "version": "0.1.0",
   "private": true,
-  "description": "Local language-model benchmarking and quality-evaluation workspace. Runs the same scenario against one or more Ollama models, captures telemetry, and optionally evaluates answers with an OpenAI-compatible judge.",
+  "description": "tuxevil Benchmark: local language-model benchmarking and quality-evaluation workspace. Runs the same scenario against one or more Ollama models, captures telemetry, and optionally evaluates answers with an OpenAI-compatible judge.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tuxevil/SLMarena.git"
+    "url": "https://github.com/tuxevil/tuxevil-benchmark.git"
   },
-  "homepage": "https://github.com/tuxevil/SLMarena",
+  "homepage": "https://tuxevil-benchmark.tuxevil.com",
   "bugs": {
-    "url": "https://github.com/tuxevil/SLMarena/issues"
+    "url": "https://github.com/tuxevil/tuxevil-benchmark/issues"
   },
   "keywords": [
     "llm",

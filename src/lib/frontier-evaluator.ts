@@ -584,7 +584,7 @@ export async function evaluateModelResponse({
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    console.error("[slmarena] [Evaluator Error]", {
+    console.error("[tuxevil-benchmark] [Evaluator Error]", {
       status: response.status,
       endpoint,
       model: config.model,
@@ -592,13 +592,13 @@ export async function evaluateModelResponse({
     });
 
     if (response.status === 400) {
-      console.warn("[slmarena] [Evaluator Warning] HTTP 400 received. Retrying without response_format...");
+      console.warn("[tuxevil-benchmark] [Evaluator Warning] HTTP 400 received. Retrying without response_format...");
       const fallbackResponse = await makeRequest(false, false);
       if (fallbackResponse.ok) {
         response = fallbackResponse;
       } else {
         const fallbackErrorText = await fallbackResponse.text().catch(() => "");
-        console.error("[slmarena] [Evaluator Fallback Error]", {
+        console.error("[tuxevil-benchmark] [Evaluator Fallback Error]", {
           status: fallbackResponse.status,
           endpoint,
           model: config.model,
@@ -619,7 +619,7 @@ export async function evaluateModelResponse({
       return evaluateContent(content);
     } catch (error) {
       if (attempt >= 3) {
-        console.error("[slmarena] [Evaluator Failed] Judge returned invalid JSON after retries", {
+        console.error("[tuxevil-benchmark] [Evaluator Failed] Judge returned invalid JSON after retries", {
           endpoint,
           model: config.model,
           mode,
@@ -630,7 +630,7 @@ export async function evaluateModelResponse({
         );
       }
       console.warn(
-        `[slmarena] [Evaluator Warning] Judge output failed validation on attempt ${attempt}; retrying with condensed prompt...`
+        `[tuxevil-benchmark] [Evaluator Warning] Judge output failed validation on attempt ${attempt}; retrying with condensed prompt...`
       );
       const retryResponse = await makeRequest(false, true, attempt === 1 ? undefined : buildJudgeReinforcement(mode, error));
       if (!retryResponse.ok) {

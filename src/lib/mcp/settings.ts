@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { slmarenaFetch } from "./http-client";
+import { tuxevilBenchmarkFetch } from "./http-client";
 
 export type Settings = {
   ollamaUrl: string;
@@ -26,7 +26,7 @@ export type Settings = {
 type SettingsPayload = { settings: Settings };
 
 export async function getSettings(): Promise<unknown> {
-  const data = await slmarenaFetch<SettingsPayload>("/api/settings");
+  const data = await tuxevilBenchmarkFetch<SettingsPayload>("/api/settings");
   return { settings: data.settings };
 }
 
@@ -94,7 +94,7 @@ export async function updateSettings(args: UpdateSettingsInput): Promise<unknown
   const parameters = toCamelParams(args.parameters);
   if (parameters) body.parameters = parameters;
 
-  const data = await slmarenaFetch<SettingsPayload>("/api/settings", {
+  const data = await tuxevilBenchmarkFetch<SettingsPayload>("/api/settings", {
     method: "PATCH",
     body: JSON.stringify(body),
   });
@@ -156,7 +156,7 @@ export async function addEvaluator(args: AddEvaluatorInput): Promise<unknown> {
   if (args.label !== undefined) body.label = args.label;
   if (args.api_key !== undefined) body.apiKey = args.api_key;
   if (args.make_active !== undefined) body.makeActive = args.make_active;
-  const data = await slmarenaFetch<SettingsPayload>("/api/settings/evaluators", {
+  const data = await tuxevilBenchmarkFetch<SettingsPayload>("/api/settings/evaluators", {
     method: "POST",
     body: JSON.stringify(body),
   });
@@ -170,7 +170,7 @@ export async function updateEvaluator(args: UpdateEvaluatorInput): Promise<unkno
   if (args.model !== undefined) body.model = args.model;
   if (args.api_key !== undefined) body.apiKey = args.api_key;
   if (args.make_active !== undefined) body.makeActive = args.make_active;
-  const data = await slmarenaFetch<SettingsPayload>(`/api/settings/evaluators/${encodeURIComponent(args.evaluator_id)}`, {
+  const data = await tuxevilBenchmarkFetch<SettingsPayload>(`/api/settings/evaluators/${encodeURIComponent(args.evaluator_id)}`, {
     method: "PATCH",
     body: JSON.stringify(body),
   });
@@ -178,7 +178,7 @@ export async function updateEvaluator(args: UpdateEvaluatorInput): Promise<unkno
 }
 
 export async function deleteEvaluator(args: DeleteEvaluatorInput): Promise<unknown> {
-  const data = await slmarenaFetch<SettingsPayload>(
+  const data = await tuxevilBenchmarkFetch<SettingsPayload>(
     `/api/settings/evaluators/${encodeURIComponent(args.evaluator_id)}`,
     { method: "DELETE" },
   );

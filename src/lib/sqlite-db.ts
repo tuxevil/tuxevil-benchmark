@@ -13,13 +13,18 @@ import type {
 
 type SqlRow = Record<string, unknown>;
 import { decryptSecret, encryptSecret } from "@/lib/secrets";
+import { CURRENT_SQLITE_FILENAME, LEGACY_SQLITE_FILENAME } from "@/lib/legacy-identifiers";
 import path from "node:path";
+import { existsSync } from "node:fs";
 
 let dbInstance: Database.Database | null = null;
 
 export function getSqliteDb(): Database.Database {
   if (!dbInstance) {
-    const dbPath = process.env.SQLITE_PATH?.trim() || path.join(process.cwd(), "compare.db");
+    const configuredPath = process.env.SQLITE_PATH?.trim();
+    const currentPath = path.join(process.cwd(), CURRENT_SQLITE_FILENAME);
+    const legacyPath = path.join(process.cwd(), LEGACY_SQLITE_FILENAME);
+    const dbPath = configuredPath || (existsSync(legacyPath) && !existsSync(currentPath) ? legacyPath : currentPath);
     dbInstance = new Database(dbPath);
     dbInstance.pragma("journal_mode = WAL");
     dbInstance.pragma("foreign_keys = ON");
@@ -299,6 +304,15 @@ function initSqliteTables(db: Database.Database) {
   if (!turnCols.some((column) => column.name === "truncated")) {
     migrationDb.exec("ALTER TABLE model_result_turns ADD COLUMN truncated INTEGER");
   }
+  if (!turnCols.some((column) => column.name === "wire_diagnostics")) {
+    migrationDb.exec("ALTER TABLE model_result_turns ADD COLUMN wire_diagnostics TEXT");
+  }
+  if (!turnCols.some((column) => column.name === "protocol_diagnostics")) {
+    migrationDb.exec("ALTER TABLE model_result_turns ADD COLUMN protocol_diagnostics TEXT");
+  }
+  if (!turnCols.some((column) => column.name === "request_body")) {
+    migrationDb.exec("ALTER TABLE model_result_turns ADD COLUMN request_body TEXT");
+  }
 
   const resultColumns = migrationDb.prepare("PRAGMA table_info(model_results)").all() as SqlRow[];
   if (!resultColumns.some((column) => column.name === "sample_index")) {
@@ -568,7 +582,7 @@ export function sqliteLoadEvaluatorKey(id: string): string | null {
   try {
     return decryptSecret(String(row.api_key_encrypted));
   } catch (error) {
-    console.error("[slmarena] [Settings] Could not decrypt evaluator credentials:", error instanceof Error ? error.message : String(error));
+    console.error("[tuxevil-benchmark] [Settings] Could not decrypt evaluator credentials:", error instanceof Error ? error.message : String(error));
     return null;
   }
 }
@@ -801,8 +815,12 @@ export function sqlitePersistRun(
       if (result.turns && result.turns.length > 0) {
         db.prepare("DELETE FROM model_result_turns WHERE model_result_id = ?").run(result.id);
         const insertTurn = db.prepare(`
-          INSERT INTO model_result_turns (id, model_result_id, step_order, user_message, response_text, thinking, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO model_result_turns (
+            id, model_result_id, step_order, user_message, response_text, thinking,
+            input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms,
+            finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const turn of result.turns) {
           insertTurn.run(
@@ -817,6 +835,11 @@ export function sqlitePersistRun(
             turn.ttftMs,
             turn.tokPerSec,
             turn.totalDurationMs,
+            turn.finishReason ?? null,
+            turn.truncated ? 1 : 0,
+            turn.wireDiagnostics ? JSON.stringify(turn.wireDiagnostics) : null,
+            turn.protocolDiagnostics ? JSON.stringify(turn.protocolDiagnostics) : null,
+            turn.requestBody ? JSON.stringify(turn.requestBody) : null,
           );
         }
       }
@@ -927,6 +950,9 @@ export function sqliteLoadState(targetRunId?: string) {
       ttftMs: row.ttft_ms !== null ? Number(row.ttft_ms) : null,
       tokPerSec: row.tok_per_sec !== null ? Number(row.tok_per_sec) : null,
       totalDurationMs: row.total_duration_ms !== null ? Number(row.total_duration_ms) : null,
+      wireDiagnostics: row.wire_diagnostics ? JSON.parse(String(row.wire_diagnostics)) : null,
+      protocolDiagnostics: row.protocol_diagnostics ? JSON.parse(String(row.protocol_diagnostics)) : null,
+      requestBody: row.request_body ? JSON.parse(String(row.request_body)) : null,
     });
     turnsByResult.set(key, list);
   }

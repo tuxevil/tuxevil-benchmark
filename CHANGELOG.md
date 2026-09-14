@@ -61,22 +61,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (CONTRIBUTING, SECURITY, CODE_OF_CONDUCT), issue and PR templates,
   `.editorconfig`, and `.nvmrc`.
 - MCP server (`npm run mcp`, PRD v2.1): Streamable HTTP transport exposing the
-  SLMarena REST API as 26 tools (`get_arena_leaderboard`, `list_ollama_models`,
+  tuxevil Benchmark REST API as 26 tools (`get_arena_leaderboard`, `list_ollama_models`,
   `get_model_profile`, `list_test_scenarios`, `get_test_scenario`,
   `create_test_scenario`, `update_test_scenario`, `delete_test_scenario`,
   `list_runs`, `pause_run`, `resume_run`, `cancel_run`,
   `pause_all_pending_runs`, `resume_all_pending_runs`, `get_settings`,
   `update_settings`, `get_analysis`, `review_result`, `get_run_result_details`,
   `get_test_run_details`, `launch_matrix_test`, `check_job_status`) plus
-  read-only resources (`slmarena://leaderboard`, `slmarena://scenarios`) for
+  read-only resources (`tuxevil-benchmark://leaderboard`, `tuxevil-benchmark://scenarios`)
+  with legacy aliases (`slmarena://leaderboard`, `slmarena://scenarios`) for
   agent-driven benchmarking. Configured via `MCP_PORT` and `APP_URL`.
 - `GET /api/runs/:id/results/:resultId` endpoint for fetching a single model
   result directly.
 
 ### Changed
 
-- Project renamed from "Compare SLM" to **SLMarena**; repository moved to
-  `https://github.com/tuxevil/SLMarena`.
+- Historical project identity before the current rebrand: the project was
+  previously named "Compare SLM" and then **SLMarena**. The canonical identity
+  is now **tuxevil Benchmark** at `https://github.com/tuxevil/tuxevil-benchmark`.
 - `OLLAMA_URL` documented as unset-by-default in `.env.example`: leaving it
   empty lets `/api/ollama/models` resolve the Ollama URL saved in the app
   settings instead of shadowing it with a stale local default.
@@ -96,5 +98,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Quality gates: ESLint, TypeScript, unit tests, integration tests, Playwright
   E2E, and a GitHub Actions CI workflow.
 
-[Unreleased]: https://github.com/tuxevil/SLMarena/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/tuxevil/SLMarena/releases/tag/v0.1.0
+[Unreleased]: https://github.com/tuxevil/tuxevil-benchmark/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/tuxevil/tuxevil-benchmark/releases/tag/v0.1.0

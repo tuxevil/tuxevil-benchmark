@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { slmarenaFetch } from "./http-client";
+import { tuxevilBenchmarkFetch } from "./http-client";
 import type { LeaderboardRow } from "./leaderboard";
 
 export const modelProfileInputSchema = {
@@ -32,12 +32,12 @@ type AnalysisPayload = {
 };
 
 export async function getModelProfile(args: ModelProfileInput): Promise<unknown> {
-  const leaderboard = await slmarenaFetch<LeaderboardPayload>("/api/leaderboard?category=ALL");
+  const leaderboard = await tuxevilBenchmarkFetch<LeaderboardPayload>("/api/leaderboard?category=ALL");
   const row = (leaderboard.models ?? []).find((item) => item.modelName === args.model_name);
 
   let scenarioStats: ModelAggregate | null = null;
   if (args.scenario_id) {
-    const analysis = await slmarenaFetch<AnalysisPayload>(
+    const analysis = await tuxevilBenchmarkFetch<AnalysisPayload>(
       `/api/analysis?scenarioId=${encodeURIComponent(args.scenario_id)}`,
     );
     scenarioStats = (analysis.models ?? []).find((item) => item.modelName === args.model_name) ?? null;

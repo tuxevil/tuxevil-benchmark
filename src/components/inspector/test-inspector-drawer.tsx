@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { EvaluatorEntry, EvaluationHistoryEntry, ModelResult, TestRun } from "@/lib/contracts";
+import type { EvaluatorEntry, EvaluationHistoryEntry, ModelResult, TestRun, TurnResult } from "@/lib/contracts";
 
 interface TestInspectorDrawerProps {
   run: TestRun | null;
@@ -9,8 +9,77 @@ interface TestInspectorDrawerProps {
   onClose: () => void;
 }
 
+/** Build the exact request body that was sent to the provider for a given turn. */
+function buildCurlCommand(run: TestRun, turn: TurnResult, streaming: boolean): string {
+  const endpoint = run.providerUrl ?? "http://<provider-url>";
+  const url = endpoint.replace(/\/$/, "") + "/v1/chat/completions";
+
+  // Use the stored requestBody if available (most accurate), otherwise reconstruct
+  const body = turn.requestBody ?? {
+    model: "<model-name>",
+    messages: "[see_request_body]",
+    stream: streaming,
+    max_tokens: run.parameters.numPredict,
+    temperature: run.parameters.temperature,
+    top_p: run.parameters.topP,
+  };
+
+  const displayBody = { ...body, stream: streaming };
+
+  const jsonStr = JSON.stringify(displayBody, null, 2);
+  const flag = streaming ? "-N" : "";
+  return `curl ${flag} -X POST "${url}" \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer <API_KEY>" \\
+  -d '${jsonStr}'`;
+}
+
+/** Build the full debug bundle JSON for a result. */
+function buildDebugBundle(run: TestRun, result: ModelResult, commitHash: string): string {
+  const turns = result.turns ?? [];
+  const bundle = {
+    tuxevil_benchmark_commit: commitHash,
+    provider: run.provider ?? "unknown",
+    model: result.modelName,
+    endpoint: run.providerUrl ?? run.parameters,
+    classification: result.errorMessage ?? (result.status === "COMPLETED" ? "COMPLETED" : result.status),
+    result_status: result.status,
+    error_message: result.errorMessage ?? null,
+    finish_reason: result.finishReason ?? null,
+    output_tokens: result.outputTokens ?? null,
+    input_tokens: result.inputTokens ?? null,
+    turns: turns.map((t) => ({
+      step_order: t.stepOrder,
+      request: t.requestBody ?? null,
+      raw_sse: t.wireDiagnostics?.rawSse ?? null,
+      raw_sse_truncated: t.wireDiagnostics?.rawSseTruncated ?? null,
+      parsed: {
+        thinking: t.thinking ?? "",
+        content: t.responseText,
+        finish_reason: t.finishReason ?? null,
+      },
+      usage: {
+        prompt_tokens: t.wireDiagnostics?.usagePromptTokens ?? t.inputTokens ?? null,
+        completion_tokens: t.wireDiagnostics?.usageCompletionTokens ?? t.outputTokens ?? null,
+        total_tokens: t.wireDiagnostics?.usageTotalTokens ?? null,
+      },
+      wire_counters: t.wireDiagnostics
+        ? {
+            event_count: t.wireDiagnostics.eventCount,
+            reasoning_delta_count: t.wireDiagnostics.reasoningDeltaCount,
+            content_delta_count: t.wireDiagnostics.contentDeltaCount,
+            reasoning_chars: t.wireDiagnostics.reasoningChars,
+            content_chars: t.wireDiagnostics.contentChars,
+          }
+        : null,
+      protocol_diagnostics: t.protocolDiagnostics ?? null,
+    })),
+  };
+  return JSON.stringify(bundle, null, 2);
+}
+
 export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawerProps) {
-  const [activeTab, setActiveTab] = useState<"prompts" | "evaluator">("prompts");
+  const [activeTab, setActiveTab] = useState<"prompts" | "evaluator" | "debug">("prompts");
   const [evaluators, setEvaluators] = useState<EvaluatorEntry[]>([]);
   const [selectedEvaluatorId, setSelectedEvaluatorId] = useState<string>("");
   const [reEvaluating, setReEvaluating] = useState(false);
@@ -18,6 +87,7 @@ export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawe
   const [historyResultId, setHistoryResultId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [localResult, setLocalResult] = useState<ModelResult | null>(null);
+  const [copiedCurl, setCopiedCurl] = useState<"stream" | "nostream" | null>(null);
 
   const resultId = result?.id ?? null;
   const runId = run?.id ?? null;
@@ -132,6 +202,13 @@ export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawe
             onClick={() => setActiveTab("evaluator")}
           >
             ⚖️ Evaluator Verdict
+          </button>
+          <button
+            type="button"
+            className={`drawer-tab ${activeTab === "debug" ? "active" : ""}`}
+            onClick={() => setActiveTab("debug")}
+          >
+            🔬 Wire Debug
           </button>
         </div>
 
@@ -290,6 +367,176 @@ export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawe
               )}
             </div>
           )}
+
+          {activeTab === "debug" && run && (() => {
+            const turns = displayResult.turns ?? [];
+            const firstTurn = turns[0] ?? null;
+            const pd = firstTurn?.protocolDiagnostics ?? null;
+            const wd = firstTurn?.wireDiagnostics ?? null;
+            const commitHash = typeof window !== "undefined"
+              ? (document.querySelector("meta[name=tuxevil-benchmark-commit]")?.getAttribute("content") ?? "unknown")
+              : "unknown";
+
+            const copyBundle = () => {
+              const bundle = buildDebugBundle(run, displayResult, commitHash);
+              void navigator.clipboard.writeText(bundle);
+            };
+
+            const copyCurl = (streaming: boolean) => {
+              if (!firstTurn) return;
+              const cmd = buildCurlCommand(run, firstTurn, streaming);
+              void navigator.clipboard.writeText(cmd).then(() => {
+                setCopiedCurl(streaming ? "stream" : "nostream");
+                setTimeout(() => setCopiedCurl(null), 2000);
+              });
+            };
+
+            return (
+              <div className="drawer-section-group">
+                {/* Classification + finish_reason */}
+                <div className="drawer-box">
+                  <span className="box-label">WIRE CLASSIFICATION</span>
+                  <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "8px", fontSize: "0.85rem" }}>
+                    <div>
+                      <span style={{ color: "var(--muted)", marginRight: "6px" }}>Status:</span>
+                      <strong style={{ color: displayResult.status === "FAILED" ? "var(--danger, #ef4444)" : "var(--accent)" }}>
+                        {displayResult.status}
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--muted)", marginRight: "6px" }}>Error:</span>
+                      <strong>{displayResult.errorMessage ?? "—"}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--muted)", marginRight: "6px" }}>finish_reason:</span>
+                      <strong>{displayResult.finishReason ?? firstTurn?.finishReason ?? "—"}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--muted)", marginRight: "6px" }}>output_tokens:</span>
+                      <strong>{displayResult.outputTokens ?? firstTurn?.outputTokens ?? "—"}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--muted)", marginRight: "6px" }}>input_tokens:</span>
+                      <strong>{displayResult.inputTokens ?? firstTurn?.inputTokens ?? "—"}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--muted)", marginRight: "6px" }}>reasoning_effort sent:</span>
+                      <strong>
+                        {firstTurn?.requestBody && "reasoning_effort" in firstTurn.requestBody
+                          ? String(firstTurn.requestBody.reasoning_effort)
+                          : "(absent — server default)"}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Protocol diagnostics */}
+                {pd && (
+                  <div className="drawer-box">
+                    <span className="box-label">PROTOCOL DIAGNOSTICS</span>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", marginTop: "8px", fontSize: "0.8rem" }}>
+                      {Object.entries(pd).map(([key, val]) => (
+                        <div key={key} style={{ display: "flex", justifyContent: "space-between", padding: "4px 8px", background: "var(--surface)", borderRadius: "4px", border: `1px solid ${val ? "var(--warning, #f59e0b)" : "var(--line)"}` }}>
+                          <span style={{ color: "var(--muted)", fontFamily: "monospace" }}>{key}</span>
+                          <strong style={{ color: val ? "var(--warning, #f59e0b)" : "var(--muted)" }}>{String(val)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {!pd && (
+                  <div className="drawer-box">
+                    <span className="box-label">PROTOCOL DIAGNOSTICS</span>
+                    <p style={{ color: "var(--muted)", fontSize: "0.82rem", marginTop: "6px" }}>
+                      Not available — run a new benchmark with this version to capture diagnostics.
+                    </p>
+                  </div>
+                )}
+
+                {/* Wire counters */}
+                {wd && (
+                  <div className="drawer-box">
+                    <span className="box-label">SSE WIRE COUNTERS</span>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px", marginTop: "8px", fontSize: "0.8rem" }}>
+                      {[
+                        ["event_count", wd.eventCount],
+                        ["reasoning_delta_count", wd.reasoningDeltaCount],
+                        ["content_delta_count", wd.contentDeltaCount],
+                        ["reasoning_chars", wd.reasoningChars],
+                        ["content_chars", wd.contentChars],
+                        ["usage.completion_tokens", wd.usageCompletionTokens ?? "—"],
+                        ["usage.prompt_tokens", wd.usagePromptTokens ?? "—"],
+                        ["raw_sse_truncated", String(wd.rawSseTruncated)],
+                      ].map(([k, v]) => (
+                        <div key={String(k)} style={{ padding: "4px 8px", background: "var(--surface)", borderRadius: "4px", border: "1px solid var(--line)" }}>
+                          <div style={{ color: "var(--muted)", fontFamily: "monospace", fontSize: "0.72rem" }}>{k}</div>
+                          <strong>{String(v)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Raw SSE */}
+                {wd?.rawSse ? (
+                  <div className="drawer-box">
+                    <span className="box-label">RAW SSE STREAM {wd.rawSseTruncated ? "(TRUNCATED AT 256 KB)" : ""}</span>
+                    <pre className="code-block" style={{ maxHeight: "260px", overflow: "auto", fontSize: "0.72rem", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                      {wd.rawSse}
+                    </pre>
+                  </div>
+                ) : (
+                  <div className="drawer-box">
+                    <span className="box-label">RAW SSE STREAM</span>
+                    <p style={{ color: "var(--muted)", fontSize: "0.82rem", marginTop: "6px" }}>
+                      Wire capture disabled. Enable <code>debugWireCapture</code> on the run to record raw SSE.
+                    </p>
+                  </div>
+                )}
+
+                {/* curl reproduction */}
+                <div className="drawer-box">
+                  <span className="box-label">REPRODUCTION CURL</span>
+                  <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                    <button
+                      type="button"
+                      className="btn-ghost-sm"
+                      style={{ fontSize: "0.8rem", padding: "4px 10px" }}
+                      onClick={() => copyCurl(true)}
+                    >
+                      {copiedCurl === "stream" ? "✓ Copied!" : "📋 Copy (streaming)"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost-sm"
+                      style={{ fontSize: "0.8rem", padding: "4px 10px" }}
+                      onClick={() => copyCurl(false)}
+                    >
+                      {copiedCurl === "nostream" ? "✓ Copied!" : "📋 Copy (non-streaming)"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost-sm"
+                      style={{ fontSize: "0.8rem", padding: "4px 10px" }}
+                      onClick={copyBundle}
+                    >
+                      📦 Export Debug Bundle
+                    </button>
+                  </div>
+                  {firstTurn?.requestBody && (
+                    <pre className="code-block" style={{ marginTop: "8px", maxHeight: "200px", overflow: "auto", fontSize: "0.72rem", whiteSpace: "pre-wrap" }}>
+                      {buildCurlCommand(run, firstTurn, true)}
+                    </pre>
+                  )}
+                  {!firstTurn?.requestBody && (
+                    <p style={{ color: "var(--muted)", fontSize: "0.82rem", marginTop: "6px" }}>
+                      Request body not captured — run a new benchmark with this version to enable curl reproduction.
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* TELEMETRY FOOTER */}
           <div className="drawer-telemetry-strip">

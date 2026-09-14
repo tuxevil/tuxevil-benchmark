@@ -15,13 +15,13 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: slmarena
-          POSTGRES_USER: slmarena
-          POSTGRES_PASSWORD: slmarena
+          POSTGRES_DB: tuxevil_benchmark
+          POSTGRES_USER: tuxevil_benchmark
+          POSTGRES_PASSWORD: tuxevil_benchmark
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U slmarena -d slmarena"
+          --health-cmd "pg_isready -U tuxevil_benchmark -d tuxevil_benchmark"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -44,11 +44,11 @@ jobs:
       - name: Apply PostgreSQL schema
         run: npm run db:migrate
         env:
-          DATABASE_URL: postgresql://slmarena:slmarena@localhost:5432/slmarena
+          DATABASE_URL: postgresql://tuxevil_benchmark:tuxevil_benchmark@localhost:5432/tuxevil_benchmark
       - name: Run integration tests
         run: npm run test:integration
         env:
-          DATABASE_URL: postgresql://slmarena:slmarena@localhost:5432/slmarena
+          DATABASE_URL: postgresql://tuxevil_benchmark:tuxevil_benchmark@localhost:5432/tuxevil_benchmark
           REDIS_URL: redis://localhost:6379
       - run: npm run lint
       - run: npm run typecheck

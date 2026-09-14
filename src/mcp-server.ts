@@ -2,6 +2,7 @@ import { loadEnvConfig } from "@next/env";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { buildMcpServer } from "@/lib/mcp/server";
+import { PROJECT_BRAND } from "@/lib/brand";
 
 loadEnvConfig(process.cwd());
 
@@ -17,7 +18,7 @@ app.post("/mcp", async (req, res) => {
     await server.connect(transport);
     await transport.handleRequest(req, res, req.body);
   } catch (error) {
-    console.error("[slmarena-mcp] Error handling MCP request:", error);
+    console.error(`[${PROJECT_BRAND.slug}-mcp] Error handling MCP request:`, error);
     if (!res.headersSent) {
       res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal error." }, id: null });
     }
@@ -38,8 +39,8 @@ app.delete("/mcp", (_req, res) => {
 });
 
 app.listen(port, host, () => {
-  console.log(`[slmarena-mcp] MCP server listening on http://${host}:${port}/mcp`);
-  console.log(`[slmarena-mcp] Talking to SLMarena at ${process.env.APP_URL ?? "http://localhost:3000"}`);
+  console.log(`[${PROJECT_BRAND.slug}-mcp] MCP server listening on http://${host}:${port}/mcp`);
+  console.log(`[${PROJECT_BRAND.slug}-mcp] Talking to ${PROJECT_BRAND.displayName} at ${process.env.APP_URL ?? "http://localhost:3000"}`);
 });
 
 process.on("SIGINT", () => process.exit(0));

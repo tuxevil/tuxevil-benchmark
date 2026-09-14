@@ -56,6 +56,70 @@ export function normalizeChatEndpoint(endpoint: string): string {
   return `${clean}/v1/chat/completions`;
 }
 
+/**
+ * Wire-level diagnostics captured from the raw SSE stream BEFORE tuxevil Benchmark's parser
+ * transforms it into responseText / thinking / finishReason.
+ *
+ * NOTE: This is what FreeToken (or any OpenAI-compatible server) already sent over HTTP.
+ * It is NOT the raw model completion before the server's own ReasoningParser.
+ * The distinction matters for bug attribution — tuxevil Benchmark can only observe the SSE layer.
+ */
+export type WireDiagnostics = {
+  /** Raw SSE text captured from the stream, up to RAW_SSE_MAX_BYTES. Null if capture disabled. */
+  rawSse: string;
+  /** True if rawSse was truncated due to size limit. */
+  rawSseTruncated: boolean;
+  /** Total number of SSE data: events received (excluding [DONE]). */
+  eventCount: number;
+  /** Number of events that contained a non-empty reasoning_content / reasoning / thinking delta. */
+  reasoningDeltaCount: number;
+  /** Number of events that contained a non-empty content delta. */
+  contentDeltaCount: number;
+  /** Total chars accumulated in reasoning stream. */
+  reasoningChars: number;
+  /** Total chars accumulated in content stream. */
+  contentChars: number;
+  /** finish_reason from the last choice that carried one, or null. */
+  finishReason: string | null;
+  /** completion_tokens from usage chunk, or null if not reported. */
+  usageCompletionTokens: number | null;
+  /** prompt_tokens from usage chunk, or null if not reported. */
+  usagePromptTokens: number | null;
+  /** total_tokens from usage chunk, or null. */
+  usageTotalTokens: number | null;
+};
+
+/**
+ * Protocol-level anomaly flags derived from WireDiagnostics.
+ * These are diagnostic only — they do NOT change scoring or classification.
+ * Classification (NO_FINAL_ANSWER / EMPTY_RESPONSE) is still determined by
+ * benchmark-queue.ts based on responseText / thinking emptiness.
+ */
+export type ProtocolDiagnostics = {
+  /** True when thinking is non-empty and responseText is empty. */
+  noFinalAnswer: boolean;
+  /** True when both reasoning and content streams were empty. */
+  emptyWireResponse: boolean;
+  /** True when reasoning_content deltas were received. */
+  reasoningDeltaSeen: boolean;
+  /** True when content deltas were received. */
+  contentDeltaSeen: boolean;
+  /**
+   * True when the stream ended with finish_reason=stop but content was empty.
+   * Strongest signal for the "model wrote answer inside <think>" hypothesis.
+   */
+  stoppedWithEmptyContent: boolean;
+  /**
+   * True when the server reported completion_tokens > 0 but neither
+   * reasoning nor content streams received any text.
+   * Relevant for EMPTY_RESPONSE cases with ~4 output tokens.
+   */
+  outputTokensWithoutVisibleDeltas: boolean;
+};
+
+/** Maximum bytes to capture in rawSse per turn (256 KB). */
+const RAW_SSE_MAX_BYTES = 256 * 1024;
+
 export type OpenAIChatResult = {
   responseText: string;
   thinking: string;
@@ -67,6 +131,10 @@ export type OpenAIChatResult = {
   tokPerSec: number | null;
   totalDurationMs: number;
   evalDurationMs: number;
+  wireDiagnostics: WireDiagnostics | null;
+  protocolDiagnostics: ProtocolDiagnostics;
+  /** The exact request body sent to the provider (without API key). */
+  requestBody: Record<string, unknown>;
 };
 
 export async function streamOpenAICompatibleChat({
@@ -79,6 +147,7 @@ export async function streamOpenAICompatibleChat({
   onToken,
   provider,
   providerName = "Local Provider",
+  debugWireCapture = false,
 }: {
   endpoint: string;
   model: string;
@@ -89,6 +158,11 @@ export async function streamOpenAICompatibleChat({
   onToken?: (token: string) => void;
   provider: "freetoken" | "llamacpp";
   providerName?: string;
+  /**
+   * When true, captures the raw SSE stream into WireDiagnostics.rawSse.
+   * Disabled by default to avoid storage overhead in production benchmarks.
+   */
+  debugWireCapture?: boolean;
 }): Promise<OpenAIChatResult> {
   const startedAt = performance.now();
   const url = normalizeChatEndpoint(endpoint);
@@ -120,10 +194,15 @@ export async function streamOpenAICompatibleChat({
       body.reasoning_effort = reasoningEffort;
     }
   }
+  // When reasoningEffort === "default", reasoning_effort is intentionally absent from body.
+  // This is the server's natural/default thinking mode. We record this distinction in requestBody.
 
   if (parameters.repeatPenalty > 1) {
     body.presence_penalty = Math.min(2, parameters.repeatPenalty - 1);
   }
+
+  // Capture the exact request body (without API key) for debug bundles and curl generation.
+  const requestBody: Record<string, unknown> = { ...body };
 
   let response: Response;
   try {
@@ -176,11 +255,33 @@ export async function streamOpenAICompatibleChat({
   let timings: LlamaCppTimings | null = null;
   let finishReason: string | null = null;
 
+  // Wire capture state
+  let rawSseBuffer = "";
+  let rawSseTruncated = false;
+  let eventCount = 0;
+  let reasoningDeltaCount = 0;
+  let contentDeltaCount = 0;
+  let reasoningChars = 0;
+  let contentChars = 0;
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
+    const chunk = decoder.decode(value, { stream: true });
+
+    // Capture raw SSE before any parsing (up to limit)
+    if (debugWireCapture && !rawSseTruncated) {
+      const remaining = RAW_SSE_MAX_BYTES - rawSseBuffer.length;
+      if (remaining > 0) {
+        rawSseBuffer += chunk.slice(0, remaining);
+        if (chunk.length > remaining) rawSseTruncated = true;
+      } else {
+        rawSseTruncated = true;
+      }
+    }
+
+    buffer += chunk;
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
 
@@ -193,21 +294,23 @@ export async function streamOpenAICompatibleChat({
         break;
       }
 
-      let chunk: OpenAIChunk;
+      eventCount++;
+
+      let parsed: OpenAIChunk;
       try {
-        chunk = JSON.parse(dataPayload) as OpenAIChunk;
+        parsed = JSON.parse(dataPayload) as OpenAIChunk;
       } catch {
         continue;
       }
 
-      if (chunk.usage) {
-        usage = chunk.usage;
+      if (parsed.usage) {
+        usage = parsed.usage;
       }
-      if (chunk.timings) {
-        timings = chunk.timings;
+      if (parsed.timings) {
+        timings = parsed.timings;
       }
 
-      const choice = chunk.choices?.[0];
+      const choice = parsed.choices?.[0];
       if (choice?.finish_reason) {
         finishReason = choice.finish_reason;
       }
@@ -224,9 +327,13 @@ export async function streamOpenAICompatibleChat({
 
       if (reasoningToken) {
         thinking += reasoningToken;
+        reasoningDeltaCount++;
+        reasoningChars += reasoningToken.length;
       }
       if (textToken) {
         rawResponseText += textToken;
+        contentDeltaCount++;
+        contentChars += textToken.length;
         onToken?.(textToken);
       }
     }
@@ -235,6 +342,11 @@ export async function streamOpenAICompatibleChat({
   // Check remaining buffer
   const finalTrimmed = buffer.trim();
   if (finalTrimmed && finalTrimmed.startsWith("data:") && !finalTrimmed.includes("[DONE]")) {
+    // Capture remaining buffer too if wire capture enabled
+    if (debugWireCapture && !rawSseTruncated) {
+      const remaining = RAW_SSE_MAX_BYTES - rawSseBuffer.length;
+      if (remaining > 0) rawSseBuffer += finalTrimmed.slice(0, remaining);
+    }
     try {
       const chunk = JSON.parse(finalTrimmed.replace(/^data:\s*/, "")) as OpenAIChunk;
       if (chunk.usage) usage = chunk.usage;
@@ -278,6 +390,37 @@ export async function streamOpenAICompatibleChat({
     tokPerSec = Number((outputTokens / (evalDurationMs / 1_000)).toFixed(2));
   }
 
+  // Build wire diagnostics
+  const wireDiagnostics: WireDiagnostics | null = debugWireCapture
+    ? {
+        rawSse: rawSseBuffer,
+        rawSseTruncated,
+        eventCount,
+        reasoningDeltaCount,
+        contentDeltaCount,
+        reasoningChars,
+        contentChars,
+        finishReason,
+        usageCompletionTokens: usage?.completion_tokens ?? null,
+        usagePromptTokens: usage?.prompt_tokens ?? null,
+        usageTotalTokens: usage?.total_tokens ?? null,
+      }
+    : null;
+
+  // Always build protocol diagnostics regardless of debugWireCapture
+  const hasReasoningDeltas = reasoningDeltaCount > 0;
+  const hasContentDeltas = contentDeltaCount > 0;
+  const hasOutputTokens = (outputTokens ?? 0) > 0;
+
+  const protocolDiagnostics: ProtocolDiagnostics = {
+    noFinalAnswer: thinking.length > 0 && responseText.length === 0,
+    emptyWireResponse: thinking.length === 0 && responseText.length === 0,
+    reasoningDeltaSeen: hasReasoningDeltas,
+    contentDeltaSeen: hasContentDeltas,
+    stoppedWithEmptyContent: finishReason === "stop" && responseText.length === 0,
+    outputTokensWithoutVisibleDeltas: hasOutputTokens && !hasReasoningDeltas && !hasContentDeltas,
+  };
+
   return {
     responseText,
     thinking,
@@ -289,5 +432,8 @@ export async function streamOpenAICompatibleChat({
     tokPerSec,
     totalDurationMs,
     evalDurationMs,
+    wireDiagnostics,
+    protocolDiagnostics,
+    requestBody,
   };
 }

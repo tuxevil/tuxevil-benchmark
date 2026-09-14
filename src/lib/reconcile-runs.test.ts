@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LEGACY_RECOVERY_KEY_PREFIX } from "@/lib/legacy-identifiers";
 import type { TestRun } from "./contracts";
 
 vi.mock("./database", () => ({
@@ -140,7 +141,7 @@ describe("reconcileOrphanedRuns", () => {
     const run = makeRun({ status: "RUNNING" });
     mockedLoad.mockResolvedValue({ runs: [{ run, config: { ollamaUrl: "http://localhost:11434" } }], scenarios: [] });
     stateByJobId.set(`benchmark-${run.id}`, { getState: async () => "failed" });
-    recoveryCounts.set(`slmarena:recovery:${run.id}`, 3);
+    recoveryCounts.set(`${LEGACY_RECOVERY_KEY_PREFIX}${run.id}`, 3);
     mockedStore.getStoredRun.mockReturnValue({ ...run, evaluator: undefined, ollamaUrl: "http://localhost:11434", cancelController: new AbortController(), eventSequence: 0, listeners: new Set() });
     mockedStore.updateRun.mockReturnValue(run);
 

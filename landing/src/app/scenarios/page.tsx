@@ -4,6 +4,7 @@ import { useSnapshot } from "@/lib/use-snapshot";
 import { Navigation } from "@/components/Navigation";
 import { ScenariosView } from "@/components/ScenariosView";
 import { ExportSection } from "@/components/ExportSection";
+import { PROJECT_BRAND } from "@/lib/brand";
 
 export default function ScenariosPage() {
   const { data, error } = useSnapshot();
@@ -26,7 +27,7 @@ export default function ScenariosPage() {
         <Navigation />
         <div className="loading-state">
           <div className="spinner" aria-hidden="true" />
-          <p>Loading SLMarena snapshot...</p>
+          <p>Loading {PROJECT_BRAND.displayName} snapshot...</p>
         </div>
       </div>
     );
@@ -40,11 +41,11 @@ export default function ScenariosPage() {
       <footer className="site-footer">
         <a
           className="footer-link"
-          href="https://github.com/tuxevil/SLMarena"
+          href={PROJECT_BRAND.repositoryUrl}
           target="_blank"
           rel="noopener noreferrer"
         >
-          github.com/tuxevil/SLMarena ↗
+          github.com/tuxevil/tuxevil-benchmark ↗
         </a>
       </footer>
     </div>

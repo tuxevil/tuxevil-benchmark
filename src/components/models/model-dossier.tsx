@@ -7,12 +7,13 @@ import { TestInspectorDrawer } from "@/components/inspector/test-inspector-drawe
 
 interface ModelDossierProps {
   modelName: string;
+  provider?: string;
   modelSummary: LeaderboardModelRow | null;
   runs: TestRun[];
   hideBackLink?: boolean;
 }
 
-export function ModelDossier({ modelName, modelSummary, runs, hideBackLink = false }: ModelDossierProps) {
+export function ModelDossier({ modelName, provider, modelSummary, runs, hideBackLink = false }: ModelDossierProps) {
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedInspectItem, setSelectedInspectItem] = useState<{
@@ -25,7 +26,7 @@ export function ModelDossier({ modelName, modelSummary, runs, hideBackLink = fal
 
   for (const r of runs) {
     for (const res of r.results) {
-      if (res.modelName === modelName) {
+      if (res.modelName === modelName && (!provider || r.provider === provider)) {
         modelResults.push({ run: r, result: res });
       }
     }
@@ -87,9 +88,11 @@ export function ModelDossier({ modelName, modelSummary, runs, hideBackLink = fal
             <h1 className="model-title">{modelName}</h1>
             <div className="model-meta-strip">
               <span className="meta-pill param">
-                {modelSummary?.paramSizeLabel ?? "SLM"} Parameters
+                {modelSummary?.paramSizeLabel ?? "Model"} Parameters
               </span>
-              <span className="meta-pill runtime">Ollama v0.5.1</span>
+              <span className="meta-pill runtime">
+                {provider === "freetoken" ? "FreeToken" : provider === "llamacpp" ? "llama.cpp" : "Ollama"}
+              </span>
               <span className="meta-pill time">Last run: Recently</span>
             </div>
           </div>

@@ -16,7 +16,7 @@ function stubFetch(payload: unknown) {
 describe("listOllamaModels", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("returns installed and running models from the SLMarena endpoint", async () => {
+  it("returns installed and running models from the tuxevil Benchmark endpoint", async () => {
     stubFetch({
       models: [{ name: "qwen3:4b", size: "2.5 GB" }],
       runningModels: [{ name: "qwen3:4b", vramFormatted: "1.8 GB" }],

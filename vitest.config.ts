@@ -13,7 +13,7 @@ export default defineConfig({
     environment: "node",
     exclude: ["**/node_modules/**", "**/e2e/**", "**/integration/**", "**/.{git,cache,output,temp}/**"],
     env: {
-      SQLITE_PATH: join(tmpdir(), `slmarena-test-${process.pid}.db`),
+      SQLITE_PATH: join(tmpdir(), `tuxevil-benchmark-test-${process.pid}.db`),
     },
   },
 });

@@ -5,6 +5,7 @@ import { streamOpenAICompatibleChat } from "@/lib/providers/openai-client";
 import { retryTransient, isTransient } from "@/lib/retry";
 import type { Queue as BullQueue } from "bullmq";
 import { redisConnection } from "@/lib/redis-connection";
+import { LEGACY_QUEUE_NAME } from "@/lib/legacy-identifiers";
 
 type QueueJob = { runId: string; execute: () => Promise<void> };
 
@@ -19,8 +20,8 @@ export async function enqueueBenchmark(runId: string) {
     }
     const { Queue } = await import("bullmq");
     if (!redisQueue) {
-      redisQueue = new Queue("slmarena-benchmarks", { connection: redisConnection() });
-      redisQueue.on("error", (error) => console.error("[slmarena] benchmark queue error", error));
+      redisQueue = new Queue(LEGACY_QUEUE_NAME, { connection: redisConnection() });
+      redisQueue.on("error", (error) => console.error("[tuxevil-benchmark] benchmark queue error", error));
     }
     await redisQueue.add("benchmark", { runId }, {
       attempts: 3,
@@ -65,7 +66,7 @@ async function executeBenchmark(runId: string) {
   await benchmarkStore.hydrate();
   let run = benchmarkStore.getStoredRun(runId);
   if (!run) {
-    console.log(`[slmarena] run ${runId} not in worker store; recovering from database`);
+    console.log(`[tuxevil-benchmark] run ${runId} not in worker store; recovering from database`);
     await benchmarkStore.refreshRun(runId);
     run = benchmarkStore.getStoredRun(runId);
   }
@@ -206,12 +207,15 @@ async function executeModel(runId: string, resultId: string) {
         outputTokens: response.outputTokens,
         tokPerSec: response.tokPerSec,
         totalDurationMs: response.totalDurationMs,
+        wireDiagnostics: "wireDiagnostics" in response ? (response.wireDiagnostics as import("@/lib/providers/openai-client").WireDiagnostics | null) : null,
+        protocolDiagnostics: "protocolDiagnostics" in response ? (response.protocolDiagnostics as import("@/lib/providers/openai-client").ProtocolDiagnostics | null) : null,
+        requestBody: "requestBody" in response ? (response.requestBody as Record<string, unknown> | null) : null,
       });
 
       // If this turn failed to produce visible content, fail the turn and stop conversation
       if (turnResponse.length === 0) {
         const errorReason = turnThinking ? "NO_FINAL_ANSWER" : "EMPTY_RESPONSE";
-        console.warn(`[slmarena] [Inference Failed] ${runId}/${resultId} turn ${index + 1}: ${errorReason}.`);
+        console.warn(`[tuxevil-benchmark] [Inference Failed] ${runId}/${resultId} turn ${index + 1}: ${errorReason}.`);
         benchmarkStore.updateResult(runId, resultId, {
           status: "FAILED",
           evalStatus: "FAILED",
@@ -235,7 +239,7 @@ async function executeModel(runId: string, resultId: string) {
 
     if (responseText.trim().length === 0) {
       const errorReason = lastTurn?.thinking ? "NO_FINAL_ANSWER" : "EMPTY_RESPONSE";
-      console.warn(`[slmarena] [Inference Failed] ${runId}/${resultId}: ${errorReason}.`);
+      console.warn(`[tuxevil-benchmark] [Inference Failed] ${runId}/${resultId}: ${errorReason}.`);
       benchmarkStore.updateResult(runId, resultId, {
         status: "FAILED",
         evalStatus: "FAILED",
@@ -286,7 +290,7 @@ async function executeModel(runId: string, resultId: string) {
         benchmarkStore.updateResult(runId, resultId, { evalStatus: "COMPLETED", status: "COMPLETED", errorMessage: null });
       } catch (error) {
         if (latestRun.cancelController.signal.aborted) return;
-        console.error("[slmarena] [Evaluation Failed]", {
+    console.error("[tuxevil-benchmark] [Evaluation Failed]", {
           runId,
           resultId,
           model: latestRun.evaluator?.model,
@@ -308,7 +312,7 @@ async function executeModel(runId: string, resultId: string) {
       return;
     }
 
-    console.error("[slmarena] [Inference Failed]", {
+    console.error("[tuxevil-benchmark] [Inference Failed]", {
       runId,
       resultId,
       error: error instanceof Error ? error.message : String(error),

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { slmarenaFetch } from "./http-client";
+import { tuxevilBenchmarkFetch } from "./http-client";
 
 export const listTestInputSchema = {
   category: z.enum(["GENERAL", "SECURITY"]).optional().describe("Filtrar escenarios por categoría."),
@@ -21,7 +21,7 @@ export type Scenario = {
 type ScenariosPayload = { scenarios: Scenario[] };
 
 export async function listTestScenarios(args: ListScenariosInput): Promise<unknown> {
-  const data = await slmarenaFetch<ScenariosPayload>("/api/scenarios");
+  const data = await tuxevilBenchmarkFetch<ScenariosPayload>("/api/scenarios");
   const scenarios = data.scenarios ?? [];
   return {
     scenarios: args.category ? scenarios.filter((s) => s.category === args.category) : scenarios,
@@ -35,7 +35,7 @@ export const getScenarioInputSchema = {
 export type GetScenarioInput = { scenario_id: string };
 
 export async function getTestScenario(args: GetScenarioInput): Promise<unknown> {
-  const data = await slmarenaFetch<{ scenario: Scenario }>(`/api/scenarios/${encodeURIComponent(args.scenario_id)}`);
+  const data = await tuxevilBenchmarkFetch<{ scenario: Scenario }>(`/api/scenarios/${encodeURIComponent(args.scenario_id)}`);
   return { scenario: data.scenario };
 }
 
@@ -78,7 +78,7 @@ export async function updateTestScenario(args: UpdateScenarioInput): Promise<unk
     systemPrompt: args.system_prompt,
     userMessages: args.user_messages,
   };
-  const data = await slmarenaFetch<{ scenario: Scenario }>(`/api/scenarios/${encodeURIComponent(args.scenario_id)}`, {
+  const data = await tuxevilBenchmarkFetch<{ scenario: Scenario }>(`/api/scenarios/${encodeURIComponent(args.scenario_id)}`, {
     method: "PATCH",
     body: JSON.stringify(body),
   });
@@ -92,7 +92,7 @@ export const deleteScenarioInputSchema = {
 export type DeleteScenarioInput = { scenario_id: string };
 
 export async function deleteTestScenario(args: DeleteScenarioInput): Promise<unknown> {
-  await slmarenaFetch<null>(`/api/scenarios/${encodeURIComponent(args.scenario_id)}`, { method: "DELETE" });
+  await tuxevilBenchmarkFetch<null>(`/api/scenarios/${encodeURIComponent(args.scenario_id)}`, { method: "DELETE" });
   return { deleted: true, scenario_id: args.scenario_id };
 }
 
@@ -140,7 +140,7 @@ export async function createTestScenario(args: CreateScenarioInput): Promise<unk
     systemPrompt: args.system_prompt,
     userMessages: args.user_messages,
   };
-  const data = await slmarenaFetch<{ scenario: Scenario }>("/api/scenarios", {
+    const data = await tuxevilBenchmarkFetch<{ scenario: Scenario }>("/api/scenarios", {
     method: "POST",
     body: JSON.stringify(body),
   });

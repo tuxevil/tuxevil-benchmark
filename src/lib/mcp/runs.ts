@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { slmarenaFetch } from "./http-client";
+import { tuxevilBenchmarkFetch } from "./http-client";
 import type { Scenario } from "./scenarios";
 
 export const runDetailsInputSchema = {
@@ -39,7 +39,7 @@ export type TestRun = {
 type RunPayload = { run: TestRun };
 
 export async function getTestRunDetails(args: RunDetailsInput): Promise<unknown> {
-  const data = await slmarenaFetch<RunPayload>(`/api/runs/${encodeURIComponent(args.run_id)}`);
+  const data = await tuxevilBenchmarkFetch<RunPayload>(`/api/runs/${encodeURIComponent(args.run_id)}`);
   return { run: data.run };
 }
 
@@ -94,7 +94,7 @@ async function resolveModels(targetModels: string[]): Promise<string[]> {
   const models: string[] = [];
   for (const target of targetModels) {
     if (target === "ALL") {
-      const data = await slmarenaFetch<OllamaModelsPayload>("/api/ollama/models");
+      const data = await tuxevilBenchmarkFetch<OllamaModelsPayload>("/api/ollama/models");
       models.push(...(data.models ?? []).map((m) => m.name));
     } else {
       models.push(target);
@@ -104,7 +104,7 @@ async function resolveModels(targetModels: string[]): Promise<string[]> {
 }
 
 async function resolveScenarios(scenarioIds: string[]): Promise<Scenario[]> {
-  const data = await slmarenaFetch<{ scenarios: Scenario[] }>("/api/scenarios");
+    const data = await tuxevilBenchmarkFetch<{ scenarios: Scenario[] }>("/api/scenarios");
   const all = data.scenarios ?? [];
   const selected: Scenario[] = [];
   for (const id of scenarioIds) {
@@ -143,7 +143,7 @@ function normalizeParameters(raw: Record<string, unknown> | undefined, defaults:
 
 export async function launchMatrixTest(args: LaunchMatrixInput): Promise<unknown> {
   const [settings, scenarios] = await Promise.all([
-    slmarenaFetch<SettingsPayload>("/api/settings"),
+    tuxevilBenchmarkFetch<SettingsPayload>("/api/settings"),
     resolveScenarios(args.scenario_ids),
   ]);
   const ollamaUrl = settings.settings?.ollamaUrl ?? "http://localhost:11434";
@@ -173,7 +173,7 @@ export async function launchMatrixTest(args: LaunchMatrixInput): Promise<unknown
       models,
       parameters,
     };
-    const data = await slmarenaFetch<RunCreateResponse>("/api/runs", {
+    const data = await tuxevilBenchmarkFetch<RunCreateResponse>("/api/runs", {
       method: "POST",
       body: JSON.stringify(body),
     });
@@ -215,7 +215,7 @@ export async function listRuns(args: ListRunsInput): Promise<unknown> {
   if (args.page != null) query.set("page", String(args.page));
   if (args.page_size != null) query.set("pageSize", String(args.page_size));
 
-  const data = await slmarenaFetch<RunsListPayload>(`/api/runs?${query.toString()}`);
+  const data = await tuxevilBenchmarkFetch<RunsListPayload>(`/api/runs?${query.toString()}`);
   return { runs: data.runs, total: data.total, page: data.page, pageSize: data.pageSize };
 }
 
@@ -226,7 +226,7 @@ export const runControlInputSchema = {
 export type RunControlInput = { run_id: string };
 
 async function controlRun(runId: string, action: "pause" | "resume" | "cancel"): Promise<unknown> {
-  const data = await slmarenaFetch<RunPayload>(`/api/runs/${encodeURIComponent(runId)}/${action}`, {
+    const data = await tuxevilBenchmarkFetch<RunPayload>(`/api/runs/${encodeURIComponent(runId)}/${action}`, {
     method: "POST",
   });
   return { run: data.run };
@@ -252,7 +252,7 @@ export const resultDetailsInputSchema = {
 export type ResultDetailsInput = { run_id: string; result_id: string };
 
 export async function getRunResultDetails(args: ResultDetailsInput): Promise<unknown> {
-  const data = await slmarenaFetch<{ runId: string; result: unknown }>(
+    const data = await tuxevilBenchmarkFetch<{ runId: string; result: unknown }>(
     `/api/runs/${encodeURIComponent(args.run_id)}/results/${encodeURIComponent(args.result_id)}`,
   );
   return { run_id: data.runId, result: data.result };
@@ -270,7 +270,7 @@ export const reevaluateInputSchema = {
 export type ReevaluateInput = { result_id: string; evaluator_id?: string };
 
 export async function reevaluateResult(args: ReevaluateInput): Promise<unknown> {
-  const data = await slmarenaFetch<RunPayload>(`/api/results/${encodeURIComponent(args.result_id)}/reevaluate`, {
+  const data = await tuxevilBenchmarkFetch<RunPayload>(`/api/results/${encodeURIComponent(args.result_id)}/reevaluate`, {
     method: "POST",
     body: JSON.stringify({ evaluatorId: args.evaluator_id }),
   });
@@ -286,7 +286,7 @@ async function forEachPendingRun(callback: (entry: PendingRunEntry, run: TestRun
   const requestedPageSize = 100;
   let page = 1;
   for (;;) {
-    const data = await slmarenaFetch<RunsListPayload>(`/api/runs?page=${page}&pageSize=${requestedPageSize}`);
+    const data = await tuxevilBenchmarkFetch<RunsListPayload>(`/api/runs?page=${page}&pageSize=${requestedPageSize}`);
     const runs = data.runs ?? [];
     const pageSize = data.pageSize ?? requestedPageSize;
     for (const run of runs) {
@@ -356,7 +356,7 @@ export const jobStatusInputSchema = {
 export type JobStatusInput = { job_id: string };
 
 export async function checkJobStatus(args: JobStatusInput): Promise<unknown> {
-  const data = await slmarenaFetch<RunPayload>(`/api/runs/${encodeURIComponent(args.job_id)}`);
+  const data = await tuxevilBenchmarkFetch<RunPayload>(`/api/runs/${encodeURIComponent(args.job_id)}`);
   const run = data.run;
   const total = run.results?.length ?? 0;
   const completed = run.results?.filter((r) => r.status === "COMPLETED").length ?? 0;

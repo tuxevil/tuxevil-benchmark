@@ -127,7 +127,7 @@ export function MasterTable({
           </span>
           <input
             type="text"
-            placeholder="Search SLM model..."
+            placeholder="Search model..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             aria-label="Search models"

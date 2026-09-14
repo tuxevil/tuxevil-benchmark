@@ -6,7 +6,9 @@ import { checkJobStatus, getTestRunDetails, jobStatusInputSchema, launchMatrixTe
 import { listOllamaModels } from "./ollama";
 import { getSettings, updateSettings, updateSettingsInputSchema, addEvaluator, addEvaluatorInputSchema, updateEvaluator, updateEvaluatorInputSchema, deleteEvaluator, deleteEvaluatorInputSchema } from "./settings";
 import { getScenarioAnalysis, analysisInputSchema, reviewResult, reviewResultInputSchema } from "./analysis";
-import { readLeaderboardResource, readScenariosResource } from "./resources";
+import { PROJECT_BRAND } from "@/lib/brand";
+import { LEGACY_MCP_RESOURCE_URIS } from "@/lib/legacy-identifiers";
+import { benchmarkResourceUris, readLeaderboardResource, readScenariosResource } from "./resources";
 
 function jsonContent(payload: unknown) {
   return {
@@ -24,7 +26,7 @@ function errorResult(error: unknown) {
 
 export function buildMcpServer(): McpServer {
   const server = new McpServer({
-    name: "slmarena-mcp",
+    name: `${PROJECT_BRAND.slug}-mcp`,
     version: "1.0.0",
   });
 
@@ -35,7 +37,7 @@ export function buildMcpServer(): McpServer {
     {
       title: "Obtener ranking de modelos",
       description:
-        "Retorna el ranking actual de modelos de SLMarena, ordenable por calidad, velocidad, seguridad o Arena Index, con filtros de velocidad mínima y categoría.",
+        "Retorna el ranking actual de modelos de tuxevil Benchmark, ordenable por calidad, velocidad, seguridad o Arena Index, con filtros de velocidad mínima y categoría.",
       inputSchema: leaderboardInputSchema,
     },
     async (args) => {
@@ -69,7 +71,7 @@ export function buildMcpServer(): McpServer {
     {
       title: "Listar modelos de Ollama",
       description:
-        "Consulta el servidor Ollama conectado a SLMarena: modelos instalados con su tamaño, modelos cargados en VRAM y el modelo activo actual.",
+        "Consulta el servidor Ollama conectado a tuxevil Benchmark: modelos instalados con su tamaño, modelos cargados en VRAM y el modelo activo actual.",
     },
     async () => {
       try {
@@ -84,7 +86,7 @@ export function buildMcpServer(): McpServer {
     "list_test_scenarios",
     {
       title: "Listar escenarios de prueba",
-      description: "Lista los escenarios y plantillas de prueba guardados en SLMarena, generales o de seguridad.",
+      description: "Lista los escenarios y plantillas de prueba guardados en tuxevil Benchmark, generales o de seguridad.",
       inputSchema: listTestInputSchema,
     },
     async (args) => {
@@ -247,7 +249,7 @@ export function buildMcpServer(): McpServer {
     {
       title: "Obtener configuración",
       description:
-        "Devuelve la configuración actual de SLMarena: URL de Ollama, catálogo de modelos evaluadores con el activo seleccionado (sin exponer API keys), e hiperparámetros por defecto.",
+        "Devuelve la configuración actual de tuxevil Benchmark: URL de Ollama, catálogo de modelos evaluadores con el activo seleccionado (sin exponer API keys), e hiperparámetros por defecto.",
     },
     async () => {
       try {
@@ -263,7 +265,7 @@ export function buildMcpServer(): McpServer {
     {
       title: "Actualizar configuración",
       description:
-        "Actualiza la configuración de SLMarena: URL de Ollama, credenciales del evaluador activo, evaluador activo del catálogo o hiperparámetros por defecto. Solo se modifican los campos indicados.",
+        "Actualiza la configuración de tuxevil Benchmark: URL de Ollama, credenciales del evaluador activo, evaluador activo del catálogo o hiperparámetros por defecto. Solo se modifican los campos indicados.",
       inputSchema: updateSettingsInputSchema,
     },
     async (args) => {
@@ -280,7 +282,7 @@ export function buildMcpServer(): McpServer {
     {
       title: "Agregar modelo evaluador",
       description:
-        "Registra un nuevo modelo evaluador (URL base, modelo y API key opcional) en el catálogo de evaluadores de SLMarena. Si make_active es true (o no hay ningún evaluador), pasa a ser el usado en las evaluaciones.",
+        "Registra un nuevo modelo evaluador (URL base, modelo y API key opcional) en el catálogo de evaluadores de tuxevil Benchmark. Si make_active es true (o no hay ningún evaluador), pasa a ser el usado en las evaluaciones.",
       inputSchema: addEvaluatorInputSchema,
     },
     async (args) => {
@@ -399,7 +401,7 @@ export function buildMcpServer(): McpServer {
     {
       title: "Obtener detalles de ejecución",
       description:
-        "Devuelve el desglose completo de una ejecución: telemetría por modelo, turns, evaluación del juez, respuestas originales del SLM y estado.",
+        "Devuelve el desglose completo de una ejecución: telemetría por modelo, turns, evaluación del juez, respuestas originales del modelo y estado.",
       inputSchema: runDetailsInputSchema,
     },
     async (args) => {
@@ -418,7 +420,7 @@ export function buildMcpServer(): McpServer {
     {
       title: "Crear escenario de prueba",
       description:
-        "Redacta y guarda un nuevo escenario (System Prompt + secuencia de mensajes de usuario) en la base de datos de SLMarena para futuras pruebas.",
+        "Redacta y guarda un nuevo escenario (System Prompt + secuencia de mensajes de usuario) en la base de datos de tuxevil Benchmark para futuras pruebas.",
       inputSchema: createScenarioInputSchema,
     },
     async (args) => {
@@ -435,7 +437,7 @@ export function buildMcpServer(): McpServer {
     {
       title: "Lanzar test matricial",
       description:
-        "Dispara una ejecución matricial: lanza cada escenario dado (o ALL_SECURITY) contra los modelos objetivo (o ALL) en la cola asíncrona de SLMarena. Retorna los run_id de seguimiento.",
+        "Dispara una ejecución matricial: lanza cada escenario dado (o ALL_SECURITY) contra los modelos objetivo (o ALL) en la cola asíncrona de tuxevil Benchmark. Retorna los run_id de seguimiento.",
       inputSchema: launchMatrixInputSchema,
     },
     async (args) => {
@@ -466,7 +468,7 @@ export function buildMcpServer(): McpServer {
 
   // ---- Resources ----
 
-  server.registerResource("slmarena://leaderboard", "slmarena://leaderboard", { mimeType: "application/json", title: "Leaderboard SLMarena" }, async () => {
+  server.registerResource(benchmarkResourceUris.leaderboard, benchmarkResourceUris.leaderboard, { mimeType: "application/json", title: `Leaderboard ${PROJECT_BRAND.displayName}` }, async () => {
     try {
       return { contents: [await readLeaderboardResource()] };
     } catch (error) {
@@ -474,9 +476,26 @@ export function buildMcpServer(): McpServer {
     }
   });
 
-  server.registerResource("slmarena://scenarios", "slmarena://scenarios", { mimeType: "application/json", title: "Escenarios de prueba" }, async () => {
+  server.registerResource(benchmarkResourceUris.scenarios, benchmarkResourceUris.scenarios, { mimeType: "application/json", title: `Escenarios de ${PROJECT_BRAND.displayName}` }, async () => {
     try {
       return { contents: [await readScenariosResource()] };
+    } catch (error) {
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+  });
+
+  // Keep the pre-rebrand URIs readable so existing MCP clients do not break.
+  server.registerResource(LEGACY_MCP_RESOURCE_URIS.leaderboard, LEGACY_MCP_RESOURCE_URIS.leaderboard, { mimeType: "application/json", title: "Legacy leaderboard resource" }, async () => {
+    try {
+      return { contents: [await readLeaderboardResource(LEGACY_MCP_RESOURCE_URIS.leaderboard)] };
+    } catch (error) {
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+  });
+
+  server.registerResource(LEGACY_MCP_RESOURCE_URIS.scenarios, LEGACY_MCP_RESOURCE_URIS.scenarios, { mimeType: "application/json", title: "Legacy scenarios resource" }, async () => {
+    try {
+      return { contents: [await readScenariosResource(LEGACY_MCP_RESOURCE_URIS.scenarios)] };
     } catch (error) {
       throw error instanceof Error ? error : new Error(String(error));
     }

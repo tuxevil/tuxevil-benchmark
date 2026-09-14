@@ -23,7 +23,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ run });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Re-evaluation failed.";
-    console.error("[slmarena] [Re-evaluate Run Failed]", { runId: id, error: message });
+    console.error("[tuxevil-benchmark] [Re-evaluate Run Failed]", { runId: id, error: message });
     const status = /not found/i.test(message) ? 404 : /evaluator/i.test(message) ? 400 : 502;
     return NextResponse.json({ error: message }, { status });
   }

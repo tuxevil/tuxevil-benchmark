@@ -87,7 +87,7 @@ export function ModelGroupedResultsList({ items, onDeleteResult, onHumanReview }
         <div>
           <h4 className="grouped-title">📊 Model-Grouped Results</h4>
           <p className="grouped-subtitle">
-            Telemetry averages and evaluator scores accumulated per SLM model.
+            Telemetry averages and evaluator scores accumulated per model.
           </p>
         </div>
 

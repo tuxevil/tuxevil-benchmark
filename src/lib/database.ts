@@ -392,6 +392,7 @@ export async function aggregateLeaderboard(options?: {
   type ModelRawBucket = {
     modelKey: string;
     modelName: string;
+    provider: import("@/lib/contracts").ModelProvider;
     reasoningEffort: import("@/lib/contracts").ReasoningEffort;
     runsCount: number;
     failedEvals: number;
@@ -439,6 +440,7 @@ export async function aggregateLeaderboard(options?: {
   for (const entry of filteredRuns) {
     uniqueRunIds.add(entry.run.id);
     const runEffort: import("@/lib/contracts").ReasoningEffort = entry.run.parameters?.reasoningEffort ?? "off";
+    const runProvider: import("@/lib/contracts").ModelProvider = entry.run.provider ?? "ollama";
     for (const res of entry.run.results) {
       if (res.status !== "COMPLETED") continue;
 
@@ -449,16 +451,17 @@ export async function aggregateLeaderboard(options?: {
         if (options.paramRange === ">8B" && param.value <= 8) continue;
       }
 
-      // Group by modelName + reasoningEffort when comparing across multiple reasoning modes
+      // Group by modelName + provider + reasoningEffort
       const modelKey = options?.reasoningEffort && options.reasoningEffort !== "ALL"
-        ? res.modelName
-        : `${res.modelName}::${runEffort}`;
+        ? `${res.modelName}::${runProvider}`
+        : `${res.modelName}::${runProvider}::${runEffort}`;
 
       let bucket = byModel.get(modelKey);
       if (!bucket) {
         bucket = {
           modelKey,
           modelName: res.modelName,
+          provider: runProvider,
           reasoningEffort: runEffort,
           runsCount: 0,
           failedEvals: 0,
@@ -558,6 +561,7 @@ export async function aggregateLeaderboard(options?: {
   let maxAvgSpeed = 1;
   const modelAverages: Array<{
     modelName: string;
+    provider: import("@/lib/contracts").ModelProvider;
     reasoningEffort?: import("@/lib/contracts").ReasoningEffort;
     paramSize: { label: string; value: number };
     totalRuns: number;
@@ -627,6 +631,7 @@ export async function aggregateLeaderboard(options?: {
 
     modelAverages.push({
       modelName: bucket.modelName,
+      provider: bucket.provider,
       reasoningEffort: bucket.reasoningEffort,
       paramSize: extractParamSize(bucket.modelName),
       totalRuns: bucket.runsCount,
@@ -670,6 +675,7 @@ export async function aggregateLeaderboard(options?: {
 
     return {
       modelName: m.modelName,
+      provider: m.provider,
       reasoningEffort: m.reasoningEffort,
       paramSizeLabel: m.paramSize.label,
       paramSizeValue: m.paramSize.value,
@@ -947,7 +953,7 @@ export async function loadPersistedEvaluatorKey(id: string): Promise<string | nu
   try {
     return decryptSecret(encrypted);
   } catch (error) {
-    console.error("[slmarena] [Settings] Could not decrypt evaluator credentials:", error instanceof Error ? error.message : String(error));
+    console.error("[tuxevil-benchmark] [Settings] Could not decrypt evaluator credentials:", error instanceof Error ? error.message : String(error));
     return null;
   }
 }
@@ -1099,6 +1105,7 @@ export async function listPersistedHistory(filters: {
   keyword: string;
   date: string;
   model: string;
+  provider?: string;
   score?: number;
   vulnerableOnly?: boolean;
   timezoneOffset: number;
@@ -1119,6 +1126,9 @@ export async function listPersistedHistory(filters: {
     }
     if (filters.model) {
       runs = runs.filter((r) => r.results.some((res) => res.modelName === filters.model));
+    }
+    if (filters.provider) {
+      runs = runs.filter((r) => r.provider === filters.provider);
     }
     if (filters.score !== undefined) {
       runs = runs.filter((r) => r.results.some((res) => res.evaluation?.scoreStars === filters.score));
@@ -1165,6 +1175,7 @@ export async function listPersistedHistory(filters: {
         SELECT 1 FROM model_results model_filter
         WHERE model_filter.test_run_id = test_runs.id AND model_filter.model_name = ${filters.model}
       ))
+      AND (${filters.provider ?? ""} = '' OR test_runs.provider = ${filters.provider ?? ""})
       AND (${score}::int IS NULL OR EXISTS (
         SELECT 1 FROM model_results score_results
         JOIN evaluations score_evaluations ON score_evaluations.model_result_id = score_results.id
@@ -1496,8 +1507,19 @@ async function persistRun(run: TestRun, config: RunPersistenceConfig) {
 
 async function persistTurn(transaction: TransactionSql, resultId: string, turn: TurnResult) {
   await transaction`
-    INSERT INTO model_result_turns (id, model_result_id, step_order, user_message, response_text, thinking, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms)
-    VALUES (${turn.id}, ${resultId}, ${turn.stepOrder}, ${turn.userMessage}, ${turn.responseText}, ${turn.thinking ?? ""}, ${turn.inputTokens}, ${turn.outputTokens}, ${turn.ttftMs}, ${turn.tokPerSec}, ${turn.totalDurationMs})
+    INSERT INTO model_result_turns (
+      id, model_result_id, step_order, user_message, response_text, thinking,
+      input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms,
+      finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body
+    )
+    VALUES (
+      ${turn.id}, ${resultId}, ${turn.stepOrder}, ${turn.userMessage}, ${turn.responseText}, ${turn.thinking ?? ""},
+      ${turn.inputTokens}, ${turn.outputTokens}, ${turn.ttftMs}, ${turn.tokPerSec}, ${turn.totalDurationMs},
+      ${turn.finishReason ?? null}, ${turn.truncated ?? false},
+      ${turn.wireDiagnostics ? JSON.stringify(turn.wireDiagnostics) : null}::jsonb,
+      ${turn.protocolDiagnostics ? JSON.stringify(turn.protocolDiagnostics) : null}::jsonb,
+      ${turn.requestBody ? JSON.stringify(turn.requestBody) : null}::jsonb
+    )
   `;
 }
 
@@ -1526,6 +1548,9 @@ function getClient() {
       ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS provider_url TEXT;
       ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS finish_reason TEXT;
       ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS truncated BOOLEAN;
+      ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS wire_diagnostics JSONB;
+      ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS protocol_diagnostics JSONB;
+      ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS request_body JSONB;
       ALTER TABLE model_results ADD COLUMN IF NOT EXISTS finish_reason TEXT;
       ALTER TABLE model_results ADD COLUMN IF NOT EXISTS truncated BOOLEAN;
       ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS visible_prompt_leak BOOLEAN;
@@ -1550,6 +1575,11 @@ function groupTurns(rows: Array<Record<string, unknown>>) {
       ttftMs: numberOrNull(row.ttft_ms),
       tokPerSec: numberOrNull(row.tok_per_sec),
       totalDurationMs: numberOrNull(row.total_duration_ms),
+      finishReason: row.finish_reason ? String(row.finish_reason) : null,
+      truncated: row.truncated === true || row.truncated === 1,
+      wireDiagnostics: row.wire_diagnostics != null ? (row.wire_diagnostics as import("@/lib/providers/openai-client").WireDiagnostics) : null,
+      protocolDiagnostics: row.protocol_diagnostics != null ? (row.protocol_diagnostics as import("@/lib/providers/openai-client").ProtocolDiagnostics) : null,
+      requestBody: row.request_body != null ? (row.request_body as Record<string, unknown>) : null,
     });
     grouped.set(String(row.model_result_id), turns);
   }
@@ -1703,7 +1733,7 @@ function dateOrNull(value: string | null) {
 }
 
 function reportPersistenceError(error: unknown) {
-  console.error("[slmarena] database persistence failed", error);
+  console.error("[tuxevil-benchmark] database persistence failed", error);
 }
 
 /**
@@ -1727,4 +1757,3 @@ export async function loadPersistedStateForResult(resultId: string): Promise<Per
     return null;
   }
 }
-

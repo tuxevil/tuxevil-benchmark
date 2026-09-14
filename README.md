@@ -1,20 +1,20 @@
-# SLMarena
+# tuxevil Benchmark
 
-[![CI](https://github.com/tuxevil/SLMarena/actions/workflows/ci.yml/badge.svg)](https://github.com/tuxevil/SLMarena/actions/workflows/ci.yml)
+[![CI](https://github.com/tuxevil/tuxevil-benchmark/actions/workflows/ci.yml/badge.svg)](https://github.com/tuxevil/tuxevil-benchmark/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node.js >= 20](https://img.shields.io/badge/node-%3E%3D20-339933.svg)](.nvmrc)
 [![TypeScript](https://img.shields.io/badge/types-TypeScript-3178c6.svg)](tsconfig.json)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-black.svg)](package.json)
 [![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](package.json)
-[![Live](https://img.shields.io/badge/live-slmarena.tuxevil.com-4caf50.svg)](https://slmarena.tuxevil.com/)
+[![Live](https://img.shields.io/badge/live-tuxevil--benchmark.tuxevil.com-4caf50.svg)](https://tuxevil-benchmark.tuxevil.com/)
 
-SLMarena (Small Language Model Arena) is an enterprise-grade local language-model benchmarking, security evaluation, and quality telemetry workspace. It positions the **Small Language Model (SLM)** as a first-class entity and applies universal UX/UI patterns—*Progressive Disclosure*, *Master-Detail Navigation*, and *Contextual Analytics*—making model comparison intuitive for both AI engineers and non-technical stakeholders.
+tuxevil Benchmark is an enterprise-grade local language-model benchmarking, security evaluation, and quality telemetry workspace in Sebastián Real's (tuxevil) personal project portfolio. It positions the **Small Language Model (SLM)** as a first-class entity and applies universal UX/UI patterns—*Progressive Disclosure*, *Master-Detail Navigation*, and *Contextual Analytics*—making model comparison intuitive for both AI engineers and non-technical stakeholders.
 
-SLMarena executes standardized scenarios across local Ollama models, captures response-quality metrics and granular inference telemetry, evaluates model outputs via an OpenAI-compatible frontier judge model, and compiles rankings on an interactive Arena Leaderboard.
+tuxevil Benchmark executes standardized scenarios across local Ollama models, captures response-quality metrics and granular inference telemetry, evaluates model outputs via an OpenAI-compatible frontier judge model, and compiles rankings on an interactive Arena Leaderboard.
 
 The application is built for secure, local, and private model evaluations. It supports both a zero-config single-process development mode backed by SQLite and a scalable, durable multi-process deployment backed by PostgreSQL and Redis.
 
-> 🌐 **Public Leaderboard:** [https://slmarena.tuxevil.com/](https://slmarena.tuxevil.com/) — static snapshot showcase of evaluated models, security results, and public scenarios.
+> 🌐 **Public Leaderboard:** [https://tuxevil-benchmark.tuxevil.com/](https://tuxevil-benchmark.tuxevil.com/) — static snapshot showcase of evaluated models, security results, and public scenarios.
 
 ## Contents
 
@@ -44,7 +44,7 @@ The application is structured into **4 independent core modules**, cleanly separ
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────────┐
-│  SLMarena   [ 📊 Leaderboard ]   [ 🧪 Test Suites ]   [ ⚡ Monitor ]   [ ⚙️ Settings ]│
+│  tuxevil Benchmark   [ 📊 Leaderboard ]   [ 🧪 Test Suites ]   [ ⚡ Monitor ]   [ ⚙️ Settings ]│
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -55,7 +55,7 @@ The application is structured into **4 independent core modules**, cleanly separ
 3. **⚡ Live Monitor (`/monitor`):** Technical operations and real-time inference monitoring. Displays local Ollama server status (ping, installed models, active model loaded in VRAM via `/api/ps`, VRAM usage), active run progress bar, token-by-token live SSE streaming box, queue flow controls (*Pause*, *Resume*, *Cancel*, *Retry Failed*), and run history log.
 4. **⚙️ Settings (`/settings`):** Endpoint configurations (Ollama URL, evaluator catalog with active judge selection), inference hyper-parameters, and theme options.
 5. **Level 2: Model Profile (`/models/[modelId]` & Inline Modal):** Technical dossier for an individual model available both as a dedicated page and an interactive modal when clicking `[View Profile]` on the Leaderboard. Displays model averages (Rating, Grammar, Compliance, Accuracy, Security Resilience), filterable executed test benchmarks table, and inspector triggers.
-6. **Level 3: Test Inspector Drawer:** Slide-over panel sliding from the right without losing background context. Displays System Prompt, User Prompt, SLM Output Response, Evaluator Verdict (star ratings, qualitative feedback, vulnerability analysis), and Execution Telemetry (*TTFT, Speed, Output Tokens, Latency*).
+6. **Level 3: Test Inspector Drawer:** Slide-over panel sliding from the right without losing background context. Displays System Prompt, User Prompt, Model Output Response, Evaluator Verdict (star ratings, qualitative feedback, vulnerability analysis), and Execution Telemetry (*TTFT, Speed, Output Tokens, Latency*).
 
 ## Highlights
 
@@ -72,11 +72,11 @@ The application is structured into **4 independent core modules**, cleanly separ
 - **Worker Auto-Recovery:** Orphaned benchmark runs (PENDING/RUNNING with no active BullMQ job) are automatically detected on worker startup and every 5 minutes. Runs are re-enqueued or marked as STALLED after exceeding a bounded retry counter (Redis TTL 7d), preventing infinite retry loops. Stalled evaluations on finished runs are also reconciled.
 - **Data Export:** Export benchmark results as JSON or CSV with optional filters (model, scenario, date range) via `GET /api/export_results`.
 - **Flexible Execution Modes:** Zero-dependency local SQLite setup or enterprise-ready PostgreSQL + Redis BullMQ worker queue architecture.
-- **MCP Server for Agent-Driven Benchmarking:** Expose the SLMarena REST API as Model Context Protocol (MCP) tools and resources so autonomous agents (e.g. Hermes) can read metrics, create test scenarios, and orchestrate matrix benchmarks programmatically.
+- **MCP Server for Agent-Driven Benchmarking:** Expose the tuxevil Benchmark REST API as Model Context Protocol (MCP) tools and resources so autonomous agents (e.g. Hermes) can read metrics, create test scenarios, and orchestrate matrix benchmarks programmatically.
 
 ## Architecture
 
-SLMarena is built as a Next.js 16 application with a React 19 single-page dashboard, typed server-side REST API routes, and a decoupled BullMQ worker process.
+tuxevil Benchmark is built as a Next.js 16 application with a React 19 single-page dashboard, typed server-side REST API routes, and a decoupled BullMQ worker process.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -110,14 +110,14 @@ SLMarena is built as a Next.js 16 application with a React 19 single-page dashbo
 
 ### Execution Modes
 
-- **Local Mode (Default):** Leave `REDIS_URL` empty. Benchmark runs execute directly in the web server process and persist to an embedded SQLite database (`SQLITE_PATH`, default `./compare.db`). Recommended for local evaluation and single-user workflows.
+- **Local Mode (Default):** Leave `REDIS_URL` empty. Benchmark runs execute directly in the web server process and persist to an embedded SQLite database (`SQLITE_PATH`, default `./tuxevil-benchmark.db`). Existing checkouts with only the legacy `compare.db` are detected automatically when `SQLITE_PATH` is unset.
 - **Durable Mode:** Set both `DATABASE_URL` and `REDIS_URL`. Benchmark jobs are enqueued in Redis via BullMQ, processed asynchronously by `src/worker.ts`, and persisted to PostgreSQL. Progress updates and events are broadcast across processes via Redis pub/sub.
 
 > **Note:** `REDIS_URL` requires `DATABASE_URL` (workers must recover run state from PostgreSQL), and the durable worker additionally requires `APP_ENCRYPTION_KEY` to decrypt stored evaluator credentials.
 
 ## Security Testing Framework
 
-SLMarena includes a security testing suite engineered to evaluate Small Language Models against adversarial jailbreak techniques and system prompt exfiltration attempts.
+tuxevil Benchmark includes a security testing suite engineered to evaluate Small Language Models against adversarial jailbreak techniques and system prompt exfiltration attempts.
 
 ### Built-in Attack Vectors & Specialized Security Categories
 
@@ -200,12 +200,12 @@ across the model population:
 
 ## Theme System (Light / Dark / System)
 
-SLMarena supports three appearance modes:
+tuxevil Benchmark supports three appearance modes:
 - **☀️ Light Mode:** High-contrast light background (`#f8fafc`), crisp slate text (`#0f172a`), and clean surface cards (`#ffffff`).
 - **🌙 Dark Mode:** Dark theme (`#0c1017`) optimized for low-light environments.
 - **💻 System Theme:** Automatically syncs with the operating system's `prefers-color-scheme`.
 
-Theme preference is persisted in `localStorage` and can be toggled via the Topbar or the Settings panel. An early inline script prevents flash of unstyled content (FOUC).
+Theme preference is persisted in `localStorage` and can be toggled via the Topbar or the Settings panel. An early inline script prevents flash of unstyled content (FOUC). Existing `slmarena-theme` preferences are read once as a compatibility fallback.
 
 ## Requirements
 
@@ -230,8 +230,8 @@ For durable worker mode:
 1. **Clone the repository and install dependencies:**
 
    ```bash
-   git clone https://github.com/tuxevil/SLMarena.git
-   cd SLMarena
+   git clone https://github.com/tuxevil/tuxevil-benchmark.git
+   cd tuxevil-benchmark
    cp -f .env.example .env.local
    npm install
    ```
@@ -284,7 +284,7 @@ For multi-user or background worker processing:
 1. **Configure connection strings in `.env.local`:**
 
    ```dotenv
-   DATABASE_URL=postgresql://slmarena:local-development-only@localhost:55432/slmarena
+   DATABASE_URL=postgresql://tuxevil_benchmark:local-development-only@localhost:55432/tuxevil_benchmark
    REDIS_URL=redis://:local-development-only@localhost:6379
    ```
 
@@ -297,7 +297,7 @@ For multi-user or background worker processing:
 3. **Run database migrations:**
 
    ```bash
-   export DATABASE_URL=postgresql://slmarena:local-development-only@localhost:55432/slmarena
+   export DATABASE_URL=postgresql://tuxevil_benchmark:local-development-only@localhost:55432/tuxevil_benchmark
    npm run db:migrate
    ```
 
@@ -325,7 +325,7 @@ For multi-user or background worker processing:
 | `EVALUATOR_MODEL` | Judge model name used for evaluation. Seeds the evaluator catalog on first startup. | Empty |
 | `EVALUATOR_API_KEY` | Judge API key. Encrypted at rest when saved via UI. | Empty |
 | `APP_ENCRYPTION_KEY` | 32-byte hex key for AES-256-GCM secret encryption. | Empty |
-| `SQLITE_PATH` | File path for SQLite database in local mode. | `./compare.db` |
+| `SQLITE_PATH` | File path for SQLite database in local mode. | `./tuxevil-benchmark.db` (legacy `compare.db` auto-detected when unset) |
 | `DATABASE_URL` | PostgreSQL connection string. Enables Postgres persistence. | Empty |
 | `REDIS_URL` | Redis connection string. Enables BullMQ queuing and SSE events. | Empty |
 | `POSTGRES_PORT` | Host port exposed by the docker-compose PostgreSQL service. | `55432` |
@@ -387,7 +387,7 @@ For multi-user or background worker processing:
 
 ## MCP Server (Agent Integration)
 
-SLMarena exposes its REST API as a [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server so autonomous agents can programmatically drive the benchmark workspace. It uses a stateless **Streamable HTTP transport** (HTTP + Server-Sent Events) rather than stdio, so any network-connected agent (e.g. Hermes) can connect directly.
+tuxevil Benchmark exposes its REST API as a [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server so autonomous agents can programmatically drive the benchmark workspace. It uses a stateless **Streamable HTTP transport** (HTTP + Server-Sent Events) rather than stdio, so any network-connected agent (e.g. Hermes) can connect directly.
 
 ### Start the server
 
@@ -395,7 +395,7 @@ SLMarena exposes its REST API as a [Model Context Protocol](https://modelcontext
 npm run mcp
 ```
 
-The MCP server talks to the SLMarena Next.js instance via its `APP_URL` (e.g. `http://localhost:3000`), not to Ollama directly — it wraps the existing REST API routes, including resolving target models from the same Ollama configured in Settings.
+The MCP server talks to the tuxevil Benchmark Next.js instance via its `APP_URL` (e.g. `http://localhost:3000`), not to Ollama directly — it wraps the existing REST API routes, including resolving target models from the same Ollama configured in Settings.
 
 ### Endpoints
 
@@ -408,7 +408,7 @@ The MCP server talks to the SLMarena Next.js instance via its `APP_URL` (e.g. `h
 | Tool | Purpose |
 | --- | --- |
 | `get_arena_leaderboard` | Read the current Arena Leaderboard with custom KPI weights and filters. |
-| `list_ollama_models` | List the models installed on the Ollama server connected to SLMarena, which are loaded in VRAM, and the currently active model. |
+| `list_ollama_models` | List the models installed on the Ollama server connected to tuxevil Benchmark, which are loaded in VRAM, and the currently active model. |
 | `get_model_profile` | Fetch per-model profile/analysis from the leaderboard and optional scenario slice. |
 | `list_test_scenarios` | List saved test scenarios. |
 | `get_test_scenario` | Fetch one saved test scenario by ID (system prompt, user messages, category, attack type). |
@@ -432,23 +432,34 @@ The MCP server talks to the SLMarena Next.js instance via its `APP_URL` (e.g. `h
 
 | Resource | Purpose |
 | --- | --- |
-| `slmarena://leaderboard` | Read-only leaderboard snapshot. |
-| `slmarena://scenarios` | Read-only scenarios list. |
+| `tuxevil-benchmark://leaderboard` | Read-only leaderboard snapshot. |
+| `tuxevil-benchmark://scenarios` | Read-only scenarios list. |
+
+Existing MCP clients can continue using the legacy `slmarena://leaderboard` and
+`slmarena://scenarios` aliases while migrating to the canonical URIs above.
 
 ## Persistence and Data Model
 
 Runs, model results, per-turn telemetry, evaluator verdicts, scenarios, and application settings are persisted across restarts in either storage engine:
 
-- **Local mode (default):** Single-file SQLite database via Better-SQLite3 (`SQLITE_PATH`, default `./compare.db`) in WAL mode. The schema — `app_settings`, `evaluators`, `scenarios`, `test_runs`, `model_results`, `model_result_turns`, `evaluations`, `evaluation_history` — is created and migrated automatically on first access (`src/lib/sqlite-db.ts`).
+- **Local mode (default):** Single-file SQLite database via Better-SQLite3 (`SQLITE_PATH`, default `./tuxevil-benchmark.db`) in WAL mode. The schema — `app_settings`, `evaluators`, `scenarios`, `test_runs`, `model_results`, `model_result_turns`, `evaluations`, `evaluation_history` — is created and migrated automatically on first access (`src/lib/sqlite-db.ts`). An existing `compare.db` is used automatically when the new default file does not exist and `SQLITE_PATH` is unset.
 - **Durable mode:** PostgreSQL (`DATABASE_URL`) with the same schema defined in `db/schema.sql`, applied with `npm run db:migrate` via `psql`. Lists and parameter objects are stored as JSONB, and a monotonic `control_version` guards against out-of-order writes from the concurrent worker.
 - **Evaluator catalog:** Multiple evaluator models can be registered (each with its own base URL, model name, and optional API key). Exactly one is marked **active** (`active_evaluator_id`) and is the one used to judge benchmark responses; per-run overrides via the API remain supported. On first startup, legacy `EVALUATOR_*` config is seeded into the catalog and activated.
 - **Evaluation history:** Every re-evaluation of a stored response appends the verdict to `evaluation_history` (judge used, scores, feedback, timestamp), while `evaluations` keeps the current verdict used by leaderboard and analysis.
 - **Secrets:** Evaluator API keys are encrypted at rest with AES-256-GCM (`APP_ENCRYPTION_KEY`) — they are stored as `api_key_encrypted` per evaluator and never returned by the API; only a `apiKeyConfigured` boolean is exposed.
 - **Human audit trail:** Each model result carries a review status (`UNREVIEWED`, `REVIEWED`, `APPROVED`, `REJECTED`) and optional reviewer notes via `/api/results/:id/review`.
 
+### Rebrand compatibility
+
+The public identity is now `tuxevil Benchmark` (`tuxevil-benchmark`). Existing
+runtime data remains usable: the legacy `compare.db` file is auto-detected, the
+pre-rebrand BullMQ queue and Redis event namespace remain stable, and seeded
+security scenario IDs are unchanged. These are internal migration identifiers,
+not public branding.
+
 ## Public Landing Site
 
-SLMarena includes a separate **static landing site** (`landing/` npm workspace) that showcases a read-only public snapshot of the Arena Leaderboard, model profiles, security results, and evaluated scenarios. It is deployed at [slmarena.tuxevil.com](https://slmarena.tuxevil.com/).
+tuxevil Benchmark includes a separate **static landing site** (`landing/` npm workspace) that showcases a read-only public snapshot of the Arena Leaderboard, model profiles, security results, and evaluated scenarios. It is deployed at [tuxevil-benchmark.tuxevil.com](https://tuxevil-benchmark.tuxevil.com/).
 
 ### Architecture
 

@@ -10,7 +10,7 @@
 ## Reporting a vulnerability
 
 Please report security issues privately by opening a
-[security advisory](https://github.com/tuxevil/SLMarena/security/advisories/new)
+[security advisory](https://github.com/tuxevil/tuxevil-benchmark/security/advisories/new)
 instead of a public issue.
 
 You should receive an acknowledgment within 48 hours. If you do not, follow up

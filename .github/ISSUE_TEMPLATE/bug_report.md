@@ -26,7 +26,7 @@ What actually happened, including any error messages.
 
 ## Environment
 
-- SLMarena version / commit: `git rev-parse HEAD`
+- tuxevil Benchmark version / commit: `git rev-parse HEAD`
 - Node.js version: `node -v`
 - Next.js version: `npm ls next`
 - Ollama version and models used:

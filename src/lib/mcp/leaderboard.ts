@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { slmarenaFetch } from "./http-client";
+import { tuxevilBenchmarkFetch } from "./http-client";
 
 export const leaderboardInputSchema = {
   sort_by: z
@@ -81,7 +81,7 @@ export async function getArenaLeaderboard(args: LeaderboardInput): Promise<unkno
     category: args.category ?? "ALL",
     difficulty: args.difficulty ?? "ALL",
   });
-  const data = await slmarenaFetch<LeaderboardPayload>(`/api/leaderboard?${query.toString()}`);
+  const data = await tuxevilBenchmarkFetch<LeaderboardPayload>(`/api/leaderboard?${query.toString()}`);
 
   let rows = data.models ?? [];
   if (args.min_tokens_sec != null) {

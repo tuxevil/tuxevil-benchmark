@@ -1,7 +1,8 @@
 import Redis from "ioredis";
 import type { RunEvent } from "@/lib/contracts";
+import { LEGACY_RUN_EVENT_CHANNEL_PREFIX } from "@/lib/legacy-identifiers";
 
-const channelPrefix = "slmarena:run:";
+const channelPrefix = LEGACY_RUN_EVENT_CHANNEL_PREFIX;
 let publisher: Redis | null | undefined;
 
 export async function publishRunEvent(event: RunEvent) {
@@ -19,10 +20,10 @@ export async function subscribeRunEvents(runId: string, onEvent: (event: RunEven
     try {
       onEvent(JSON.parse(payload) as RunEvent);
     } catch (error) {
-      console.error("[slmarena] invalid run event", error);
+      console.error("[tuxevil-benchmark] invalid run event", error);
     }
   });
-  subscriber.on("error", (error) => console.error("[slmarena] run event subscriber error", error));
+  subscriber.on("error", (error) => console.error("[tuxevil-benchmark] run event subscriber error", error));
 
   return async () => {
     await subscriber.unsubscribe(channel).catch(() => undefined);
@@ -38,7 +39,7 @@ function getPublisher() {
     return publisher;
   }
   publisher = new Redis(url, { maxRetriesPerRequest: null });
-  publisher.on("error", (error) => console.error("[slmarena] run event publisher error", error));
+  publisher.on("error", (error) => console.error("[tuxevil-benchmark] run event publisher error", error));
   return publisher;
 }
 
