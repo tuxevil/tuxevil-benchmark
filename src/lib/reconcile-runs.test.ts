@@ -71,27 +71,25 @@ describe("reconcileOrphanedRuns", () => {
     stateByJobId.clear();
     recoveryCounts.clear();
     const QueueMock = vi.mocked(Queue);
-    QueueMock.mockImplementation(
-      () =>
-        ({
-          getJob: vi.fn(async (jobId: string) => stateByJobId.get(jobId)),
-          close: vi.fn(async () => undefined),
-        }) as unknown as ReturnType<typeof QueueMock>,
-    );
+    QueueMock.mockImplementation(function () {
+      return {
+        getJob: vi.fn(async (jobId: string) => stateByJobId.get(jobId)),
+        close: vi.fn(async () => undefined),
+      } as unknown as InstanceType<typeof QueueMock>;
+    });
     const IORedisMock = vi.mocked(IORedis);
-    IORedisMock.mockImplementation(
-      () =>
-        ({
-          get: vi.fn(async (key: string) => String(recoveryCounts.get(key) ?? 0)),
-          incr: vi.fn(async (key: string) => {
-            const next = (recoveryCounts.get(key) ?? 0) + 1;
-            recoveryCounts.set(key, next);
-            return next;
-          }),
-          expire: vi.fn(async () => 1),
-          disconnect: vi.fn(() => undefined),
-        }) as unknown as InstanceType<typeof IORedisMock>,
-    );
+    IORedisMock.mockImplementation(function () {
+      return {
+        get: vi.fn(async (key: string) => String(recoveryCounts.get(key) ?? 0)),
+        incr: vi.fn(async (key: string) => {
+          const next = (recoveryCounts.get(key) ?? 0) + 1;
+          recoveryCounts.set(key, next);
+          return next;
+        }),
+        expire: vi.fn(async () => 1),
+        disconnect: vi.fn(() => undefined),
+      } as unknown as InstanceType<typeof IORedisMock>;
+    });
   });
 
   afterEach(() => vi.unstubAllGlobals());

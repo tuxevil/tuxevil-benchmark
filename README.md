@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/types-TypeScript-3178c6.svg)](tsconfig.json)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-black.svg)](package.json)
 [![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](package.json)
-[![Live](https://img.shields.io/badge/live-tuxevil--benchmark.tuxevil.com-4caf50.svg)](https://tuxevil-benchmark.tuxevil.com/)
+[![Live](https://img.shields.io/badge/live-benchmark.tuxevil.com-4caf50.svg)](https://benchmark.tuxevil.com/)
 
 tuxevil Benchmark is an enterprise-grade local language-model benchmarking, security evaluation, and quality telemetry workspace in Sebastián Real's (tuxevil) personal project portfolio. It positions the **Small Language Model (SLM)** as a first-class entity and applies universal UX/UI patterns—*Progressive Disclosure*, *Master-Detail Navigation*, and *Contextual Analytics*—making model comparison intuitive for both AI engineers and non-technical stakeholders.
 
@@ -14,7 +14,7 @@ tuxevil Benchmark executes standardized scenarios across local Ollama models, ca
 
 The application is built for secure, local, and private model evaluations. It supports both a zero-config single-process development mode backed by SQLite and a scalable, durable multi-process deployment backed by PostgreSQL and Redis.
 
-> 🌐 **Public Leaderboard:** [https://tuxevil-benchmark.tuxevil.com/](https://tuxevil-benchmark.tuxevil.com/) — static snapshot showcase of evaluated models, security results, and public scenarios.
+> 🌐 **Public Leaderboard:** [https://benchmark.tuxevil.com/](https://benchmark.tuxevil.com/) — static snapshot showcase of evaluated models, security results, and public scenarios.
 
 ## Contents
 
@@ -459,7 +459,7 @@ not public branding.
 
 ## Public Landing Site
 
-tuxevil Benchmark includes a separate **static landing site** (`landing/` npm workspace) that showcases a read-only public snapshot of the Arena Leaderboard, model profiles, security results, and evaluated scenarios. It is deployed at [tuxevil-benchmark.tuxevil.com](https://tuxevil-benchmark.tuxevil.com/).
+tuxevil Benchmark includes a separate **static landing site** (`landing/` npm workspace) that showcases a read-only public snapshot of the Arena Leaderboard, model profiles, security results, and evaluated scenarios. It is deployed at [benchmark.tuxevil.com](https://benchmark.tuxevil.com/).
 
 ### Architecture
 

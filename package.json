@@ -8,7 +8,7 @@
     "type": "git",
     "url": "https://github.com/tuxevil/tuxevil-benchmark.git"
   },
-  "homepage": "https://tuxevil-benchmark.tuxevil.com",
+  "homepage": "https://benchmark.tuxevil.com",
   "bugs": {
     "url": "https://github.com/tuxevil/tuxevil-benchmark/issues"
   },
@@ -45,11 +45,11 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@next/env": "16.2.12",
+    "@next/env": "16.3.5",
     "better-sqlite3": "^13.0.2",
     "bullmq": "6.0.6",
     "ioredis": "^6.0.0",
-    "next": "16.2.12",
+    "next": "16.3.5",
     "postgres": "3.4.7",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -63,13 +63,13 @@
     "@types/react": "19.1.12",
     "@types/react-dom": "19.1.9",
     "eslint": "9.35.0",
-    "eslint-config-next": "16.2.12",
+    "eslint-config-next": "16.3.5",
     "tsx": "4.23.5",
     "typescript": "5.9.2",
-    "vitest": "3.2.7"
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "postcss": "^8.5.25",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.4"
   }
 }
