@@ -98,7 +98,7 @@ function initSqliteTables(db: Database.Database) {
 
     CREATE TABLE IF NOT EXISTS model_results (
       id TEXT PRIMARY KEY,
-      test_run_id TEXT NOT NULL,
+      test_run_id TEXT,
       model_name TEXT NOT NULL,
       sample_index INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL,
@@ -113,7 +113,7 @@ function initSqliteTables(db: Database.Database) {
       human_status TEXT NOT NULL DEFAULT 'UNREVIEWED',
       human_notes TEXT,
       created_at TEXT NOT NULL,
-      FOREIGN KEY(test_run_id) REFERENCES test_runs(id) ON DELETE CASCADE
+      FOREIGN KEY(test_run_id) REFERENCES test_runs(id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS model_result_turns (
