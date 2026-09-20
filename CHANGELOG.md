@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Benchmark vNext experiment foundation: exact model-artifact metadata, execution-environment fingerprints, baseline/variant/control experiment arms, and nullable links from runs/results to reproducibility metadata in both SQLite and PostgreSQL.
+- Paired churn analysis primitives inspired by controlled quantization experiments: changed/unchanged outcomes, lost/gained/neutral flips, Wilson confidence intervals, exact McNemar significance, repeated-baseline noise measurement, excess churn, and signal-to-noise reporting.
+- Architecture notes in `docs/benchmark-vnext-experiments.md` defining the path from the experiment layer to Practical SLM, Performance, Tool Calling and Agentic suites.
+
 - Anomaly dashboard in the UI (GitHub issue #11): `/monitor` now shows three
   sections — empty/near-zero responses (trimmed length < 15 chars, grouped by
   model × scenario), failed evaluations (FAILED or RUNNING orphans on finished

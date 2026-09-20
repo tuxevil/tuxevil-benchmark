@@ -82,7 +82,7 @@ ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS provider_url TEXT;
 
 CREATE TABLE IF NOT EXISTS model_results (
   id UUID PRIMARY KEY,
-  test_run_id UUID NOT NULL REFERENCES test_runs(id) ON DELETE CASCADE,
+  test_run_id UUID REFERENCES test_runs(id) ON DELETE SET NULL,
   model_name VARCHAR(255) NOT NULL,
   sample_index INTEGER NOT NULL DEFAULT 0,
   status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
@@ -194,3 +194,79 @@ LEFT JOIN evaluations e ON e.model_result_id = m.id
 WHERE m.status = 'COMPLETED' AND m.eval_status <> 'FAILED'
 GROUP BY m.model_name;
 
+
+
+-- Benchmark vNext experiment foundation --------------------------------------
+-- These tables wrap existing test_runs/model_results rather than replacing
+-- them, so historical benchmark data remains valid.
+
+CREATE TABLE IF NOT EXISTS model_artifacts (
+  id UUID PRIMARY KEY,
+  display_name VARCHAR(255) NOT NULL,
+  base_model VARCHAR(255),
+  model_name VARCHAR(255) NOT NULL,
+  format VARCHAR(64),
+  quantization VARCHAR(128),
+  bits_per_weight DOUBLE PRECISION,
+  size_bytes BIGINT,
+  total_parameters_b DOUBLE PRECISION,
+  active_parameters_b DOUBLE PRECISION,
+  file_sha256 VARCHAR(64),
+  source_uri TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS model_artifacts_sha256_idx
+  ON model_artifacts (file_sha256)
+  WHERE file_sha256 IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS execution_environments (
+  id UUID PRIMARY KEY,
+  label VARCHAR(255) NOT NULL,
+  fingerprint VARCHAR(255) NOT NULL UNIQUE,
+  runtime VARCHAR(128),
+  runtime_version VARCHAR(128),
+  runtime_commit VARCHAR(128),
+  backend VARCHAR(128),
+  operating_system VARCHAR(255),
+  cpu VARCHAR(255),
+  ram_bytes BIGINT,
+  gpu VARCHAR(255),
+  vram_bytes BIGINT,
+  driver_version VARCHAR(128),
+  server_args JSONB NOT NULL DEFAULT '[]'::jsonb,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS experiments (
+  id UUID PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  factor VARCHAR(64) NOT NULL,
+  hypothesis TEXT,
+  controlled_variables JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS experiment_arms (
+  id UUID PRIMARY KEY,
+  experiment_id UUID NOT NULL REFERENCES experiments(id) ON DELETE CASCADE,
+  role VARCHAR(16) NOT NULL,
+  label VARCHAR(255) NOT NULL,
+  test_run_id UUID NOT NULL REFERENCES test_runs(id) ON DELETE CASCADE,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (experiment_id, test_run_id)
+);
+
+ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS execution_environment_id UUID;
+ALTER TABLE model_results ADD COLUMN IF NOT EXISTS model_artifact_id UUID;
+
+CREATE INDEX IF NOT EXISTS experiment_arms_experiment_idx ON experiment_arms (experiment_id);
+CREATE INDEX IF NOT EXISTS experiment_arms_run_idx ON experiment_arms (test_run_id);
+CREATE INDEX IF NOT EXISTS test_runs_environment_idx ON test_runs (execution_environment_id);
+CREATE INDEX IF NOT EXISTS model_results_artifact_idx ON model_results (model_artifact_id);
