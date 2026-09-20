@@ -227,6 +227,8 @@ export type EvaluationHistoryEntry = Evaluation & {
 export type ModelResult = Telemetry & {
   id: string;
   modelName: string;
+  /** Exact weights/quant artifact used for this result, when fingerprinted. */
+  modelArtifactId?: string | null;
   sampleIndex: number;
   status: ModelStatus;
   evalStatus: EvaluationStatus;
@@ -242,6 +244,8 @@ export type ModelResult = Telemetry & {
 
 export type TestRun = {
   id: string;
+  /** Runtime/hardware fingerprint used for this run, when captured. */
+  executionEnvironmentId?: string | null;
   category: TestCategory;
   attackType: SecurityAttackType | null;
   status: RunStatus;
