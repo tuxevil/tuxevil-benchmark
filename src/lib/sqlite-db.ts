@@ -233,12 +233,12 @@ function initSqliteTables(db: Database.Database) {
       experiment_id TEXT NOT NULL,
       role TEXT NOT NULL,
       label TEXT NOT NULL,
-      test_run_id TEXT NOT NULL,
+      test_run_id TEXT,
       metadata TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL,
       UNIQUE(experiment_id, test_run_id),
       FOREIGN KEY(experiment_id) REFERENCES experiments(id) ON DELETE CASCADE,
-      FOREIGN KEY(test_run_id) REFERENCES test_runs(id) ON DELETE CASCADE
+      FOREIGN KEY(test_run_id) REFERENCES test_runs(id) ON DELETE SET NULL
     );
 
     CREATE INDEX IF NOT EXISTS experiment_arms_experiment_idx ON experiment_arms(experiment_id);
