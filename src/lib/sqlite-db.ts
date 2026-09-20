@@ -805,8 +805,8 @@ export function sqlitePersistRun(
 
   const transaction = db.transaction(() => {
     db.prepare(`
-      INSERT INTO test_runs (id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, user_messages, selected_models, parameters, evaluator_config, created_at, updated_at, started_at, finished_at, error_message)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO test_runs (id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, user_messages, selected_models, parameters, evaluator_config, execution_environment_id, created_at, updated_at, started_at, finished_at, error_message)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         category = excluded.category,
         attack_type = excluded.attack_type,
@@ -823,6 +823,7 @@ export function sqlitePersistRun(
         selected_models = excluded.selected_models,
         parameters = excluded.parameters,
         evaluator_config = excluded.evaluator_config,
+        execution_environment_id = excluded.execution_environment_id,
         updated_at = excluded.updated_at,
         started_at = CASE WHEN excluded.control_version >= test_runs.control_version THEN excluded.started_at ELSE test_runs.started_at END,
         finished_at = CASE WHEN excluded.control_version >= test_runs.control_version THEN excluded.finished_at ELSE test_runs.finished_at END,
@@ -844,6 +845,7 @@ export function sqlitePersistRun(
       JSON.stringify(run.models),
       JSON.stringify(run.parameters),
       evaluatorConfigJson,
+      run.executionEnvironmentId ?? null,
       run.createdAt,
       run.updatedAt,
       run.startedAt,
@@ -853,10 +855,11 @@ export function sqlitePersistRun(
 
     for (const result of run.results) {
       db.prepare(`
-        INSERT INTO model_results (id, test_run_id, model_name, sample_index, status, eval_status, response_text, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, error_message, human_status, human_notes, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO model_results (id, test_run_id, model_name, model_artifact_id, sample_index, status, eval_status, response_text, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, error_message, human_status, human_notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           model_name = excluded.model_name,
+          model_artifact_id = excluded.model_artifact_id,
           sample_index = excluded.sample_index,
           status = excluded.status,
           eval_status = excluded.eval_status,
@@ -873,6 +876,7 @@ export function sqlitePersistRun(
         result.id,
         run.id,
         result.modelName,
+        result.modelArtifactId ?? null,
         result.sampleIndex,
         result.status,
         result.evalStatus,
@@ -1063,6 +1067,7 @@ export function sqliteLoadState(targetRunId?: string) {
       const result: ModelResult = {
         id: rowId,
         modelName: String(row.model_name),
+        modelArtifactId: row.model_artifact_id ? String(row.model_artifact_id) : null,
         sampleIndex: Number(row.sample_index ?? 0),
         status: row.status as ModelResult["status"],
         evalStatus: row.eval_status as ModelResult["evalStatus"],
@@ -1102,6 +1107,7 @@ export function sqliteLoadState(targetRunId?: string) {
     const runId = String(row.id);
     const run: TestRun = {
       id: runId,
+      executionEnvironmentId: row.execution_environment_id ? String(row.execution_environment_id) : null,
       category: (row.category as TestRun["category"]) || "GENERAL",
       attackType: (row.attack_type as TestRun["attackType"]) || null,
       status: row.status as RunStatus,
