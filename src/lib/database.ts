@@ -141,7 +141,6 @@ function contentKey(systemPrompt: string, userMessages: string[]) {
 
 export type AnalysisScenarioRef = {
   scenarioId: string | null;
-  executionEnvironmentId: string | null;
   systemPrompt: string;
   userMessages: string[];
 };
@@ -1229,6 +1228,7 @@ export type ExportRow = {
   category: TestCategory;
   attackType: SecurityAttackType | null;
   scenarioId: string | null;
+  executionEnvironmentId: string | null;
   systemPrompt: string;
   userMessages: string[];
   parameters: BenchmarkParameters;
