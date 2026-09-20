@@ -141,6 +141,7 @@ function contentKey(systemPrompt: string, userMessages: string[]) {
 
 export type AnalysisScenarioRef = {
   scenarioId: string | null;
+  executionEnvironmentId: string | null;
   systemPrompt: string;
   userMessages: string[];
 };
@@ -1236,6 +1237,7 @@ export type ExportRow = {
   runError: string | null;
   resultId: string;
   modelName: string;
+  modelArtifactId: string | null;
   sampleIndex: number;
   status: ModelStatus;
   evalStatus: EvaluationStatus;
@@ -1292,9 +1294,9 @@ export async function exportResults(filters: ExportFilters = {}): Promise<Export
     const rows = await sql`
       SELECT
         runs.id AS run_id, runs.created_at AS run_created_at, runs.status AS run_status,
-        runs.category, runs.attack_type, runs.scenario_id, runs.system_prompt, runs.user_messages,
+        runs.category, runs.attack_type, runs.scenario_id, runs.execution_environment_id, runs.system_prompt, runs.user_messages,
         runs.parameters, runs.selected_models, runs.ollama_url, runs.error_message AS run_error,
-        results.id AS result_id, results.model_name, results.sample_index, results.status,
+        results.id AS result_id, results.model_name, results.model_artifact_id, results.sample_index, results.status,
         results.eval_status, results.response_text, results.input_tokens, results.output_tokens,
         results.ttft_ms, results.tok_per_sec, results.total_duration_ms, results.error_message,
         results.human_status, results.human_notes,
@@ -1325,6 +1327,7 @@ function toExportRow(run: TestRun, result: ModelResult, ollamaUrl: string): Expo
     category: run.category,
     attackType: run.attackType,
     scenarioId: run.scenarioId,
+    executionEnvironmentId: run.executionEnvironmentId ?? null,
     systemPrompt: run.systemPrompt,
     userMessages: run.userMessages,
     parameters: run.parameters,
@@ -1333,6 +1336,7 @@ function toExportRow(run: TestRun, result: ModelResult, ollamaUrl: string): Expo
     runError: run.errorMessage,
     resultId: result.id,
     modelName: result.modelName,
+    modelArtifactId: result.modelArtifactId ?? null,
     sampleIndex: result.sampleIndex,
     status: result.status,
     evalStatus: result.evalStatus,
@@ -1369,6 +1373,7 @@ function toExportRowFromSql(row: Record<string, unknown>): ExportRow {
     category: (String(row.category) as TestCategory) || "GENERAL",
     attackType: row.attack_type ? (String(row.attack_type) as SecurityAttackType) : null,
     scenarioId: row.scenario_id ? String(row.scenario_id) : null,
+    executionEnvironmentId: row.execution_environment_id ? String(row.execution_environment_id) : null,
     systemPrompt: String(row.system_prompt ?? ""),
     userMessages: parseJsonArray(row.user_messages),
     parameters: (parseJson(row.parameters) ?? {}) as BenchmarkParameters,
@@ -1644,6 +1649,7 @@ function restoreResult(row: Record<string, unknown>, turns: TurnResult[], evalua
   return {
     id: String(row.id),
     modelName: String(row.model_name),
+    modelArtifactId: row.model_artifact_id ? String(row.model_artifact_id) : null,
     sampleIndex: Number(row.sample_index ?? 0),
     status: String(row.status) as ModelResult["status"],
     evalStatus: String(row.eval_status) as ModelResult["evalStatus"],
