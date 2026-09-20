@@ -175,6 +175,76 @@ function initSqliteTables(db: Database.Database) {
     );
   `  );
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS model_artifacts (
+      id TEXT PRIMARY KEY,
+      display_name TEXT NOT NULL,
+      base_model TEXT,
+      model_name TEXT NOT NULL,
+      format TEXT,
+      quantization TEXT,
+      bits_per_weight REAL,
+      size_bytes INTEGER,
+      total_parameters_b REAL,
+      active_parameters_b REAL,
+      file_sha256 TEXT,
+      source_uri TEXT,
+      metadata TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS model_artifacts_sha256_idx
+      ON model_artifacts(file_sha256)
+      WHERE file_sha256 IS NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS execution_environments (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      fingerprint TEXT NOT NULL UNIQUE,
+      runtime TEXT,
+      runtime_version TEXT,
+      runtime_commit TEXT,
+      backend TEXT,
+      operating_system TEXT,
+      cpu TEXT,
+      ram_bytes INTEGER,
+      gpu TEXT,
+      vram_bytes INTEGER,
+      driver_version TEXT,
+      server_args TEXT NOT NULL DEFAULT '[]',
+      metadata TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS experiments (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      factor TEXT NOT NULL,
+      hypothesis TEXT,
+      controlled_variables TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS experiment_arms (
+      id TEXT PRIMARY KEY,
+      experiment_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      label TEXT NOT NULL,
+      test_run_id TEXT NOT NULL,
+      metadata TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      UNIQUE(experiment_id, test_run_id),
+      FOREIGN KEY(experiment_id) REFERENCES experiments(id) ON DELETE CASCADE,
+      FOREIGN KEY(test_run_id) REFERENCES test_runs(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS experiment_arms_experiment_idx ON experiment_arms(experiment_id);
+    CREATE INDEX IF NOT EXISTS experiment_arms_run_idx ON experiment_arms(test_run_id);
+  `);
+
   const migrationDb = getSqliteDb();
   const turnColumns = migrationDb.prepare("PRAGMA table_info(model_result_turns)").all() as SqlRow[];
   if (!turnColumns.some((column) => column.name === "thinking")) {
@@ -202,6 +272,9 @@ function initSqliteTables(db: Database.Database) {
   }
   if (!runColumns.some((column) => column.name === "provider_url")) {
     migrationDb.exec("ALTER TABLE test_runs ADD COLUMN provider_url TEXT");
+  }
+  if (!runColumns.some((column) => column.name === "execution_environment_id")) {
+    migrationDb.exec("ALTER TABLE test_runs ADD COLUMN execution_environment_id TEXT");
   }
 
   const scenarioColumns = migrationDb.prepare("PRAGMA table_info(scenarios)").all() as SqlRow[];
@@ -323,6 +396,9 @@ function initSqliteTables(db: Database.Database) {
   }
   if (!resultColumns.some((column) => column.name === "truncated")) {
     migrationDb.exec("ALTER TABLE model_results ADD COLUMN truncated INTEGER");
+  }
+  if (!resultColumns.some((column) => column.name === "model_artifact_id")) {
+    migrationDb.exec("ALTER TABLE model_results ADD COLUMN model_artifact_id TEXT");
   }
 
   const settingsColumns = migrationDb.prepare("PRAGMA table_info(app_settings)").all() as SqlRow[];
