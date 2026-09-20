@@ -73,7 +73,7 @@ export type ExperimentArm = {
   experimentId: string;
   role: ExperimentArmRole;
   label: string;
-  testRunId: string;
+  testRunId: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
 };
@@ -121,6 +121,6 @@ export const experimentArmInputSchema = z.object({
   experimentId: z.string().uuid(),
   role: experimentArmRoleSchema,
   label: z.string().trim().min(1).max(255),
-  testRunId: z.string().uuid(),
+  testRunId: z.string().uuid().nullable().optional(),
   metadata: z.record(z.unknown()).default({}),
 });
