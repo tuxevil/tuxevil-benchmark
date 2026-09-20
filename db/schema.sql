@@ -82,7 +82,7 @@ ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS provider_url TEXT;
 
 CREATE TABLE IF NOT EXISTS model_results (
   id UUID PRIMARY KEY,
-  test_run_id UUID NOT NULL REFERENCES test_runs(id) ON DELETE CASCADE,
+  test_run_id UUID REFERENCES test_runs(id) ON DELETE SET NULL,
   model_name VARCHAR(255) NOT NULL,
   sample_index INTEGER NOT NULL DEFAULT 0,
   status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
