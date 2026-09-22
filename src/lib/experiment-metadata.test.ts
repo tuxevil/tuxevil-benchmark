@@ -48,7 +48,7 @@ describe("model artifact fingerprint", () => {
 });
 
 describe("execution environment fingerprint", () => {
-  it("ignores label/metadata and normalizes unordered lists", () => {
+  it("ignores label and arbitrary metadata", () => {
     const a = executionEnvironmentInputSchema.parse({
       label: "beast",
       runtime: "llama.cpp",
@@ -61,14 +61,12 @@ describe("execution environment fingerprint", () => {
     const b = executionEnvironmentInputSchema.parse({
       ...a,
       label: "same machine renamed",
-      gpuModels: ["GPU A", "GPU B"],
-      runtimeFlags: ["-ngl 99", "-fa on"],
       metadata: { sampledAt: "later" },
     });
     expect(fingerprintExecutionEnvironment(a)).toBe(fingerprintExecutionEnvironment(b));
   });
 
-  it("changes when a behavior-relevant runtime parameter changes", () => {
+  it("changes when runtime ordering or a behavior-relevant parameter changes", () => {
     const a = executionEnvironmentInputSchema.parse({
       label: "env",
       runtime: "llama.cpp",
@@ -76,7 +74,12 @@ describe("execution environment fingerprint", () => {
       kvCacheV: "q8_0",
       contextSize: 32768,
     });
-    const b = executionEnvironmentInputSchema.parse({ ...a, kvCacheK: "q4_0" });
-    expect(fingerprintExecutionEnvironment(a)).not.toBe(fingerprintExecutionEnvironment(b));
+    const reordered = executionEnvironmentInputSchema.parse({
+      ...a,
+      runtimeFlags: ["-ngl 99", "-fa on"],
+    });
+    const changedKv = executionEnvironmentInputSchema.parse({ ...a, kvCacheK: "q4_0" });
+    expect(fingerprintExecutionEnvironment(a)).not.toBe(fingerprintExecutionEnvironment(reordered));
+    expect(fingerprintExecutionEnvironment(a)).not.toBe(fingerprintExecutionEnvironment(changedKv));
   });
 });
