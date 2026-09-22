@@ -157,7 +157,7 @@ export async function listModelArtifacts(): Promise<ModelArtifact[]> {
     SELECT id, fingerprint, payload_json, created_at, updated_at
     FROM model_artifacts ORDER BY updated_at DESC, id ASC
   `;
-  return rows.map(restoreArtifact);
+  return rows.map((row) => restoreArtifact(row as JsonRow));
 }
 
 export async function upsertExecutionEnvironment(
@@ -234,7 +234,7 @@ export async function listExecutionEnvironments(): Promise<ExecutionEnvironment[
     SELECT id, fingerprint, payload_json, created_at, updated_at
     FROM execution_environments ORDER BY updated_at DESC, id ASC
   `;
-  return rows.map(restoreEnvironment);
+  return rows.map((row) => restoreEnvironment(row as JsonRow));
 }
 
 /** Test-only: close the independent metadata pool so Vitest exits cleanly. */
