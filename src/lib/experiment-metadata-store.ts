@@ -121,7 +121,7 @@ export async function upsertModelArtifact(input: ModelArtifactInput): Promise<Mo
       updated_at = CURRENT_TIMESTAMP
     RETURNING id, fingerprint, payload_json, created_at, updated_at
   `;
-  return restoreArtifact(row);
+  return restoreArtifact(rawRow as JsonRow);
 }
 
 export async function getModelArtifact(id: string): Promise<ModelArtifact | null> {
@@ -139,7 +139,7 @@ export async function getModelArtifact(id: string): Promise<ModelArtifact | null
     SELECT id, fingerprint, payload_json, created_at, updated_at
     FROM model_artifacts WHERE id = ${id}
   `;
-  return rows[0] ? restoreArtifact(rows[0]) : null;
+  return rows[0] ? restoreArtifact(rows[0] as JsonRow) : null;
 }
 
 export async function listModelArtifacts(): Promise<ModelArtifact[]> {
@@ -148,7 +148,7 @@ export async function listModelArtifacts(): Promise<ModelArtifact[]> {
     const rows = getSqliteDb()
       .prepare("SELECT id, fingerprint, payload_json, created_at, updated_at FROM model_artifacts ORDER BY updated_at DESC, id ASC")
       .all() as JsonRow[];
-    return rows.map(restoreArtifact);
+    return rows.map((row) => restoreArtifact(row as JsonRow));
   }
 
   const sql = getPgClient();
@@ -198,7 +198,7 @@ export async function upsertExecutionEnvironment(
       updated_at = CURRENT_TIMESTAMP
     RETURNING id, fingerprint, payload_json, created_at, updated_at
   `;
-  return restoreEnvironment(row);
+  return restoreEnvironment(rawRow as JsonRow);
 }
 
 export async function getExecutionEnvironment(id: string): Promise<ExecutionEnvironment | null> {
@@ -216,7 +216,7 @@ export async function getExecutionEnvironment(id: string): Promise<ExecutionEnvi
     SELECT id, fingerprint, payload_json, created_at, updated_at
     FROM execution_environments WHERE id = ${id}
   `;
-  return rows[0] ? restoreEnvironment(rows[0]) : null;
+  return rows[0] ? restoreEnvironment(rows[0] as JsonRow) : null;
 }
 
 export async function listExecutionEnvironments(): Promise<ExecutionEnvironment[]> {
@@ -225,7 +225,7 @@ export async function listExecutionEnvironments(): Promise<ExecutionEnvironment[
     const rows = getSqliteDb()
       .prepare("SELECT id, fingerprint, payload_json, created_at, updated_at FROM execution_environments ORDER BY updated_at DESC, id ASC")
       .all() as JsonRow[];
-    return rows.map(restoreEnvironment);
+    return rows.map((row) => restoreEnvironment(row as JsonRow));
   }
 
   const sql = getPgClient();
