@@ -5,7 +5,7 @@ import type { ModelProvider, TestRun } from "@/lib/contracts";
 import { useTheme } from "@/components/theme-provider";
 import { PROJECT_BRAND } from "@/lib/brand";
 
-export type ActiveTab = "analytics" | "suites" | "monitor" | "settings" | "wizard" | "history";
+export type ActiveTab = "analytics" | "suites" | "churn" | "monitor" | "settings" | "wizard" | "history";
 
 interface TopbarNavProps {
   activeTab: ActiveTab;
@@ -28,6 +28,7 @@ export function TopbarNav({
 
   const isAnalyticsActive = activeTab === "analytics";
   const isSuitesActive = activeTab === "suites" || activeTab === "wizard";
+  const isChurnActive = activeTab === "churn";
   const isMonitorActive = activeTab === "monitor" || activeTab === "history";
   const isSettingsActive = activeTab === "settings";
 
@@ -69,6 +70,15 @@ export function TopbarNav({
         >
           <span className="nav-icon">🧪</span>
           <span className="nav-label">Test Suites</span>
+        </Link>
+
+        <Link
+          href="/churn"
+          className={`topbar-item ${isChurnActive ? "active" : ""}`}
+          onClick={() => handleNav("churn")}
+        >
+          <span className="nav-icon">🧬</span>
+          <span className="nav-label">Churn Lab</span>
         </Link>
 
         <Link
