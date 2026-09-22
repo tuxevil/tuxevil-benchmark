@@ -168,13 +168,80 @@ export async function listExperimentObservations(
   return rows.map((row) => restoreObservation(row as SqlRow));
 }
 
+export type ExperimentCaseStatus =
+  | "UNCHANGED"
+  | "LOST"
+  | "GAINED"
+  | "CHANGED_NEUTRAL"
+  | "BASELINE_ONLY"
+  | "VARIANT_ONLY";
+
+export type ExperimentCaseDiff = {
+  caseId: string;
+  status: ExperimentCaseStatus;
+  baselineValue: string | null;
+  variantValue: string | null;
+  baselineSuccess: boolean | null;
+  variantSuccess: boolean | null;
+  repeatValue: string | null;
+  repeatChanged: boolean | null;
+};
+
 export type ExperimentComparison = {
   experimentId: string;
   baselineVariantId: string;
   variantId: string;
   baselineRepeatVariantId: string | null;
   summary: PairedExperimentSummary;
+  cases: ExperimentCaseDiff[];
 };
+
+function buildCaseDiffs(
+  baseline: ExperimentObservation[],
+  variant: ExperimentObservation[],
+  repeat: ExperimentObservation[] | null,
+): ExperimentCaseDiff[] {
+  const baselineByCase = new Map(baseline.map((item) => [item.caseId, item]));
+  const variantByCase = new Map(variant.map((item) => [item.caseId, item]));
+  const repeatByCase = repeat ? new Map(repeat.map((item) => [item.caseId, item])) : null;
+  const caseIds = [...new Set([...baselineByCase.keys(), ...variantByCase.keys()])].sort();
+
+  return caseIds.map((caseId) => {
+    const base = baselineByCase.get(caseId) ?? null;
+    const next = variantByCase.get(caseId) ?? null;
+    const repeated = repeatByCase?.get(caseId) ?? null;
+
+    let status: ExperimentCaseStatus;
+    if (!base) {
+      status = "VARIANT_ONLY";
+    } else if (!next) {
+      status = "BASELINE_ONLY";
+    } else if (base.success === true && next.success === false) {
+      status = "LOST";
+    } else if (base.success === false && next.success === true) {
+      status = "GAINED";
+    } else if (base.canonicalValue !== next.canonicalValue) {
+      status = "CHANGED_NEUTRAL";
+    } else {
+      status = "UNCHANGED";
+    }
+
+    return {
+      caseId,
+      status,
+      baselineValue: base?.canonicalValue ?? null,
+      variantValue: next?.canonicalValue ?? null,
+      baselineSuccess: base?.success ?? null,
+      variantSuccess: next?.success ?? null,
+      repeatValue: repeated?.canonicalValue ?? null,
+      repeatChanged: repeatByCase
+        ? base && repeated
+          ? base.canonicalValue !== repeated.canonicalValue
+          : true
+        : null,
+    };
+  });
+}
 
 export async function compareExperimentVariants(
   experimentId: string,
@@ -225,5 +292,6 @@ export async function compareExperimentVariants(
     variantId,
     baselineRepeatVariantId: repeatId,
     summary,
+    cases: buildCaseDiffs(baseline, variant, repeat),
   };
 }
