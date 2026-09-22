@@ -70,7 +70,7 @@ describe("experiment metadata SQLite persistence", () => {
     const renamed = await store.upsertExecutionEnvironment({
       ...base,
       label: `renamed-${marker}`,
-      runtimeFlags: ["-ngl 99", "-fa on"],
+      runtimeFlags: ["-fa on", "-ngl 99"],
     });
     const changed = await store.upsertExecutionEnvironment({ ...base, kvCacheK: "q4_0" });
 
