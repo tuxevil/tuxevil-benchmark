@@ -27,9 +27,9 @@ export const modelArtifactInputSchema = z.object({
   metadata: z.record(z.unknown()).default({}),
 });
 
-export type ModelArtifactInput = z.infer<typeof modelArtifactInputSchema>;
+export type ModelArtifactInput = z.input<typeof modelArtifactInputSchema>;\nexport type ModelArtifactData = z.output<typeof modelArtifactInputSchema>;
 
-export type ModelArtifact = ModelArtifactInput & {
+export type ModelArtifact = ModelArtifactData & {
   id: string;
   fingerprint: string;
   createdAt: string;
@@ -61,9 +61,9 @@ export const executionEnvironmentInputSchema = z.object({
   metadata: z.record(z.unknown()).default({}),
 });
 
-export type ExecutionEnvironmentInput = z.infer<typeof executionEnvironmentInputSchema>;
+export type ExecutionEnvironmentInput = z.input<typeof executionEnvironmentInputSchema>;\nexport type ExecutionEnvironmentData = z.output<typeof executionEnvironmentInputSchema>;
 
-export type ExecutionEnvironment = ExecutionEnvironmentInput & {
+export type ExecutionEnvironment = ExecutionEnvironmentData & {
   id: string;
   fingerprint: string;
   createdAt: string;
