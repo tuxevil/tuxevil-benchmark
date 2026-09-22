@@ -105,6 +105,27 @@ describe("experiment observations", () => {
     ]);
   });
 
+  it("leaves repeat evaluation unchecked when baseline repeat has no observations yet", async () => {
+    const { experiment, baseline, variant } = await fixture();
+    await observations.upsertExperimentObservations(experiment.id, baseline.id, [
+      { caseId: "a", canonicalValue: "A", success: true },
+      { caseId: "b", canonicalValue: "B", success: false },
+    ]);
+    await observations.upsertExperimentObservations(experiment.id, variant.id, [
+      { caseId: "a", canonicalValue: "X", success: false },
+      { caseId: "b", canonicalValue: "B", success: false },
+      { caseId: "c", canonicalValue: "C", success: true },
+    ]);
+
+    const result = await observations.compareExperimentVariants(experiment.id, variant.id);
+    expect(result.summary.determinism.validity).toBe("UNCHECKED");
+    expect(result.cases).toEqual([
+      expect.objectContaining({ caseId: "a", status: "LOST", repeatChanged: null }),
+      expect.objectContaining({ caseId: "b", status: "UNCHANGED", repeatChanged: null }),
+      expect.objectContaining({ caseId: "c", status: "VARIANT_ONLY", repeatChanged: null }),
+    ]);
+  });
+
   it("upserts a case instead of duplicating it", async () => {
     const { experiment, baseline } = await fixture();
     await observations.upsertExperimentObservations(experiment.id, baseline.id, [

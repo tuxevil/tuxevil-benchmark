@@ -221,7 +221,11 @@ function parseObservations(raw: string) {
       if (!item || typeof item !== "object") throw new Error(`Invalid JSON observation at index ${index}.`);
       const record = item as Record<string, unknown>;
       const caseId = String(record.caseId ?? record.case_id ?? "").trim();
-      const canonicalValue = String(record.canonicalValue ?? record.value ?? "");
+      const rawValue = record.canonicalValue ?? record.value ?? "";
+      const canonicalValue =
+        typeof rawValue === "object" && rawValue !== null
+          ? JSON.stringify(rawValue)
+          : String(rawValue);
       if (!caseId) throw new Error(`Missing caseId at index ${index}.`);
       return {
         caseId,

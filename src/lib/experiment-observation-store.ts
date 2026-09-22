@@ -203,7 +203,7 @@ function buildCaseDiffs(
 ): ExperimentCaseDiff[] {
   const baselineByCase = new Map(baseline.map((item) => [item.caseId, item]));
   const variantByCase = new Map(variant.map((item) => [item.caseId, item]));
-  const repeatByCase = repeat ? new Map(repeat.map((item) => [item.caseId, item])) : null;
+  const repeatByCase = repeat && repeat.length > 0 ? new Map(repeat.map((item) => [item.caseId, item])) : null;
   const caseIds = [...new Set([...baselineByCase.keys(), ...variantByCase.keys()])].sort();
 
   return caseIds.map((caseId) => {
@@ -226,6 +226,13 @@ function buildCaseDiffs(
       status = "UNCHANGED";
     }
 
+    let repeatChanged: boolean | null = null;
+    if (repeatByCase) {
+      if (base) {
+        repeatChanged = repeated ? base.canonicalValue !== repeated.canonicalValue : true;
+      }
+    }
+
     return {
       caseId,
       status,
@@ -234,11 +241,7 @@ function buildCaseDiffs(
       baselineSuccess: base?.success ?? null,
       variantSuccess: next?.success ?? null,
       repeatValue: repeated?.canonicalValue ?? null,
-      repeatChanged: repeatByCase
-        ? base && repeated
-          ? base.canonicalValue !== repeated.canonicalValue
-          : true
-        : null,
+      repeatChanged,
     };
   });
 }
@@ -272,12 +275,14 @@ export async function compareExperimentVariants(
     repeatId ? listExperimentObservations(experimentId, repeatId) : Promise.resolve(null),
   ]);
 
+  const hasRepeatObservations = Boolean(repeat && repeat.length > 0);
+
   const summary = comparePairedObservations(
     baseline.map((item) => ({ caseId: item.caseId, value: item.canonicalValue, success: item.success })),
     variant.map((item) => ({ caseId: item.caseId, value: item.canonicalValue, success: item.success })),
-    repeat
+    hasRepeatObservations
       ? {
-          baselineRepeat: repeat.map((item) => ({
+          baselineRepeat: repeat!.map((item) => ({
             caseId: item.caseId,
             value: item.canonicalValue,
             success: item.success,
@@ -292,6 +297,6 @@ export async function compareExperimentVariants(
     variantId,
     baselineRepeatVariantId: repeatId,
     summary,
-    cases: buildCaseDiffs(baseline, variant, repeat),
+    cases: buildCaseDiffs(baseline, variant, hasRepeatObservations ? repeat : null),
   };
 }
