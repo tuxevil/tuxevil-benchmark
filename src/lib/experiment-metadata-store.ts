@@ -1,5 +1,10 @@
-import postgres from "postgres";
 import { getSqliteDb } from "@/lib/sqlite-db";
+import {
+  closeExperimentDb,
+  ensureExperimentSqliteSchema,
+  experimentUsesPostgres,
+  getExperimentPostgresClient,
+} from "@/lib/experiment-db";
 import {
   executionEnvironmentInputSchema,
   fingerprintExecutionEnvironment,
@@ -18,45 +23,6 @@ type JsonRow = {
   created_at: unknown;
   updated_at: unknown;
 };
-
-let pgClient: ReturnType<typeof postgres> | null | undefined;
-
-function usePostgres() {
-  return Boolean(process.env.DATABASE_URL?.trim());
-}
-
-function getPgClient() {
-  if (pgClient !== undefined) return pgClient;
-  const url = process.env.DATABASE_URL?.trim();
-  pgClient = url ? postgres(url, { connect_timeout: 5, idle_timeout: 20, max: 3 }) : null;
-  return pgClient;
-}
-
-function ensureSqliteTables() {
-  getSqliteDb().exec(`
-    CREATE TABLE IF NOT EXISTS model_artifacts (
-      id TEXT PRIMARY KEY,
-      fingerprint TEXT NOT NULL UNIQUE,
-      display_name TEXT NOT NULL,
-      payload_json TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS model_artifacts_updated_idx
-      ON model_artifacts(updated_at DESC);
-
-    CREATE TABLE IF NOT EXISTS execution_environments (
-      id TEXT PRIMARY KEY,
-      fingerprint TEXT NOT NULL UNIQUE,
-      label TEXT NOT NULL,
-      payload_json TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS execution_environments_updated_idx
-      ON execution_environments(updated_at DESC);
-  `);
-}
 
 function parsePayload(value: unknown): unknown {
   if (typeof value === "string") return JSON.parse(value);
@@ -90,8 +56,8 @@ export async function upsertModelArtifact(input: ModelArtifactInput): Promise<Mo
   const fingerprint = fingerprintModelArtifact(parsed);
   const now = new Date().toISOString();
 
-  if (!usePostgres()) {
-    ensureSqliteTables();
+  if (!experimentUsesPostgres()) {
+    ensureExperimentSqliteSchema();
     const db = getSqliteDb();
     const existing = db
       .prepare("SELECT id, created_at FROM model_artifacts WHERE fingerprint = ?")
@@ -111,7 +77,7 @@ export async function upsertModelArtifact(input: ModelArtifactInput): Promise<Mo
     return (await getModelArtifact(id))!;
   }
 
-  const sql = getPgClient();
+  const sql = getExperimentPostgresClient();
   if (!sql) throw new Error("PostgreSQL is not configured.");
   const id = crypto.randomUUID();
   const rows = await sql`
@@ -127,15 +93,15 @@ export async function upsertModelArtifact(input: ModelArtifactInput): Promise<Mo
 }
 
 export async function getModelArtifact(id: string): Promise<ModelArtifact | null> {
-  if (!usePostgres()) {
-    ensureSqliteTables();
+  if (!experimentUsesPostgres()) {
+    ensureExperimentSqliteSchema();
     const row = getSqliteDb()
       .prepare("SELECT id, fingerprint, payload_json, created_at, updated_at FROM model_artifacts WHERE id = ?")
       .get(id) as JsonRow | undefined;
     return row ? restoreArtifact(row) : null;
   }
 
-  const sql = getPgClient();
+  const sql = getExperimentPostgresClient();
   if (!sql) return null;
   const rows = await sql`
     SELECT id, fingerprint, payload_json, created_at, updated_at
@@ -146,15 +112,15 @@ export async function getModelArtifact(id: string): Promise<ModelArtifact | null
 }
 
 export async function listModelArtifacts(): Promise<ModelArtifact[]> {
-  if (!usePostgres()) {
-    ensureSqliteTables();
+  if (!experimentUsesPostgres()) {
+    ensureExperimentSqliteSchema();
     const rows = getSqliteDb()
       .prepare("SELECT id, fingerprint, payload_json, created_at, updated_at FROM model_artifacts ORDER BY updated_at DESC, id ASC")
       .all() as JsonRow[];
     return rows.map(restoreArtifact);
   }
 
-  const sql = getPgClient();
+  const sql = getExperimentPostgresClient();
   if (!sql) return [];
   const rows = await sql`
     SELECT id, fingerprint, payload_json, created_at, updated_at
@@ -171,8 +137,8 @@ export async function upsertExecutionEnvironment(
   const fingerprint = fingerprintExecutionEnvironment(parsed);
   const now = new Date().toISOString();
 
-  if (!usePostgres()) {
-    ensureSqliteTables();
+  if (!experimentUsesPostgres()) {
+    ensureExperimentSqliteSchema();
     const db = getSqliteDb();
     const existing = db
       .prepare("SELECT id, created_at FROM execution_environments WHERE fingerprint = ?")
@@ -192,7 +158,7 @@ export async function upsertExecutionEnvironment(
     return (await getExecutionEnvironment(id))!;
   }
 
-  const sql = getPgClient();
+  const sql = getExperimentPostgresClient();
   if (!sql) throw new Error("PostgreSQL is not configured.");
   const id = crypto.randomUUID();
   const rows = await sql`
@@ -208,15 +174,15 @@ export async function upsertExecutionEnvironment(
 }
 
 export async function getExecutionEnvironment(id: string): Promise<ExecutionEnvironment | null> {
-  if (!usePostgres()) {
-    ensureSqliteTables();
+  if (!experimentUsesPostgres()) {
+    ensureExperimentSqliteSchema();
     const row = getSqliteDb()
       .prepare("SELECT id, fingerprint, payload_json, created_at, updated_at FROM execution_environments WHERE id = ?")
       .get(id) as JsonRow | undefined;
     return row ? restoreEnvironment(row) : null;
   }
 
-  const sql = getPgClient();
+  const sql = getExperimentPostgresClient();
   if (!sql) return null;
   const rows = await sql`
     SELECT id, fingerprint, payload_json, created_at, updated_at
@@ -227,15 +193,15 @@ export async function getExecutionEnvironment(id: string): Promise<ExecutionEnvi
 }
 
 export async function listExecutionEnvironments(): Promise<ExecutionEnvironment[]> {
-  if (!usePostgres()) {
-    ensureSqliteTables();
+  if (!experimentUsesPostgres()) {
+    ensureExperimentSqliteSchema();
     const rows = getSqliteDb()
       .prepare("SELECT id, fingerprint, payload_json, created_at, updated_at FROM execution_environments ORDER BY updated_at DESC, id ASC")
       .all() as JsonRow[];
     return rows.map(restoreEnvironment);
   }
 
-  const sql = getPgClient();
+  const sql = getExperimentPostgresClient();
   if (!sql) return [];
   const rows = await sql`
     SELECT id, fingerprint, payload_json, created_at, updated_at
@@ -245,8 +211,7 @@ export async function listExecutionEnvironments(): Promise<ExecutionEnvironment[
   return rows.map((row) => restoreEnvironment(row as JsonRow));
 }
 
-/** Test-only: close the independent metadata pool so Vitest exits cleanly. */
+/** Test-only/backward-compatible alias while the experiment DB is shared. */
 export async function closeExperimentMetadataStore() {
-  if (pgClient) await pgClient.end({ timeout: 1 });
-  pgClient = undefined;
+  await closeExperimentDb();
 }
