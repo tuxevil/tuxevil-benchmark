@@ -113,8 +113,8 @@ export function fingerprintModelArtifact(input: ModelArtifactInput): string {
 
 /**
  * Fingerprint the behavior/performance-relevant execution environment.
- * Display labels and arbitrary metadata are excluded. Lists whose ordering is
- * not semantically meaningful are sorted before hashing.
+ * Display labels and arbitrary metadata are excluded. Runtime/GPU ordering is
+ * intentionally preserved because it can affect flag precedence or device placement.
  */
 export function fingerprintExecutionEnvironment(input: ExecutionEnvironmentInput): string {
   const parsed = executionEnvironmentInputSchema.parse(input);
