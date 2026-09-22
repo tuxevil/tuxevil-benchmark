@@ -6,6 +6,32 @@ The goal is not to replace the existing Response/Security Arena. It is to add a
 reproducible experiment layer underneath future Practical SLM, Churn,
 Performance, Tool Calling, and Agentic suites.
 
+## Implementation status
+
+Implemented on `work/experiment-foundation`:
+
+- paired comparison core with churn, lost/gained, Wilson CI and determinism validity;
+- `ModelArtifact` registry with stable fingerprinting;
+- `ExecutionEnvironment` registry with behavior-relevant fingerprinting;
+- shared SQLite/PostgreSQL experimental persistence;
+- `Experiment` and `ExperimentVariant` records with one-baseline invariant;
+- per-case `ExperimentObservation` persistence;
+- API endpoints for artifacts, environments, experiments, variants and observations;
+- baseline-vs-variant comparison API backed by persisted observations.
+
+Current API shape:
+
+- `GET/POST /api/experiments/artifacts`
+- `GET/POST /api/experiments/environments`
+- `GET/POST /api/experiments`
+- `GET /api/experiments/:id`
+- `GET/POST /api/experiments/:id/variants`
+- `GET/POST /api/experiments/:id/variants/:variantId/observations`
+- `GET /api/experiments/:id/compare?variantId=...&baselineRepeatVariantId=...`
+
+The dedicated Churn Lab UI and automatic capture of model/runtime metadata from
+providers are intentionally still separate follow-up work.
+
 ## Core principle
 
 Aggregate scores are useful but insufficient.
