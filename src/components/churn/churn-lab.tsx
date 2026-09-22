@@ -393,9 +393,6 @@ export function ChurnLab() {
     if (preset.sameEnvironment && baselineEnvironmentId) setVariantEnvironmentId(baselineEnvironmentId);
   }, [presetId, preset.sameArtifact, preset.sameEnvironment, baselineArtifactId, baselineEnvironmentId]);
 
-  const artifactById = useMemo(() => new Map(artifacts.map((item) => [item.id, item])), [artifacts]);
-  const environmentById = useMemo(() => new Map(environments.map((item) => [item.id, item])), [environments]);
-
   const controlWarnings = useMemo(() => {
     const warnings: string[] = [];
     if (preset.sameArtifact && baselineArtifactId && variantArtifactId && baselineArtifactId !== variantArtifactId) {
