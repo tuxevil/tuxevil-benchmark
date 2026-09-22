@@ -61,13 +61,16 @@ Metrics:
 - agreement rate;
 - lost successes;
 - gained successes;
+- neutral changed answers (drift without pass/fail flip);
 - net success delta;
+- exact two-sided McNemar test for net delta significance;
 - baseline and variant success rate over the same paired cases;
 - Wilson 95% CI for churn;
-- missing/unpaired case detection;
+- missing/unpaired case detection (for variant and baseline repeat);
 - intrinsic churn from an optional identical baseline repeat;
 - experiment validity threshold;
-- signal/noise ratio when intrinsic churn is non-zero.
+- excess churn rate above baseline noise floor;
+- signal/noise ratio (finite, zero, or infinite when intrinsic noise is zero).
 
 A baseline repeat is an instrument check, not another sample of the variant.
 If identical conditions are not sufficiently repeatable, causal attribution to
