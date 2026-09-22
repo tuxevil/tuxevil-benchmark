@@ -24,9 +24,9 @@ export const experimentInputSchema = z.object({
   notes: z.string().max(20_000).default(""),
 });
 
-export type ExperimentInput = z.infer<typeof experimentInputSchema>;
+export type ExperimentInput = z.input<typeof experimentInputSchema>;\nexport type ExperimentData = z.output<typeof experimentInputSchema>;
 
-export type ExperimentRecord = ExperimentInput & {
+export type ExperimentRecord = ExperimentData & {
   id: string;
   baselineVariantId: string | null;
   createdAt: string;
@@ -44,9 +44,9 @@ export const experimentVariantInputSchema = z.object({
   parentVariantId: z.string().uuid().nullable().default(null),
 });
 
-export type ExperimentVariantInput = z.infer<typeof experimentVariantInputSchema>;
+export type ExperimentVariantInput = z.input<typeof experimentVariantInputSchema>;\nexport type ExperimentVariantData = z.output<typeof experimentVariantInputSchema>;
 
-export type ExperimentVariant = ExperimentVariantInput & {
+export type ExperimentVariant = ExperimentVariantData & {
   id: string;
   experimentId: string;
   createdAt: string;
