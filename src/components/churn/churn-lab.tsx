@@ -388,10 +388,12 @@ export function ChurnLab() {
     };
   }, [loadExperiment, loadRegistries]);
 
-  useEffect(() => {
-    if (preset.sameArtifact && baselineArtifactId) setVariantArtifactId(baselineArtifactId);
-    if (preset.sameEnvironment && baselineEnvironmentId) setVariantEnvironmentId(baselineEnvironmentId);
-  }, [presetId, preset.sameArtifact, preset.sameEnvironment, baselineArtifactId, baselineEnvironmentId]);
+  const handlePresetChange = (id: string) => {
+    const next = PRESETS.find((item) => item.id === id) ?? PRESETS[0];
+    setPresetId(id);
+    if (next.sameArtifact && baselineArtifactId) setVariantArtifactId(baselineArtifactId);
+    if (next.sameEnvironment && baselineEnvironmentId) setVariantEnvironmentId(baselineEnvironmentId);
+  };
 
   const controlWarnings = useMemo(() => {
     const warnings: string[] = [];
@@ -836,7 +838,7 @@ export function ChurnLab() {
 
         <div className="churn-preset-row">
           {PRESETS.map((item) => (
-            <button key={item.id} type="button" className={`churn-preset ${presetId === item.id ? "active" : ""}`} onClick={() => setPresetId(item.id)}>
+            <button key={item.id} type="button" className={`churn-preset ${presetId === item.id ? "active" : ""}`} onClick={() => handlePresetChange(item.id)}>
               <strong>{item.label}</strong>
               <span>{item.factor}</span>
             </button>
@@ -860,8 +862,14 @@ export function ChurnLab() {
             reasoningMode={baselineReasoning}
             artifacts={artifacts}
             environments={environments}
-            onArtifactChange={setBaselineArtifactId}
-            onEnvironmentChange={setBaselineEnvironmentId}
+            onArtifactChange={(value) => {
+              setBaselineArtifactId(value);
+              if (preset.sameArtifact) setVariantArtifactId(value);
+            }}
+            onEnvironmentChange={(value) => {
+              setBaselineEnvironmentId(value);
+              if (preset.sameEnvironment) setVariantEnvironmentId(value);
+            }}
             onReasoningChange={setBaselineReasoning}
           />
           <VariantEditor
