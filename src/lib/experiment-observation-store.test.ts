@@ -97,6 +97,12 @@ describe("experiment observations", () => {
     expect(result.summary.churn.gainedSuccesses).toBe(1);
     expect(result.summary.churn.netSuccessDelta).toBe(0);
     expect(result.summary.determinism.validity).toBe("VALID");
+    expect(result.cases).toEqual([
+      expect.objectContaining({ caseId: "a", status: "LOST", repeatChanged: false }),
+      expect.objectContaining({ caseId: "b", status: "GAINED", repeatChanged: false }),
+      expect.objectContaining({ caseId: "c", status: "UNCHANGED", repeatChanged: false }),
+      expect.objectContaining({ caseId: "d", status: "UNCHANGED", repeatChanged: false }),
+    ]);
   });
 
   it("upserts a case instead of duplicating it", async () => {
