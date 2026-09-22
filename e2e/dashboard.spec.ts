@@ -249,3 +249,16 @@ function createRun(status: string, resultPatch: Record<string, unknown> = {}) {
     errorMessage: null,
   };
 }
+
+
+test("Churn Lab renders the experiment workbench", async ({ page }) => {
+  await page.goto("/churn");
+
+  await expect(page.getByRole("heading", { name: "Churn Lab" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Model Artifact" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Execution Environment" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Experiment Builder" })).toBeVisible();
+  await expect(page.getByText("Quant / weights")).toBeVisible();
+  await expect(page.getByText("Observation Import")).toBeVisible();
+  await expect(page.getByText("Paired Comparison")).toBeVisible();
+});
