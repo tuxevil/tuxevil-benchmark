@@ -77,6 +77,9 @@ export function ensureExperimentSqliteSchema() {
     );
     CREATE INDEX IF NOT EXISTS experiment_variants_experiment_idx
       ON experiment_variants(experiment_id, created_at ASC);
+    CREATE UNIQUE INDEX IF NOT EXISTS experiment_one_baseline_idx
+      ON experiment_variants(experiment_id)
+      WHERE role = 'BASELINE';
 
     CREATE TABLE IF NOT EXISTS experiment_observations (
       id TEXT PRIMARY KEY,
