@@ -77,6 +77,25 @@ export function ensureExperimentSqliteSchema() {
     );
     CREATE INDEX IF NOT EXISTS experiment_variants_experiment_idx
       ON experiment_variants(experiment_id, created_at ASC);
+
+    CREATE TABLE IF NOT EXISTS experiment_observations (
+      id TEXT PRIMARY KEY,
+      experiment_id TEXT NOT NULL,
+      variant_id TEXT NOT NULL,
+      case_id TEXT NOT NULL,
+      comparison_kind TEXT NOT NULL,
+      canonical_value TEXT NOT NULL,
+      success INTEGER,
+      telemetry TEXT NOT NULL,
+      metadata TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(experiment_id) REFERENCES experiments(id) ON DELETE CASCADE,
+      FOREIGN KEY(variant_id) REFERENCES experiment_variants(id) ON DELETE CASCADE,
+      UNIQUE(variant_id, case_id)
+    );
+    CREATE INDEX IF NOT EXISTS experiment_observations_variant_idx
+      ON experiment_observations(variant_id, case_id);
   `);
 }
 
