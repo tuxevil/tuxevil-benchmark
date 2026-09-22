@@ -40,11 +40,11 @@ The application is built for secure, local, and private model evaluations. It su
 
 ## UX/UI Architecture & Navigation
 
-The application is structured into **4 independent core modules**, cleanly separating analytical consultation from operational execution, alongside a 3-level navigation hierarchy:
+The application is structured into **5 independent core modules**, cleanly separating analytical consultation, controlled experimentation, and operational execution, alongside a 3-level navigation hierarchy:
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────────┐
-│  tuxevil Benchmark   [ 📊 Leaderboard ]   [ 🧪 Test Suites ]   [ ⚡ Monitor ]   [ ⚙️ Settings ]│
+│ tuxevil Benchmark [ 📊 Leaderboard ] [ 🧪 Test Suites ] [ 🧬 Churn Lab ] [ ⚡ Monitor ] [ ⚙️ Settings ] │
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -52,10 +52,11 @@ The application is structured into **4 independent core modules**, cleanly separ
 2. **🧪 Test Suites & Matrix (`/suites`):** Dual-panel test creator and matrix orchestrator.
    - **Left Panel:** Syntax-highlighted system prompt editor, category selector, Canary Token Injector (`CANARY_SEC_9842_ALPHA`), multi-turn conversation builder, scenario library saver, and delete button (`[ 🗑️ Delete from Library ]`).
    - **Right Panel:** **Mode A (Model Onboarding)** (run the active editor scenario on a single model), **Mode B (Suite Update)** (run 1 scenario across ALL local models), and **Custom Matrix Mode** (N models $\times$ M scenarios) with a live model refresh trigger (`[ 🔄 Refresh Models ]`).
-3. **⚡ Live Monitor (`/monitor`):** Technical operations and real-time inference monitoring. Displays local Ollama server status (ping, installed models, active model loaded in VRAM via `/api/ps`, VRAM usage), active run progress bar, token-by-token live SSE streaming box, queue flow controls (*Pause*, *Resume*, *Cancel*, *Retry Failed*), and run history log.
-4. **⚙️ Settings (`/settings`):** Endpoint configurations (Ollama URL, evaluator catalog with active judge selection), inference hyper-parameters, and theme options.
-5. **Level 2: Model Profile (`/models/[modelId]` & Inline Modal):** Technical dossier for an individual model available both as a dedicated page and an interactive modal when clicking `[View Profile]` on the Leaderboard. Displays model averages (Rating, Grammar, Compliance, Accuracy, Security Resilience), filterable executed test benchmarks table, and inspector triggers.
-6. **Level 3: Test Inspector Drawer:** Slide-over panel sliding from the right without losing background context. Displays System Prompt, User Prompt, Model Output Response, Evaluator Verdict (star ratings, qualitative feedback, vulnerability analysis), and Execution Telemetry (*TTFT, Speed, Output Tokens, Latency*).
+3. **🧬 Churn Lab (`/churn`):** Controlled paired-experiment workbench for local model changes. Register immutable model artifacts and execution environments, create baseline / baseline-repeat / variant experiments, import case-level observations, and inspect churn, lost/gained successes, intrinsic run noise, McNemar significance, and per-case diffs. Includes presets for quant/weights, KV cache, backend builds, context depth, reasoning mode, Flash Attention, and sampling.
+4. **⚡ Live Monitor (`/monitor`):** Technical operations and real-time inference monitoring. Displays local Ollama server status (ping, installed models, active model loaded in VRAM via `/api/ps`, VRAM usage), active run progress bar, token-by-token live SSE streaming box, queue flow controls (*Pause*, *Resume*, *Cancel*, *Retry Failed*), and run history log.
+5. **⚙️ Settings (`/settings`):** Endpoint configurations (Ollama URL, evaluator catalog with active judge selection), inference hyper-parameters, and theme options.
+6. **Level 2: Model Profile (`/models/[modelId]` & Inline Modal):** Technical dossier for an individual model available both as a dedicated page and an interactive modal when clicking `[View Profile]` on the Leaderboard. Displays model averages (Rating, Grammar, Compliance, Accuracy, Security Resilience), filterable executed test benchmarks table, and inspector triggers.
+7. **Level 3: Test Inspector Drawer:** Slide-over panel sliding from the right without losing background context. Displays System Prompt, User Prompt, Model Output Response, Evaluator Verdict (star ratings, qualitative feedback, vulnerability analysis), and Execution Telemetry (*TTFT, Speed, Output Tokens, Latency*).
 
 ## Highlights
 
@@ -65,6 +66,7 @@ The application is structured into **4 independent core modules**, cleanly separ
 - **Custom Weighting Formula:** Adjust Arena Score weighting dynamically:
   $$\text{Arena Index} = (W_q \cdot \text{Quality}) + (W_s \cdot \text{Security}) + (W_v \cdot \text{Speed})$$
 - **Granular Inference Telemetry:** Capture Time to First Token (TTFT), token output throughput (tok/sec), thinking token consumption, prompt token count, output token count, and execution latency for every turn and sample.
+- **Controlled Churn Experiments:** Compare baseline and variant outputs case-by-case instead of relying only on aggregate scores. Track agreement/churn, lost vs gained successes, Wilson confidence intervals, exact McNemar p-values, deterministic baseline-repeat noise, and model/runtime fingerprints.
 - **Automated Frontier Evaluation (LLM-as-a-Judge):** Evaluate outputs automatically using OpenAI-compatible `/chat/completions` endpoints. Receives structured JSON metrics (1–5 star overall score, Grammar, Compliance, Accuracy, and vulnerability breakdown).
 - **Real-Time Token Streaming & Queue Controls:** Stream output token-by-token over Server-Sent Events (SSE) in the Live Monitor, with queue control actions (*Pause*, *Resume*, *Cancel*, *Retry Failed*).
 - **Theme Support (Light / Dark / System):** Native support for Light mode, Dark mode, and OS preference matching without flash of unstyled content (FOUC).
