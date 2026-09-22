@@ -93,11 +93,12 @@ export async function upsertModelArtifact(input: ModelArtifactInput): Promise<Mo
   if (!usePostgres()) {
     ensureSqliteTables();
     const db = getSqliteDb();
-    const existing = db.prepare("SELECT id, created_at FROM model_artifacts WHERE fingerprint = ?").get(fingerprint) as
-      | { id: string; created_at: string }
-      | undefined;
+    const existing = db
+      .prepare("SELECT id, created_at FROM model_artifacts WHERE fingerprint = ?")
+      .get(fingerprint) as { id: string; created_at: string } | undefined;
     const id = existing?.id ?? crypto.randomUUID();
     const createdAt = existing?.created_at ?? now;
+
     db.prepare(`
       INSERT INTO model_artifacts (id, fingerprint, display_name, payload_json, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -106,13 +107,14 @@ export async function upsertModelArtifact(input: ModelArtifactInput): Promise<Mo
         payload_json = excluded.payload_json,
         updated_at = excluded.updated_at
     `).run(id, fingerprint, parsed.displayName, JSON.stringify(parsed), createdAt, now);
+
     return (await getModelArtifact(id))!;
   }
 
   const sql = getPgClient();
   if (!sql) throw new Error("PostgreSQL is not configured.");
   const id = crypto.randomUUID();
-  const [row] = await sql<JsonRow[]>`
+  const rows = await sql`
     INSERT INTO model_artifacts (id, fingerprint, display_name, payload_json, created_at, updated_at)
     VALUES (${id}, ${fingerprint}, ${parsed.displayName}, ${JSON.stringify(parsed)}::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     ON CONFLICT (fingerprint) DO UPDATE SET
@@ -121,7 +123,7 @@ export async function upsertModelArtifact(input: ModelArtifactInput): Promise<Mo
       updated_at = CURRENT_TIMESTAMP
     RETURNING id, fingerprint, payload_json, created_at, updated_at
   `;
-  return restoreArtifact(rawRow as JsonRow);
+  return restoreArtifact(rows[0] as JsonRow);
 }
 
 export async function getModelArtifact(id: string): Promise<ModelArtifact | null> {
@@ -135,9 +137,10 @@ export async function getModelArtifact(id: string): Promise<ModelArtifact | null
 
   const sql = getPgClient();
   if (!sql) return null;
-  const rows = await sql<JsonRow[]>`
+  const rows = await sql`
     SELECT id, fingerprint, payload_json, created_at, updated_at
-    FROM model_artifacts WHERE id = ${id}
+    FROM model_artifacts
+    WHERE id = ${id}
   `;
   return rows[0] ? restoreArtifact(rows[0] as JsonRow) : null;
 }
@@ -148,14 +151,15 @@ export async function listModelArtifacts(): Promise<ModelArtifact[]> {
     const rows = getSqliteDb()
       .prepare("SELECT id, fingerprint, payload_json, created_at, updated_at FROM model_artifacts ORDER BY updated_at DESC, id ASC")
       .all() as JsonRow[];
-    return rows.map((row) => restoreArtifact(row as JsonRow));
+    return rows.map(restoreArtifact);
   }
 
   const sql = getPgClient();
   if (!sql) return [];
-  const rows = await sql<JsonRow[]>`
+  const rows = await sql`
     SELECT id, fingerprint, payload_json, created_at, updated_at
-    FROM model_artifacts ORDER BY updated_at DESC, id ASC
+    FROM model_artifacts
+    ORDER BY updated_at DESC, id ASC
   `;
   return rows.map((row) => restoreArtifact(row as JsonRow));
 }
@@ -175,6 +179,7 @@ export async function upsertExecutionEnvironment(
       .get(fingerprint) as { id: string; created_at: string } | undefined;
     const id = existing?.id ?? crypto.randomUUID();
     const createdAt = existing?.created_at ?? now;
+
     db.prepare(`
       INSERT INTO execution_environments (id, fingerprint, label, payload_json, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -183,13 +188,14 @@ export async function upsertExecutionEnvironment(
         payload_json = excluded.payload_json,
         updated_at = excluded.updated_at
     `).run(id, fingerprint, parsed.label, JSON.stringify(parsed), createdAt, now);
+
     return (await getExecutionEnvironment(id))!;
   }
 
   const sql = getPgClient();
   if (!sql) throw new Error("PostgreSQL is not configured.");
   const id = crypto.randomUUID();
-  const [row] = await sql<JsonRow[]>`
+  const rows = await sql`
     INSERT INTO execution_environments (id, fingerprint, label, payload_json, created_at, updated_at)
     VALUES (${id}, ${fingerprint}, ${parsed.label}, ${JSON.stringify(parsed)}::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     ON CONFLICT (fingerprint) DO UPDATE SET
@@ -198,7 +204,7 @@ export async function upsertExecutionEnvironment(
       updated_at = CURRENT_TIMESTAMP
     RETURNING id, fingerprint, payload_json, created_at, updated_at
   `;
-  return restoreEnvironment(rawRow as JsonRow);
+  return restoreEnvironment(rows[0] as JsonRow);
 }
 
 export async function getExecutionEnvironment(id: string): Promise<ExecutionEnvironment | null> {
@@ -212,9 +218,10 @@ export async function getExecutionEnvironment(id: string): Promise<ExecutionEnvi
 
   const sql = getPgClient();
   if (!sql) return null;
-  const rows = await sql<JsonRow[]>`
+  const rows = await sql`
     SELECT id, fingerprint, payload_json, created_at, updated_at
-    FROM execution_environments WHERE id = ${id}
+    FROM execution_environments
+    WHERE id = ${id}
   `;
   return rows[0] ? restoreEnvironment(rows[0] as JsonRow) : null;
 }
@@ -225,14 +232,15 @@ export async function listExecutionEnvironments(): Promise<ExecutionEnvironment[
     const rows = getSqliteDb()
       .prepare("SELECT id, fingerprint, payload_json, created_at, updated_at FROM execution_environments ORDER BY updated_at DESC, id ASC")
       .all() as JsonRow[];
-    return rows.map((row) => restoreEnvironment(row as JsonRow));
+    return rows.map(restoreEnvironment);
   }
 
   const sql = getPgClient();
   if (!sql) return [];
-  const rows = await sql<JsonRow[]>`
+  const rows = await sql`
     SELECT id, fingerprint, payload_json, created_at, updated_at
-    FROM execution_environments ORDER BY updated_at DESC, id ASC
+    FROM execution_environments
+    ORDER BY updated_at DESC, id ASC
   `;
   return rows.map((row) => restoreEnvironment(row as JsonRow));
 }
