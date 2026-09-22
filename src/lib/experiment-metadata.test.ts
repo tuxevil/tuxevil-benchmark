@@ -73,6 +73,7 @@ describe("execution environment fingerprint", () => {
       kvCacheK: "q8_0",
       kvCacheV: "q8_0",
       contextSize: 32768,
+      runtimeFlags: ["-fa on", "-ngl 99"],
     });
     const reordered = executionEnvironmentInputSchema.parse({
       ...a,
