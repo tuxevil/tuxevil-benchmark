@@ -12,7 +12,8 @@ export const experimentObservationInputSchema = z.object({
   metadata: z.record(z.unknown()).default({}),
 });
 
-export type ExperimentObservationInput = z.input<typeof experimentObservationInputSchema>;\nexport type ExperimentObservationData = z.output<typeof experimentObservationInputSchema>;
+export type ExperimentObservationInput = z.input<typeof experimentObservationInputSchema>;
+export type ExperimentObservationData = z.output<typeof experimentObservationInputSchema>;
 
 export const experimentObservationBatchSchema = z.object({
   observations: z.array(experimentObservationInputSchema).min(1).max(10_000),
