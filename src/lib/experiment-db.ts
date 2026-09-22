@@ -1,0 +1,86 @@
+import postgres from "postgres";
+import { getSqliteDb } from "@/lib/sqlite-db";
+
+let pgClient: ReturnType<typeof postgres> | null | undefined;
+
+export function experimentUsesPostgres() {
+  return Boolean(process.env.DATABASE_URL?.trim());
+}
+
+export function getExperimentPostgresClient() {
+  if (pgClient !== undefined) return pgClient;
+  const url = process.env.DATABASE_URL?.trim();
+  pgClient = url ? postgres(url, { connect_timeout: 5, idle_timeout: 20, max: 3 }) : null;
+  return pgClient;
+}
+
+export function ensureExperimentSqliteSchema() {
+  getSqliteDb().exec(`
+    CREATE TABLE IF NOT EXISTS model_artifacts (
+      id TEXT PRIMARY KEY,
+      fingerprint TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS model_artifacts_updated_idx
+      ON model_artifacts(updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS execution_environments (
+      id TEXT PRIMARY KEY,
+      fingerprint TEXT NOT NULL UNIQUE,
+      label TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS execution_environments_updated_idx
+      ON execution_environments(updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS experiments (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      factor_under_test TEXT NOT NULL,
+      status TEXT NOT NULL,
+      validity_status TEXT NOT NULL,
+      baseline_variant_id TEXT,
+      suite_key TEXT,
+      suite_version TEXT,
+      scenario_version TEXT,
+      sampling_snapshot TEXT NOT NULL,
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS experiments_updated_idx
+      ON experiments(updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS experiment_variants (
+      id TEXT PRIMARY KEY,
+      experiment_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL,
+      model_artifact_id TEXT NOT NULL,
+      execution_environment_id TEXT NOT NULL,
+      inference_parameters TEXT NOT NULL,
+      prompt_version TEXT,
+      reasoning_mode TEXT,
+      parent_variant_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(experiment_id) REFERENCES experiments(id) ON DELETE CASCADE,
+      FOREIGN KEY(model_artifact_id) REFERENCES model_artifacts(id),
+      FOREIGN KEY(execution_environment_id) REFERENCES execution_environments(id),
+      FOREIGN KEY(parent_variant_id) REFERENCES experiment_variants(id),
+      UNIQUE(experiment_id, name)
+    );
+    CREATE INDEX IF NOT EXISTS experiment_variants_experiment_idx
+      ON experiment_variants(experiment_id, created_at ASC);
+  `);
+}
+
+export async function closeExperimentDb() {
+  if (pgClient) await pgClient.end({ timeout: 1 });
+  pgClient = undefined;
+}
