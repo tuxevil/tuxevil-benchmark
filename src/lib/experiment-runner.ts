@@ -269,6 +269,38 @@ async function resetOllamaForColdSample(targetId: string, modelName: string) {
   throw new Error(`Ollama model "${modelName}" remained loaded after cold reset.`);
 }
 
+async function failMappedRun(testRunId: string, message: string) {
+  await benchmarkStore.hydrate();
+  let run = benchmarkStore.getStoredRun(testRunId);
+  if (!run) {
+    await benchmarkStore.refreshRun(testRunId);
+    run = benchmarkStore.getStoredRun(testRunId);
+  }
+  if (!run || ["COMPLETED", "FAILED", "CANCELLED"].includes(run.status)) return;
+  benchmarkStore.updateRun(testRunId, {
+    status: "FAILED",
+    finishedAt: new Date().toISOString(),
+    errorMessage: message,
+  });
+  await benchmarkStore.flush(testRunId);
+}
+
+async function cancelUnenqueuedExecutionRuns(executionId: string) {
+  const stored = await getExperimentExecution(executionId);
+  if (!stored) return;
+  for (const mapping of stored.runs.filter((item) => !item.enqueuedAt)) {
+    await benchmarkStore.hydrate();
+    let run = benchmarkStore.getStoredRun(mapping.testRunId);
+    if (!run) {
+      await benchmarkStore.refreshRun(mapping.testRunId);
+      run = benchmarkStore.getStoredRun(mapping.testRunId);
+    }
+    if (!run || ["COMPLETED", "FAILED", "CANCELLED"].includes(run.status)) continue;
+    benchmarkStore.cancelRun(mapping.testRunId);
+    await benchmarkStore.flush(mapping.testRunId);
+  }
+}
+
 async function enqueueMappedRun(
   execution: ExperimentExecutionWithRuns["execution"],
   mapping: ExperimentExecutionWithRuns["runs"][number],
@@ -277,16 +309,22 @@ async function enqueueMappedRun(
   const claimed = await claimExperimentExecutionRunForEnqueue(mapping.id);
   if (!claimed) return false;
 
-  if (execution.executionMode === "PERFORMANCE" && execution.includeColdSample) {
-    const variant = experiment?.variants.find((item) => item.id === mapping.variantId);
-    if (!variant?.executionTargetId || !variant.executionModelName) {
-      throw new Error("Performance run lost its execution target/model binding.");
+  try {
+    if (execution.executionMode === "PERFORMANCE" && execution.includeColdSample) {
+      const variant = experiment?.variants.find((item) => item.id === mapping.variantId);
+      if (!variant?.executionTargetId || !variant.executionModelName) {
+        throw new Error("Performance run lost its execution target/model binding.");
+      }
+      await resetOllamaForColdSample(variant.executionTargetId, variant.executionModelName);
     }
-    await resetOllamaForColdSample(variant.executionTargetId, variant.executionModelName);
-  }
 
-  await enqueueBenchmark(mapping.testRunId);
-  return true;
+    await enqueueBenchmark(mapping.testRunId);
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not enqueue benchmark run.";
+    await failMappedRun(mapping.testRunId, message);
+    throw error;
+  }
 }
 
 function canonicalValue(result: ModelResult) {
@@ -474,8 +512,12 @@ export async function startExperimentExecution(
     return reconcileExperimentExecution(experimentId, execution.id);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not launch experiment execution.";
+    await cancelUnenqueuedExecutionRuns(execution.id);
     await updateExperimentExecutionStatus(execution.id, "FAILED", message);
-    await releaseExecutionTargetLeases(execution.id);
+    const failed = await getExperimentExecution(execution.id);
+    if (!failed?.runs.some((mapping) => mapping.enqueuedAt)) {
+      await releaseExecutionTargetLeases(execution.id);
+    }
     await updateExperimentStatus(experimentId, "FAILED");
     throw error;
   }
@@ -533,6 +575,7 @@ export async function reconcileExperimentExecution(
           await enqueueMappedRun(stored.execution, next, experiment);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Could not enqueue next performance run.";
+          await cancelUnenqueuedExecutionRuns(executionId);
           stored.execution = await updateExperimentExecutionStatus(executionId, "FAILED", message);
           await releaseExecutionTargetLeases(executionId);
           await updateExperimentStatus(experimentId, "FAILED");
