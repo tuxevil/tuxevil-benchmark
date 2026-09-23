@@ -24,6 +24,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const body = await readJson(request);
   const parsed = scenarioSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid scenario." }, { status: 400 });
+  if (parsed.data.suiteKey === "practical-slm") {
+    return NextResponse.json(
+      { error: "The practical-slm suite key is reserved for built-in versioned scenarios." },
+      { status: 409 },
+    );
+  }
   const scenario = await benchmarkStore.updateScenario(id, parsed.data);
   return scenario
     ? NextResponse.json({ scenario })
