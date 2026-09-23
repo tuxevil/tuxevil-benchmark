@@ -95,7 +95,7 @@ export function gradeDeterministicResponse(
   return {
     passed,
     comparisonKind: "STRUCTURAL",
-    canonicalValue: responseText.trim(),
+    canonicalValue: canonicalJson({ missing, forbiddenFound }),
     reason: passed ? "All required fragments were present and forbidden fragments absent." : "Required/forbidden fragment constraints were not satisfied.",
     details: { missing, forbiddenFound },
   };
