@@ -269,6 +269,7 @@ export function ChurnLab() {
   const [experiments, setExperiments] = useState<ExperimentRecord[]>([]);
   const [detail, setDetail] = useState<ExperimentDetail | null>(null);
   const [comparison, setComparison] = useState<Comparison | null>(null);
+  const [automaticComparisons, setAutomaticComparisons] = useState<Comparison[]>([]);
   const [selectedExperimentId, setSelectedExperimentId] = useState("");
   const [compareVariantId, setCompareVariantId] = useState("");
   const [caseFilter, setCaseFilter] = useState("changed");
@@ -364,6 +365,7 @@ export function ChurnLab() {
     if (!id) {
       setDetail(null);
       setComparison(null);
+      setAutomaticComparisons([]);
       return;
     }
     const res = await fetch(`/api/experiments/${encodeURIComponent(id)}`);
@@ -374,6 +376,7 @@ export function ChurnLab() {
     setCompareVariantId(targetVariant?.id ?? "");
     setObservationVariantId(data.experiment.baselineVariantId ?? data.variants[0]?.id ?? "");
     setComparison(null);
+    setAutomaticComparisons([]);
   }, []);
 
   useEffect(() => {
@@ -655,6 +658,7 @@ export function ChurnLab() {
       if (!res.ok) throw new Error(data.error || "Could not import observations.");
       setNotice(`${parsed.length} observations imported into ${detail.variants.find((item) => item.id === observationVariantId)?.name ?? "variant"}.`);
       setComparison(null);
+      setAutomaticComparisons([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not parse/import observations.");
     }
@@ -667,6 +671,11 @@ export function ChurnLab() {
     }
     setError(null);
     setNotice(null);
+    const automatic = automaticComparisons.find((item) => item.variantId === compareVariantId);
+    if (automatic) {
+      setComparison(automatic);
+      return;
+    }
     const repeat = detail.variants.find((item) => item.role === "BASELINE_REPEAT");
     const query = new URLSearchParams({ variantId: compareVariantId });
     if (repeat) query.set("baselineRepeatVariantId", repeat.id);
@@ -976,7 +985,15 @@ export function ChurnLab() {
               experimentId={detail.experiment.id}
               variants={runnerVariants}
               onBindingsSaved={() => loadExperiment(detail.experiment.id)}
-              onComparison={(value) => setComparison(value as Comparison)}
+              onComparisons={(values) => {
+                const next = values as Comparison[];
+                setAutomaticComparisons(next);
+                const first = next[0];
+                if (first) {
+                  setCompareVariantId(first.variantId);
+                  setComparison(first);
+                }
+              }}
             />
           )}
 
