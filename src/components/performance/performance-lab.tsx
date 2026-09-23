@@ -176,10 +176,7 @@ export function PerformanceLab() {
   }, []);
 
   useEffect(() => {
-    if (!experimentId) {
-      setDetail(null);
-      return;
-    }
+    if (!experimentId) return;
     let ignore = false;
     (async () => {
       try {
@@ -223,9 +220,7 @@ export function PerformanceLab() {
       : false
   );
 
-  useEffect(() => {
-    if (!allOllama && includeCold) setIncludeCold(false);
-  }, [allOllama, includeCold]);
+  const effectiveIncludeCold = includeCold && allOllama;
 
   const pollExecution = async (executionId: string) => {
     for (;;) {
@@ -274,7 +269,8 @@ export function PerformanceLab() {
     try {
       const measured = Math.max(1, Math.min(8, Number(measuredSamples) || 1));
       const warmup = Math.max(0, Math.min(5, Number(warmupSamples) || 0));
-      if (measured + warmup + (includeCold ? 1 : 0) > 10) {
+      const cold = effectiveIncludeCold;
+      if (measured + warmup + (cold ? 1 : 0) > 10) {
         throw new Error("Measured + warmup + cold samples may not exceed 10 per scenario.");
       }
 
@@ -286,7 +282,7 @@ export function PerformanceLab() {
           samplesPerModel: measured,
           executionMode: "PERFORMANCE",
           warmupSamples: warmup,
-          includeColdSample: includeCold,
+          includeColdSample: cold,
           useEvaluator: false,
           successPolicy: "DETERMINISTIC",
           successThreshold: 4,
@@ -347,7 +343,18 @@ export function PerformanceLab() {
 
           <label>
             Experiment
-            <select className="input" value={experimentId} onChange={(e) => setExperimentId(e.target.value)} disabled={busy}>
+            <select
+              className="input"
+              value={experimentId}
+              onChange={(e) => {
+                setExperimentId(e.target.value);
+                setDetail(null);
+                setExecution(null);
+                setReport(null);
+                setIncludeCold(false);
+              }}
+              disabled={busy}
+            >
               <option value="">Select experiment…</option>
               {experiments.map((experiment) => (
                 <option key={experiment.id} value={experiment.id}>
@@ -401,7 +408,7 @@ export function PerformanceLab() {
             <label className="performance-checkbox">
               <input
                 type="checkbox"
-                checked={includeCold}
+                checked={effectiveIncludeCold}
                 onChange={(e) => setIncludeCold(e.target.checked)}
                 disabled={busy || !allOllama}
               />
