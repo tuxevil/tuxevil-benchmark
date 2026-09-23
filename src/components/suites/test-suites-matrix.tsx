@@ -43,6 +43,8 @@ export function TestSuitesMatrix({
   ]);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
   const [savingNotice, setSavingNotice] = useState<string | null>(null);
+  const selectedScenario = scenarios.find((scenario) => scenario.id === selectedScenarioId) ?? null;
+  const selectedIsPractical = selectedScenario?.suiteKey === "practical-slm";
 
   // Right Panel - Matrix Launcher Mode
   const [mode, setMode] = useState<"onboarding" | "update" | "custom">("onboarding");
@@ -379,7 +381,7 @@ export function TestSuitesMatrix({
               <option value="">-- Select Saved Scenario --</option>
               {scenarios.map((s) => (
                 <option key={s.id} value={s.id}>
-                  [{s.category}] {s.name}
+                  [{s.suiteKey === "practical-slm" ? "Practical SLM" : s.category}] {s.name}
                 </option>
               ))}
             </select>
@@ -484,10 +486,13 @@ export function TestSuitesMatrix({
           <button type="button" className="btn-save-library" onClick={handleSaveScenario}>
             💾 Save to Library
           </button>
-          {selectedScenarioId && (
+          {selectedScenarioId && !selectedIsPractical && (
             <button type="button" className="btn-delete-library" onClick={handleDeleteScenario}>
               🗑️ Delete from Library
             </button>
+          )}
+          {selectedIsPractical && (
+            <span className="sub">🔒 Versioned Practical SLM case · Save to Library creates a customizable copy.</span>
           )}
         </div>
       </div>
