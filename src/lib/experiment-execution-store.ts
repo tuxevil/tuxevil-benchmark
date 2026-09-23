@@ -375,9 +375,11 @@ export async function acquireExecutionTargetLeases(
     const rows = await sql`
       SELECT target_id, execution_id
       FROM execution_target_leases
-      WHERE target_id = ANY(${unique}::uuid[])
     `;
-    const conflict = rows.find((row) => String(row.execution_id) !== executionId);
+    const conflict = rows.find((row) =>
+      unique.includes(String(row.target_id))
+      && String(row.execution_id) !== executionId
+    );
     throw new Error(
       conflict
         ? `Execution target ${String(conflict.target_id)} is already leased by execution ${String(conflict.execution_id)}.`
