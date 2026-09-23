@@ -58,12 +58,12 @@ export function ExperimentRunnerPanel({
   experimentId,
   variants,
   onBindingsSaved,
-  onComparison,
+  onComparisons,
 }: {
   experimentId: string;
   variants: Variant[];
   onBindingsSaved: () => Promise<void> | void;
-  onComparison: (comparison: Comparison) => void;
+  onComparisons: (comparisons: Comparison[]) => void;
 }) {
   const [targets, setTargets] = useState<Target[]>([]);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
@@ -180,7 +180,7 @@ export function ExperimentRunnerPanel({
       setExecution(view);
 
       if (view.execution.status === "COMPLETED" || view.execution.status === "FAILED") {
-        if (view.comparisons[0]) onComparison(view.comparisons[0]);
+        if (view.comparisons.length > 0) onComparisons(view.comparisons);
         return view;
       }
       await delay(1_500);
