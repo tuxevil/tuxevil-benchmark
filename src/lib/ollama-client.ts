@@ -37,6 +37,7 @@ export async function streamOllamaChat({
   parameters,
   signal,
   onToken,
+  apiKey,
 }: {
   endpoint: string;
   model: string;
@@ -44,9 +45,10 @@ export async function streamOllamaChat({
   parameters: BenchmarkParameters;
   signal: AbortSignal;
   onToken?: (token: string) => void;
+  apiKey?: string | null;
 }): Promise<OllamaChatResult> {
   const startedAt = performance.now();
-  const streamed = await requestChat({ endpoint, model, messages, parameters, signal, onToken });
+  const streamed = await requestChat({ endpoint, model, messages, parameters, signal, onToken, apiKey });
 
   const evalDurationMs = durationMs(streamed.finalChunk.eval_duration);
   const outputTokens = streamed.finalChunk.eval_count ?? null;
@@ -78,6 +80,7 @@ async function requestChat({
   parameters,
   signal,
   onToken,
+  apiKey,
 }: {
   endpoint: string;
   model: string;
@@ -85,12 +88,16 @@ async function requestChat({
   parameters: BenchmarkParameters;
   signal: AbortSignal;
   onToken?: (token: string) => void;
+  apiKey?: string | null;
 }): Promise<StreamedChat> {
   const timeoutSignal = AbortSignal.timeout(120_000);
   const requestSignal = AbortSignal.any([signal, timeoutSignal]);
   const response = await fetch(`${endpoint.replace(/\/$/, "")}/api/chat`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(apiKey?.trim() ? { authorization: `Bearer ${apiKey.trim()}` } : {}),
+    },
     redirect: "error",
     body: JSON.stringify({
       model,
