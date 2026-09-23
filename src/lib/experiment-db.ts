@@ -114,6 +114,9 @@ export function ensureExperimentSqliteSchema() {
     );
     CREATE INDEX IF NOT EXISTS experiment_executions_experiment_idx
       ON experiment_executions(experiment_id, created_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS experiment_one_active_execution_idx
+      ON experiment_executions(experiment_id)
+      WHERE status IN ('PENDING', 'RUNNING');
 
     CREATE TABLE IF NOT EXISTS experiment_execution_runs (
       id TEXT PRIMARY KEY,
