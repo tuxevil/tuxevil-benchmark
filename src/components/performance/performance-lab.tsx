@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import "./performance-lab.module.css";
 
 type ExperimentSummary = {
   id: string;
