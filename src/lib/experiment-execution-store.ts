@@ -256,14 +256,16 @@ export async function findActiveExperimentExecution(
 }
 
 
-export async function markExperimentExecutionRunEnqueued(id: string): Promise<ExperimentExecutionRun> {
+export async function claimExperimentExecutionRunForEnqueue(id: string): Promise<ExperimentExecutionRun | null> {
   const now = new Date().toISOString();
   if (!experimentUsesPostgres()) {
     ensureExperimentSqliteSchema();
-    getSqliteDb().prepare(
-      "UPDATE experiment_execution_runs SET enqueued_at = COALESCE(enqueued_at, ?) WHERE id = ?",
+    const db = getSqliteDb();
+    const result = db.prepare(
+      "UPDATE experiment_execution_runs SET enqueued_at = ? WHERE id = ? AND enqueued_at IS NULL",
     ).run(now, id);
-    const row = getSqliteDb().prepare("SELECT * FROM experiment_execution_runs WHERE id = ?").get(id) as Row;
+    if (result.changes === 0) return null;
+    const row = db.prepare("SELECT * FROM experiment_execution_runs WHERE id = ?").get(id) as Row;
     return restoreRun(row);
   }
 
@@ -271,11 +273,11 @@ export async function markExperimentExecutionRunEnqueued(id: string): Promise<Ex
   if (!sql) throw new Error("PostgreSQL is not configured.");
   const rows = await sql`
     UPDATE experiment_execution_runs
-    SET enqueued_at = COALESCE(enqueued_at, CURRENT_TIMESTAMP)
-    WHERE id = ${id}
+    SET enqueued_at = CURRENT_TIMESTAMP
+    WHERE id = ${id} AND enqueued_at IS NULL
     RETURNING *
   `;
-  return restoreRun(rows[0] as Row);
+  return rows[0] ? restoreRun(rows[0] as Row) : null;
 }
 
 export async function acquireExecutionTargetLeases(
