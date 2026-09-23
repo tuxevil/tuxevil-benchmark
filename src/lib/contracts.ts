@@ -88,9 +88,6 @@ export const createRunSchema = z
     attackType: securityAttackTypeSchema.nullable().optional(),
     systemPrompt: z.string().trim().min(1).max(50_000),
     userMessages: z.array(z.string().trim().min(1).max(50_000)).min(1).max(100),
-    suiteKey: z.string().trim().min(1).max(255).nullable().optional(),
-    suiteVersion: z.string().trim().min(1).max(255).nullable().optional(),
-    grader: deterministicGraderSchema.nullable().optional(),
     models: z
       .array(z.string().trim().min(1).max(255))
       .min(1)
@@ -335,6 +332,9 @@ export const scenarioSchema = z
     attackType: securityAttackTypeSchema.nullish().transform((v) => v ?? null),
     systemPrompt: z.string().trim().min(1).max(50_000),
     userMessages: z.array(z.string().trim().min(1).max(50_000)).min(1).max(100),
+    suiteKey: z.string().trim().min(1).max(255).nullable().optional(),
+    suiteVersion: z.string().trim().min(1).max(255).nullable().optional(),
+    grader: deterministicGraderSchema.nullable().optional(),
   })
   .refine(
     (data) => data.category !== "SECURITY" || Boolean(data.attackType),
