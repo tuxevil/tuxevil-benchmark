@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS experiment_variants (
   model_artifact_id UUID NOT NULL REFERENCES model_artifacts(id),
   execution_environment_id UUID NOT NULL REFERENCES execution_environments(id),
   execution_target_id UUID REFERENCES execution_targets(id) ON DELETE SET NULL,
-  execution_model_name VARCHAR(512),
+  execution_model_name VARCHAR(255),
   inference_parameters JSONB NOT NULL DEFAULT '{}'::jsonb,
   prompt_version VARCHAR(255),
   reasoning_mode VARCHAR(64),
@@ -86,7 +86,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS experiment_one_baseline_idx
 ALTER TABLE experiment_variants
   ADD COLUMN IF NOT EXISTS execution_target_id UUID REFERENCES execution_targets(id) ON DELETE SET NULL;
 ALTER TABLE experiment_variants
-  ADD COLUMN IF NOT EXISTS execution_model_name VARCHAR(512);
+  ADD COLUMN IF NOT EXISTS execution_model_name VARCHAR(255);
 
 CREATE TABLE IF NOT EXISTS experiment_executions (
   id UUID PRIMARY KEY,
