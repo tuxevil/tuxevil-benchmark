@@ -92,9 +92,13 @@ describe("performance target isolation", () => {
       executions.acquireExecutionTargetLeases(second.id, [target.id]),
     ).rejects.toThrow(/already leased/);
 
-    await executions.releaseExecutionTargetLeases(first.id);
+    // Simulate a crash after terminal status was persisted but before explicit lease release.
+    await executions.updateExperimentExecutionStatus(first.id, "COMPLETED");
     await executions.acquireExecutionTargetLeases(second.id, [target.id]);
     expect((await executions.listExecutionTargetLeases())[0].executionId).toBe(second.id);
+
+    await executions.releaseExecutionTargetLeases(second.id);
+    expect(await executions.listExecutionTargetLeases()).toHaveLength(0);
   });
 
   it("claims a planned run for enqueue exactly once", async () => {
