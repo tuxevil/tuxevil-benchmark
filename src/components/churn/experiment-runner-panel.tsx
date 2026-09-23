@@ -112,20 +112,6 @@ export function ExperimentRunnerPanel({
     };
   }, []);
 
-  useEffect(() => {
-    setBindings(
-      Object.fromEntries(
-        variants.map((variant) => [
-          variant.id,
-          {
-            executionTargetId: variant.executionTargetId ?? "",
-            executionModelName: variant.executionModelName ?? "",
-          },
-        ]),
-      ),
-    );
-  }, [variants]);
-
   const variantNameById = useMemo(
     () => new Map(variants.map((variant) => [variant.id, variant.name])),
     [variants],
