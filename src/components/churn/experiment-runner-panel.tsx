@@ -344,7 +344,11 @@ export function ExperimentRunnerPanel({
           <select
             className="input"
             value={successPolicy}
-            onChange={(e) => setSuccessPolicy(e.target.value as "NONE" | "EVALUATION_THRESHOLD")}
+            onChange={(e) => {
+              const policy = e.target.value as "NONE" | "EVALUATION_THRESHOLD";
+              setSuccessPolicy(policy);
+              if (policy === "EVALUATION_THRESHOLD") setUseEvaluator(true);
+            }}
           >
             <option value="NONE">No objective pass/fail</option>
             <option value="EVALUATION_THRESHOLD">Evaluator star threshold</option>
