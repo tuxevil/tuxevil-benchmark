@@ -73,6 +73,13 @@ function conflict(label: string, expected: unknown, observed: unknown): string |
     : `${label}: expected ${String(expected)}, detected ${String(observed)}`;
 }
 
+function arrayConflict(label: string, expected: string[], observed: string[]): string | null {
+  if (expected.length === 0 || observed.length === 0) return null;
+  return JSON.stringify(expected) === JSON.stringify(observed)
+    ? null
+    : `${label}: expected ${JSON.stringify(expected)}, detected ${JSON.stringify(observed)}`;
+}
+
 async function preflightVariant(variant: ExperimentVariant): Promise<Preflight> {
   if (!variant.executionTargetId) throw new Error(`Variant "${variant.name}" has no execution target.`);
   if (!variant.executionModelName) throw new Error(`Variant "${variant.name}" has no execution model name.`);
@@ -106,6 +113,7 @@ async function preflightVariant(variant: ExperimentVariant): Promise<Preflight> 
     conflict("batch size", environment.batchSize, snapshot.environment.batchSize),
     conflict("ubatch size", environment.ubatchSize, snapshot.environment.ubatchSize),
     conflict("parallel slots", environment.parallel, snapshot.environment.parallel),
+    arrayConflict("runtime flags", environment.runtimeFlags, snapshot.environment.runtimeFlags),
     conflict("architecture", artifact.architecture, snapshot.artifact.architecture),
     conflict("parameter count", artifact.totalParameters, snapshot.artifact.totalParameters),
     conflict("quantization", artifact.quantization, snapshot.artifact.quantization),
@@ -145,6 +153,7 @@ function buildParameters(
     topP: numeric(raw.topP) ?? defaults.topP,
     repeatPenalty: numeric(raw.repeatPenalty) ?? defaults.repeatPenalty,
     numPredict: numeric(raw.numPredict) ?? defaults.numPredict,
+    seed: numeric(raw.seed) ?? defaults.seed,
     reasoningEffort: reasoning.success ? reasoning.data : (defaults.reasoningEffort ?? "off"),
   };
 }
