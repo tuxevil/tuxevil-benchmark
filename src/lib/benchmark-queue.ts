@@ -74,7 +74,16 @@ async function executeBenchmark(runId: string) {
 
   benchmarkStore.updateRun(runId, { status: "RUNNING", startedAt: new Date().toISOString() });
 
-  const modelConcurrency = Math.max(1, Number(process.env.BENCHMARK_MODEL_CONCURRENCY ?? 1));
+  let modelConcurrency = Math.max(1, Number(process.env.BENCHMARK_MODEL_CONCURRENCY ?? 1));
+  try {
+    const { isTestRunInPerformanceExecution } = await import("@/lib/experiment-execution-store");
+    if (await isTestRunInPerformanceExecution(runId)) modelConcurrency = 1;
+  } catch (error) {
+    console.error("[tuxevil-benchmark] could not resolve performance sample concurrency", {
+      runId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
   await runWithConcurrency(run.results, modelConcurrency, async (result) => {
     if (await waitUntilRunnable(runId)) await executeModel(runId, result.id);
   });
