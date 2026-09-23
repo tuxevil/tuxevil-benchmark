@@ -5,6 +5,7 @@ import { benchmarkStore } from "@/lib/benchmark-store";
 import { loadPersistedState } from "@/lib/database";
 import { redisConnection } from "@/lib/redis-connection";
 import { LEGACY_QUEUE_NAME, LEGACY_RECOVERY_KEY_PREFIX } from "@/lib/legacy-identifiers";
+import { isTestRunAwaitingExperimentEnqueue } from "@/lib/experiment-execution-store";
 
 const QUEUE_NAME = LEGACY_QUEUE_NAME;
 const RECOVERY_KEY_PREFIX = LEGACY_RECOVERY_KEY_PREFIX;
@@ -32,6 +33,10 @@ export async function reconcileOrphanedRuns(options: { maxRecoveries?: number } 
 
     const candidates = persisted.runs.filter(({ run }) => run.status === "PENDING" || run.status === "RUNNING");
     for (const { run } of candidates) {
+      if (await isTestRunAwaitingExperimentEnqueue(run.id)) {
+        result.skipped.push(run.id);
+        continue;
+      }
       if (run.paused) {
         result.skipped.push(run.id);
         continue;
