@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ExecutionTargetPanel } from "@/components/churn/execution-target-panel";
+import { ExperimentRunnerPanel } from "@/components/churn/experiment-runner-panel";
 
 type ModelArtifact = {
   id: string;
@@ -50,6 +51,8 @@ type ExperimentVariant = {
   role: "BASELINE" | "VARIANT" | "BASELINE_REPEAT" | "CONTROL";
   modelArtifactId: string;
   executionEnvironmentId: string;
+  executionTargetId: string | null;
+  executionModelName: string | null;
   inferenceParameters: Record<string, unknown>;
   reasoningMode: string | null;
 };
@@ -933,10 +936,19 @@ export function ChurnLab() {
         </aside>
 
         <div className="churn-workbench-main">
+          {detail && (
+            <ExperimentRunnerPanel
+              experimentId={detail.experiment.id}
+              variants={detail.variants}
+              onBindingsSaved={() => loadExperiment(detail.experiment.id)}
+              onComparison={(value) => setComparison(value as Comparison)}
+            />
+          )}
+
           <section className="panel churn-card">
             <div className="churn-card-head">
               <div>
-                <p className="card-kicker">Step 3</p>
+                <p className="card-kicker">Manual fallback</p>
                 <h2>Observation Import</h2>
               </div>
               {detail && <span className="churn-count">{detail.variants.length} variants</span>}
@@ -969,7 +981,7 @@ export function ChurnLab() {
           <section className="panel churn-card">
             <div className="churn-card-head">
               <div>
-                <p className="card-kicker">Step 4</p>
+                <p className="card-kicker">Comparison</p>
                 <h2>Paired Comparison</h2>
               </div>
               {comparison && <span className={`churn-validity ${comparison.summary.determinism.validity.toLowerCase()}`}>{comparison.summary.determinism.validity}</span>}
