@@ -116,7 +116,7 @@ export async function getExecutionTargetConnection(id: string): Promise<Executio
 
 export async function updateExecutionTarget(id: string, input: ExecutionTargetUpdate): Promise<ExecutionTarget | null> {
   const parsed = executionTargetUpdateSchema.parse(input);
-  const existing = await getExecutionTargetConnection(id);
+  const existing = await getExecutionTarget(id);
   if (!existing) return null;
 
   const provider = parsed.provider ?? existing.provider;
