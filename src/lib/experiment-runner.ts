@@ -253,6 +253,11 @@ export async function startExperimentExecution(
   const execution = await createExperimentExecutionRecord(experimentId, parsed);
   try {
     const defaults = benchmarkStore.getSettings().parameters;
+    const plannedRunIds: string[] = [];
+
+    // Persist the complete execution plan before starting any worker. This
+    // prevents a very fast local run from making a partially-built execution
+    // look terminal while later variant/scenario mappings are still being added.
     for (const preflight of preflights) {
       for (const scenario of scenarios) {
         if (!scenario) continue;
@@ -278,11 +283,14 @@ export async function startExperimentExecution(
           scenarioId: scenario.id,
           testRunId: run.id,
         });
-        await enqueueBenchmark(run.id);
+        plannedRunIds.push(run.id);
       }
     }
+
     await updateExperimentExecutionStatus(execution.id, "RUNNING");
     await updateExperimentStatus(experimentId, "RUNNING");
+    for (const runId of plannedRunIds) await enqueueBenchmark(runId);
+
     return reconcileExperimentExecution(experimentId, execution.id);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not launch experiment execution.";
