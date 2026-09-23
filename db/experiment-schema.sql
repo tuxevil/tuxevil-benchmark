@@ -83,6 +83,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS experiment_one_baseline_idx
   ON experiment_variants (experiment_id)
   WHERE role = 'BASELINE';
 
+ALTER TABLE experiment_variants
+  ADD COLUMN IF NOT EXISTS execution_target_id UUID REFERENCES execution_targets(id) ON DELETE SET NULL;
+ALTER TABLE experiment_variants
+  ADD COLUMN IF NOT EXISTS execution_model_name VARCHAR(512);
+
 CREATE TABLE IF NOT EXISTS experiment_executions (
   id UUID PRIMARY KEY,
   experiment_id UUID NOT NULL REFERENCES experiments(id) ON DELETE CASCADE,
