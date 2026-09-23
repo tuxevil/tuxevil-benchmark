@@ -89,6 +89,15 @@ export async function reconcileOrphanedEvals(persisted?: Awaited<ReturnType<type
     }
     if (markedInRun > 0) {
       await benchmarkStore.flush(run.id);
+      try {
+        const { reconcileExperimentExecutionsForTestRun } = await import("@/lib/experiment-runner");
+        await reconcileExperimentExecutionsForTestRun(run.id);
+      } catch (error) {
+        console.error("[tuxevil-benchmark] experiment reconciliation after eval recovery failed", {
+          runId: run.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
       marked += markedInRun;
     }
   }
@@ -108,4 +117,13 @@ async function markStalled(runId: string) {
     errorMessage: STALLED_ERROR_MESSAGE,
   });
   await benchmarkStore.flush(runId);
+  try {
+    const { reconcileExperimentExecutionsForTestRun } = await import("@/lib/experiment-runner");
+    await reconcileExperimentExecutionsForTestRun(runId);
+  } catch (error) {
+    console.error("[tuxevil-benchmark] experiment reconciliation after stalled run failed", {
+      runId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
