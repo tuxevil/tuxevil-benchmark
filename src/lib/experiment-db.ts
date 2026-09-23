@@ -130,6 +130,25 @@ export function ensureExperimentSqliteSchema() {
     CREATE INDEX IF NOT EXISTS experiment_execution_runs_execution_idx
       ON experiment_execution_runs(execution_id, variant_id);
 
+    CREATE TABLE IF NOT EXISTS experiment_execution_observations (
+      id TEXT PRIMARY KEY,
+      execution_id TEXT NOT NULL,
+      variant_id TEXT NOT NULL,
+      case_id TEXT NOT NULL,
+      comparison_kind TEXT NOT NULL,
+      canonical_value TEXT NOT NULL,
+      success INTEGER,
+      telemetry TEXT NOT NULL,
+      metadata TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(execution_id) REFERENCES experiment_executions(id) ON DELETE CASCADE,
+      FOREIGN KEY(variant_id) REFERENCES experiment_variants(id) ON DELETE CASCADE,
+      UNIQUE(execution_id, variant_id, case_id)
+    );
+    CREATE INDEX IF NOT EXISTS experiment_execution_observations_idx
+      ON experiment_execution_observations(execution_id, variant_id, case_id);
+
     CREATE TABLE IF NOT EXISTS experiment_observations (
       id TEXT PRIMARY KEY,
       experiment_id TEXT NOT NULL,
