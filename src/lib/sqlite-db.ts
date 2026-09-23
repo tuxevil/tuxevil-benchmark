@@ -620,6 +620,7 @@ export function sqliteLoadSettings(): {
         topP: Number(parsed.topP ?? params.topP),
         repeatPenalty: Number(parsed.repeatPenalty ?? params.repeatPenalty),
         numPredict: Number(parsed.numPredict ?? params.numPredict),
+        seed: parsed.seed === undefined || parsed.seed === null ? undefined : Number(parsed.seed),
       };
     } catch {}
   }
