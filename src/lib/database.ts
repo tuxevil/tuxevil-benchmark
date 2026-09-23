@@ -981,6 +981,7 @@ function parsePersistedParameters(raw: unknown): import("@/lib/contracts").Bench
       topP: Number(parsed.topP ?? defaults.topP),
       repeatPenalty: Number(parsed.repeatPenalty ?? defaults.repeatPenalty),
       numPredict: Number(parsed.numPredict ?? defaults.numPredict),
+      seed: parsed.seed === undefined || parsed.seed === null ? undefined : Number(parsed.seed),
     };
   } catch {
     return defaults;
