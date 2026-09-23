@@ -6,10 +6,12 @@ import {
 } from "@/lib/experiment-db";
 import {
   experimentInputSchema,
+  experimentVariantBindingSchema,
   experimentVariantInputSchema,
   type ExperimentInput,
   type ExperimentRecord,
   type ExperimentVariant,
+  type ExperimentVariantBindingInput,
   type ExperimentVariantInput,
   type ExperimentWithVariants,
 } from "@/lib/experiment-records";
@@ -64,6 +66,8 @@ function restoreVariant(row: SqlRow): ExperimentVariant {
     role: String(row.role) as ExperimentVariant["role"],
     modelArtifactId: String(row.model_artifact_id),
     executionEnvironmentId: String(row.execution_environment_id),
+    executionTargetId: row.execution_target_id ? String(row.execution_target_id) : null,
+    executionModelName: row.execution_model_name ? String(row.execution_model_name) : null,
     inferenceParameters: json(row.inference_parameters),
     promptVersion: row.prompt_version ? String(row.prompt_version) : null,
     reasoningMode: row.reasoning_mode ? String(row.reasoning_mode) : null,
@@ -170,6 +174,10 @@ export async function createExperimentVariant(
   if (!(await getExecutionEnvironment(parsed.executionEnvironmentId))) {
     throw new Error("Execution environment not found.");
   }
+  if (parsed.executionTargetId) {
+    const { getExecutionTarget } = await import("@/lib/execution-target-store");
+    if (!(await getExecutionTarget(parsed.executionTargetId))) throw new Error("Execution target not found.");
+  }
   if (parsed.parentVariantId && !experiment.variants.some((variant) => variant.id === parsed.parentVariantId)) {
     throw new Error("Parent variant must belong to the same experiment.");
   }
@@ -187,9 +195,10 @@ export async function createExperimentVariant(
       db.prepare(`
         INSERT INTO experiment_variants (
           id, experiment_id, name, role, model_artifact_id, execution_environment_id,
+          execution_target_id, execution_model_name,
           inference_parameters, prompt_version, reasoning_mode, parent_variant_id,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         experimentId,
@@ -197,6 +206,8 @@ export async function createExperimentVariant(
         parsed.role,
         parsed.modelArtifactId,
         parsed.executionEnvironmentId,
+        parsed.executionTargetId,
+        parsed.executionModelName,
         JSON.stringify(parsed.inferenceParameters),
         parsed.promptVersion,
         parsed.reasoningMode,
@@ -223,11 +234,13 @@ export async function createExperimentVariant(
     const rows = await tx`
       INSERT INTO experiment_variants (
         id, experiment_id, name, role, model_artifact_id, execution_environment_id,
+        execution_target_id, execution_model_name,
         inference_parameters, prompt_version, reasoning_mode, parent_variant_id,
         created_at, updated_at
       ) VALUES (
         ${id}, ${experimentId}, ${parsed.name}, ${parsed.role},
         ${parsed.modelArtifactId}, ${parsed.executionEnvironmentId},
+        ${parsed.executionTargetId}, ${parsed.executionModelName},
         ${JSON.stringify(parsed.inferenceParameters)}::jsonb,
         ${parsed.promptVersion}, ${parsed.reasoningMode}, ${parsed.parentVariantId},
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -242,4 +255,85 @@ export async function createExperimentVariant(
     return rows[0] as SqlRow;
   });
   return restoreVariant(variant);
+}
+
+
+export async function updateExperimentVariantBinding(
+  experimentId: string,
+  variantId: string,
+  input: ExperimentVariantBindingInput,
+): Promise<ExperimentVariant> {
+  const parsed = experimentVariantBindingSchema.parse(input);
+  const experiment = await getExperiment(experimentId);
+  if (!experiment) throw new Error("Experiment not found.");
+  if (!experiment.variants.some((variant) => variant.id === variantId)) {
+    throw new Error("Variant not found in experiment.");
+  }
+  if (parsed.executionTargetId) {
+    const { getExecutionTarget } = await import("@/lib/execution-target-store");
+    if (!(await getExecutionTarget(parsed.executionTargetId))) throw new Error("Execution target not found.");
+  }
+  const now = new Date().toISOString();
+
+  if (!experimentUsesPostgres()) {
+    ensureExperimentSqliteSchema();
+    getSqliteDb().prepare(`
+      UPDATE experiment_variants
+      SET execution_target_id = ?, execution_model_name = ?, updated_at = ?
+      WHERE id = ? AND experiment_id = ?
+    `).run(parsed.executionTargetId, parsed.executionModelName, now, variantId, experimentId);
+  } else {
+    const sql = getExperimentPostgresClient();
+    if (!sql) throw new Error("PostgreSQL is not configured.");
+    await sql`
+      UPDATE experiment_variants
+      SET execution_target_id = ${parsed.executionTargetId},
+          execution_model_name = ${parsed.executionModelName},
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${variantId} AND experiment_id = ${experimentId}
+    `;
+  }
+
+  const refreshed = await getExperiment(experimentId);
+  return refreshed!.variants.find((variant) => variant.id === variantId)!;
+}
+
+export async function updateExperimentStatus(
+  experimentId: string,
+  status: ExperimentRecord["status"],
+  validityStatus?: ExperimentRecord["validityStatus"],
+): Promise<ExperimentRecord> {
+  const existing = await getExperiment(experimentId);
+  if (!existing) throw new Error("Experiment not found.");
+  const now = new Date().toISOString();
+
+  if (!experimentUsesPostgres()) {
+    ensureExperimentSqliteSchema();
+    if (validityStatus) {
+      getSqliteDb().prepare(
+        "UPDATE experiments SET status = ?, validity_status = ?, updated_at = ? WHERE id = ?",
+      ).run(status, validityStatus, now, experimentId);
+    } else {
+      getSqliteDb().prepare(
+        "UPDATE experiments SET status = ?, updated_at = ? WHERE id = ?",
+      ).run(status, now, experimentId);
+    }
+  } else {
+    const sql = getExperimentPostgresClient();
+    if (!sql) throw new Error("PostgreSQL is not configured.");
+    if (validityStatus) {
+      await sql`
+        UPDATE experiments
+        SET status = ${status}, validity_status = ${validityStatus}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ${experimentId}
+      `;
+    } else {
+      await sql`
+        UPDATE experiments SET status = ${status}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ${experimentId}
+      `;
+    }
+  }
+
+  return (await getExperiment(experimentId))!.experiment;
 }
