@@ -236,7 +236,7 @@ export function ExecutionTargetPanel({
                   >
                     {probingId === target.id ? "Probing…" : "Probe & register"}
                   </button>
-                  <button className="secondary-button" type="button" onClick={() => void removeTarget(target)}>
+                  <button className="danger-button" type="button" onClick={() => void removeTarget(target)}>
                     Delete
                   </button>
                 </div>
