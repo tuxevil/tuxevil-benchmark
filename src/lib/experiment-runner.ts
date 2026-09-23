@@ -190,13 +190,13 @@ function observationSuccess(
 }
 
 
-function totalSamplesForExecution(execution: ExperimentExecutionWithRuns["execution"]) {
+export function totalSamplesForExecution(execution: ExperimentExecutionWithRuns["execution"]) {
   return execution.executionMode === "PERFORMANCE"
     ? execution.samplesPerModel + execution.warmupSamples + (execution.includeColdSample ? 1 : 0)
     : execution.samplesPerModel;
 }
 
-function performanceSampleIdentity(
+export function performanceSampleIdentity(
   execution: ExperimentExecutionWithRuns["execution"],
   scenarioId: string,
   sampleIndex: number,
