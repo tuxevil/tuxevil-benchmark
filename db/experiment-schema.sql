@@ -65,6 +65,8 @@ CREATE TABLE IF NOT EXISTS experiment_variants (
   role VARCHAR(32) NOT NULL,
   model_artifact_id UUID NOT NULL REFERENCES model_artifacts(id),
   execution_environment_id UUID NOT NULL REFERENCES execution_environments(id),
+  execution_target_id UUID REFERENCES execution_targets(id) ON DELETE SET NULL,
+  execution_model_name VARCHAR(512),
   inference_parameters JSONB NOT NULL DEFAULT '{}'::jsonb,
   prompt_version VARCHAR(255),
   reasoning_mode VARCHAR(64),
