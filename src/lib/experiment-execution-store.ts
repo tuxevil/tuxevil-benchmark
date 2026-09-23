@@ -438,3 +438,31 @@ export async function isTestRunAwaitingExperimentEnqueue(testRunId: string): Pro
   `;
   return Boolean(rows[0]);
 }
+
+
+export async function isTestRunInPerformanceExecution(testRunId: string): Promise<boolean> {
+  if (!experimentUsesPostgres()) {
+    ensureExperimentSqliteSchema();
+    const row = getSqliteDb().prepare(`
+      SELECT 1
+      FROM experiment_execution_runs er
+      JOIN experiment_executions e ON e.id = er.execution_id
+      WHERE er.test_run_id = ?
+        AND e.execution_mode = 'PERFORMANCE'
+      LIMIT 1
+    `).get(testRunId);
+    return Boolean(row);
+  }
+
+  const sql = getExperimentPostgresClient();
+  if (!sql) return false;
+  const rows = await sql`
+    SELECT 1
+    FROM experiment_execution_runs er
+    JOIN experiment_executions e ON e.id = er.execution_id
+    WHERE er.test_run_id = ${testRunId}
+      AND e.execution_mode = 'PERFORMANCE'
+    LIMIT 1
+  `;
+  return Boolean(rows[0]);
+}
