@@ -26,7 +26,10 @@ Implemented on `work/experiment-foundation`:
 - automatic Experiment Runner orchestration through the existing TestRun queue/worker;
 - provider preflight before launch to reject known model/runtime/config contradictions;
 - execution-scoped observations keyed by execution + variant + stable case ID;
-- automatic execution reconciliation, observation capture and paired comparison.
+- automatic execution reconciliation, observation capture and paired comparison;
+- versioned Practical SLM v1 suite with 15 deterministic scenarios;
+- deterministic grader engine for exact text, exact JSON, numeric answers, and required/forbidden content;
+- deterministic experiment success policy that does not require an LLM judge.
 
 Current API shape:
 
@@ -241,16 +244,31 @@ Expose CRUD/read APIs and preserve backward compatibility with existing runs.
 
 ### 3. Practical SLM Suite
 
-Mostly deterministic graders:
+Practical SLM v1 is implemented as the immutable `practical-slm@1.0.0`
+scenario set. It currently contains 15 deterministic cases across:
 
-- extraction;
 - classification;
-- strict JSON;
-- instruction following;
-- RAG with fixed retrieved context;
-- short reasoning;
-- coding with executable tests;
-- consistency checks.
+- strict JSON extraction;
+- instruction/format following;
+- short arithmetic reasoning;
+- fixed-context retrieval;
+- multi-turn state retention.
+
+The deterministic grader types are:
+
+- `EXACT_TEXT`;
+- `JSON_EXACT` (canonical object-key ordering);
+- `NUMBER` with explicit tolerance;
+- `CONTAINS_ALL` with required and forbidden fragments.
+
+Experiment Runner can use `successPolicy=DETERMINISTIC`, in which case every
+selected scenario must have a valid grader and no frontier evaluator is
+required. Grader outcome and diagnostics are stored in the execution-scoped
+observation metadata.
+
+Coding with executable tests and broader consistency/property testing remain
+follow-up work because they require a sandbox/execution model rather than
+response-only deterministic grading.
 
 ### 4. Churn Lab
 
