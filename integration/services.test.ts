@@ -23,9 +23,62 @@ serviceSuite("local infrastructure", () => {
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = 'public'
-        AND table_name IN ('app_settings', 'evaluators', 'scenarios', 'test_runs', 'model_results', 'model_result_turns', 'evaluations', 'evaluation_history', 'execution_targets', 'model_artifacts', 'execution_environments', 'experiments', 'experiment_variants', 'experiment_executions', 'experiment_execution_runs', 'experiment_execution_observations', 'experiment_observations')
+        AND table_name IN ('app_settings', 'evaluators', 'scenarios', 'test_runs', 'model_results', 'model_result_turns', 'evaluations', 'evaluation_history', 'execution_targets', 'model_artifacts', 'execution_environments', 'experiments', 'experiment_variants', 'experiment_executions', 'experiment_execution_runs', 'experiment_execution_observations', 'experiment_observations', 'execution_target_leases')
     `;
-    expect(tables).toHaveLength(17);
+    expect(tables).toHaveLength(18);
+  }, 30_000);
+
+  it("enforces and self-heals execution target leases in PostgreSQL", async () => {
+    sql ??= postgres(databaseUrl!);
+    const targetId = crypto.randomUUID();
+    const firstExperimentId = crypto.randomUUID();
+    const secondExperimentId = crypto.randomUUID();
+    const firstExecutionId = crypto.randomUUID();
+    const secondExecutionId = crypto.randomUUID();
+
+    await sql`
+      INSERT INTO execution_targets (id, label, provider, endpoint)
+      VALUES (${targetId}, 'integration lease target', 'llamacpp', 'http://127.0.0.1:8080')
+    `;
+    for (const [id, name] of [
+      [firstExperimentId, "lease first"],
+      [secondExperimentId, "lease second"],
+    ]) {
+      await sql`
+        INSERT INTO experiments (id, name, factor_under_test, status, validity_status, sampling_snapshot, notes)
+        VALUES (${id}, ${name}, 'OTHER', 'DRAFT', 'UNCHECKED', '{}'::jsonb, '')
+      `;
+    }
+    for (const [id, experimentId] of [
+      [firstExecutionId, firstExperimentId],
+      [secondExecutionId, secondExperimentId],
+    ]) {
+      await sql`
+        INSERT INTO experiment_executions (
+          id, experiment_id, status, scenario_ids, samples_per_model, execution_mode,
+          warmup_samples, include_cold_sample, use_evaluator, success_policy, success_threshold
+        ) VALUES (
+          ${id}, ${experimentId}, 'RUNNING', '[]'::jsonb, 1, 'PERFORMANCE',
+          0, FALSE, FALSE, 'NONE', 4
+        )
+      `;
+    }
+
+    const executionStore = await import("../src/lib/experiment-execution-store");
+    await executionStore.acquireExecutionTargetLeases(firstExecutionId, [targetId]);
+    await expect(
+      executionStore.acquireExecutionTargetLeases(secondExecutionId, [targetId]),
+    ).rejects.toThrow(/already leased/);
+
+    await sql`UPDATE experiment_executions SET status = 'COMPLETED' WHERE id = ${firstExecutionId}`;
+    await executionStore.acquireExecutionTargetLeases(secondExecutionId, [targetId]);
+
+    const leases = await sql`SELECT target_id, execution_id FROM execution_target_leases WHERE target_id = ${targetId}`;
+    expect(String(leases[0].execution_id)).toBe(secondExecutionId);
+
+    await sql`DELETE FROM execution_target_leases WHERE target_id = ${targetId}`;
+    await sql`DELETE FROM experiments WHERE id IN (${firstExperimentId}, ${secondExperimentId})`;
+    await sql`DELETE FROM execution_targets WHERE id = ${targetId}`;
   }, 30_000);
 
   it("round-trips Practical SLM grader metadata through PostgreSQL scenario persistence", async () => {

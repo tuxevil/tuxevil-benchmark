@@ -372,3 +372,92 @@ test("Churn Lab exposes automatic Experiment Runner for a selected experiment", 
   await expect(runner.getByText("baseline", { exact: true })).toBeVisible();
   await expect(runner.getByText("variant", { exact: true })).toBeVisible();
 });
+
+
+test("Performance Lab renders isolated Practical SLM execution controls", async ({ page }) => {
+  const experimentId = "33333333-3333-4333-8333-333333333333";
+  const targetId = "11111111-1111-4111-8111-111111111111";
+  const scenarioId = "22222222-2222-4222-8222-222222222222";
+
+  await page.route(/\/api\/experiments$/, async (route) => {
+    await route.fulfill({
+      json: {
+        experiments: [{
+          id: experimentId,
+          name: "Qwen vs Bonsai",
+          factorUnderTest: "MODEL",
+          status: "READY",
+          validityStatus: "UNCHECKED",
+        }],
+      },
+    });
+  });
+  await page.route(/\/api\/scenarios$/, async (route) => {
+    await route.fulfill({
+      json: {
+        scenarios: [{
+          id: scenarioId,
+          name: "Practical SLM · Reasoning · Multiplication",
+          category: "GENERAL",
+          attackType: null,
+          suiteKey: "practical-slm",
+          suiteVersion: "1.0.0",
+          grader: { type: "NUMBER", version: 1, expected: 391, tolerance: 0 },
+        }],
+      },
+    });
+  });
+  await page.route(/\/api\/experiments\/targets$/, async (route) => {
+    await route.fulfill({
+      json: {
+        targets: [{
+          id: targetId,
+          label: "beast llama.cpp",
+          provider: "llamacpp",
+          endpoint: "http://127.0.0.1:8080",
+          apiKeyConfigured: false,
+        }],
+      },
+    });
+  });
+  await page.route(new RegExp(`/api/experiments/${experimentId}$`), async (route) => {
+    await route.fulfill({
+      json: {
+        experiment: {
+          id: experimentId,
+          name: "Qwen vs Bonsai",
+          factorUnderTest: "MODEL",
+          status: "READY",
+          validityStatus: "UNCHECKED",
+          baselineVariantId: "44444444-4444-4444-8444-444444444444",
+        },
+        variants: [
+          {
+            id: "44444444-4444-4444-8444-444444444444",
+            name: "Qwen IQ3",
+            role: "BASELINE",
+            executionTargetId: targetId,
+            executionModelName: "qwen.gguf",
+          },
+          {
+            id: "55555555-5555-4555-8555-555555555555",
+            name: "Bonsai PQ2",
+            role: "VARIANT",
+            executionTargetId: targetId,
+            executionModelName: "bonsai.gguf",
+          },
+        ],
+      },
+    });
+  });
+
+  await page.goto("/performance");
+
+  await expect(page.getByRole("heading", { name: "Performance Lab" })).toBeVisible();
+  await expect(page.getByText("seconds / successful task")).toBeVisible();
+  await expect(page.getByText("Reasoning · Multiplication")).toBeVisible();
+  await expect(page.getByText("Qwen IQ3")).toBeVisible();
+  await expect(page.getByText("Bonsai PQ2")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run isolated performance benchmark" })).toBeEnabled();
+  await expect(page.getByLabel("Verified cold sample")).toBeDisabled();
+});

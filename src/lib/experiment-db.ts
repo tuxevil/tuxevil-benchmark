@@ -103,6 +103,9 @@ export function ensureExperimentSqliteSchema() {
       status TEXT NOT NULL,
       scenario_ids TEXT NOT NULL,
       samples_per_model INTEGER NOT NULL,
+      execution_mode TEXT NOT NULL DEFAULT 'STANDARD',
+      warmup_samples INTEGER NOT NULL DEFAULT 0,
+      include_cold_sample INTEGER NOT NULL DEFAULT 0,
       use_evaluator INTEGER NOT NULL,
       success_policy TEXT NOT NULL,
       success_threshold INTEGER NOT NULL,
@@ -124,6 +127,8 @@ export function ensureExperimentSqliteSchema() {
       variant_id TEXT NOT NULL,
       scenario_id TEXT NOT NULL,
       test_run_id TEXT NOT NULL,
+      sequence_order INTEGER NOT NULL DEFAULT 0,
+      enqueued_at TEXT,
       created_at TEXT NOT NULL,
       FOREIGN KEY(execution_id) REFERENCES experiment_executions(id) ON DELETE CASCADE,
       FOREIGN KEY(variant_id) REFERENCES experiment_variants(id) ON DELETE CASCADE,
@@ -132,6 +137,16 @@ export function ensureExperimentSqliteSchema() {
     );
     CREATE INDEX IF NOT EXISTS experiment_execution_runs_execution_idx
       ON experiment_execution_runs(execution_id, variant_id);
+
+    CREATE TABLE IF NOT EXISTS execution_target_leases (
+      target_id TEXT PRIMARY KEY,
+      execution_id TEXT NOT NULL,
+      acquired_at TEXT NOT NULL,
+      FOREIGN KEY(target_id) REFERENCES execution_targets(id) ON DELETE CASCADE,
+      FOREIGN KEY(execution_id) REFERENCES experiment_executions(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS execution_target_leases_execution_idx
+      ON execution_target_leases(execution_id);
 
     CREATE TABLE IF NOT EXISTS experiment_execution_observations (
       id TEXT PRIMARY KEY,
@@ -179,7 +194,27 @@ export function ensureExperimentSqliteSchema() {
   if (!variantColumns.some((column) => column.name === "execution_model_name")) {
     db.exec("ALTER TABLE experiment_variants ADD COLUMN execution_model_name TEXT");
   }
+
+  const executionColumns = db.prepare("PRAGMA table_info(experiment_executions)").all() as Array<{ name: string }>;
+  if (!executionColumns.some((column) => column.name === "execution_mode")) {
+    db.exec("ALTER TABLE experiment_executions ADD COLUMN execution_mode TEXT NOT NULL DEFAULT 'STANDARD'");
+  }
+  if (!executionColumns.some((column) => column.name === "warmup_samples")) {
+    db.exec("ALTER TABLE experiment_executions ADD COLUMN warmup_samples INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!executionColumns.some((column) => column.name === "include_cold_sample")) {
+    db.exec("ALTER TABLE experiment_executions ADD COLUMN include_cold_sample INTEGER NOT NULL DEFAULT 0");
+  }
+
+  const executionRunColumns = db.prepare("PRAGMA table_info(experiment_execution_runs)").all() as Array<{ name: string }>;
+  if (!executionRunColumns.some((column) => column.name === "sequence_order")) {
+    db.exec("ALTER TABLE experiment_execution_runs ADD COLUMN sequence_order INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!executionRunColumns.some((column) => column.name === "enqueued_at")) {
+    db.exec("ALTER TABLE experiment_execution_runs ADD COLUMN enqueued_at TEXT");
+  }
 }
+
 
 export async function closeExperimentDb() {
   if (pgClient) await pgClient.end({ timeout: 1 });

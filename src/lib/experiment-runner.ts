@@ -4,11 +4,14 @@ import { benchmarkStore } from "@/lib/benchmark-store";
 import { gradeDeterministicResponse, type DeterministicGrade } from "@/lib/deterministic-grader";
 import { enqueueBenchmark } from "@/lib/benchmark-queue";
 import {
+  acquireExecutionTargetLeases,
   addExperimentExecutionRun,
+  claimExperimentExecutionRunForEnqueue,
   createExperimentExecutionRecord,
   findActiveExperimentExecution,
   findExperimentExecutionsForTestRun,
   getExperimentExecution,
+  releaseExecutionTargetLeases,
   updateExperimentExecutionStatus,
 } from "@/lib/experiment-execution-store";
 import {
@@ -186,6 +189,142 @@ function observationSuccess(
   return stars == null ? null : stars >= threshold;
 }
 
+
+export function totalSamplesForExecution(execution: ExperimentExecutionWithRuns["execution"]) {
+  return execution.executionMode === "PERFORMANCE"
+    ? execution.samplesPerModel + execution.warmupSamples + (execution.includeColdSample ? 1 : 0)
+    : execution.samplesPerModel;
+}
+
+export function performanceSampleIdentity(
+  execution: ExperimentExecutionWithRuns["execution"],
+  scenarioId: string,
+  sampleIndex: number,
+): { measured: boolean; phase: "STANDARD" | "COLD" | "WARMUP" | "WARM"; caseId: string } {
+  if (execution.executionMode !== "PERFORMANCE") {
+    return {
+      measured: true,
+      phase: "STANDARD",
+      caseId: `${scenarioId}::sample-${sampleIndex}`,
+    };
+  }
+
+  let offset = 0;
+  if (execution.includeColdSample) {
+    if (sampleIndex === 0) {
+      return { measured: true, phase: "COLD", caseId: `${scenarioId}::cold` };
+    }
+    offset = 1;
+  }
+
+  if (sampleIndex < offset + execution.warmupSamples) {
+    return {
+      measured: false,
+      phase: "WARMUP",
+      caseId: `${scenarioId}::warmup-${sampleIndex - offset}`,
+    };
+  }
+
+  const warmIndex = sampleIndex - offset - execution.warmupSamples;
+  return { measured: true, phase: "WARM", caseId: `${scenarioId}::warm-${warmIndex}` };
+}
+
+async function resetOllamaForColdSample(targetId: string, modelName: string) {
+  const target = await getExecutionTargetConnection(targetId);
+  if (!target) throw new Error("Execution target not found while preparing cold sample.");
+  if (target.provider !== "ollama") {
+    throw new Error("Verified cold samples are currently supported only for Ollama execution targets.");
+  }
+
+  const endpoint = target.endpoint.replace(/\/$/, "");
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (target.apiKey?.trim()) headers.authorization = `Bearer ${target.apiKey.trim()}`;
+  const response = await fetch(`${endpoint}/api/generate`, {
+    method: "POST",
+    headers,
+    redirect: "error",
+    body: JSON.stringify({ model: modelName, keep_alive: 0, stream: false }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    throw new Error(`Ollama cold reset returned HTTP ${response.status}.`);
+  }
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const ps = await fetch(`${endpoint}/api/ps`, {
+      headers: target.apiKey?.trim() ? { authorization: `Bearer ${target.apiKey.trim()}` } : undefined,
+      redirect: "error",
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!ps.ok) throw new Error(`Ollama cold reset verification returned HTTP ${ps.status}.`);
+    const payload = await ps.json() as { models?: Array<{ name?: string; model?: string }> };
+    const stillLoaded = (payload.models ?? []).some((item) =>
+      item.name === modelName || item.model === modelName
+    );
+    if (!stillLoaded) return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`Ollama model "${modelName}" remained loaded after cold reset.`);
+}
+
+async function failMappedRun(testRunId: string, message: string) {
+  await benchmarkStore.hydrate();
+  let run = benchmarkStore.getStoredRun(testRunId);
+  if (!run) {
+    await benchmarkStore.refreshRun(testRunId);
+    run = benchmarkStore.getStoredRun(testRunId);
+  }
+  if (!run || ["COMPLETED", "FAILED", "CANCELLED"].includes(run.status)) return;
+  benchmarkStore.updateRun(testRunId, {
+    status: "FAILED",
+    finishedAt: new Date().toISOString(),
+    errorMessage: message,
+  });
+  await benchmarkStore.flush(testRunId);
+}
+
+async function cancelUnenqueuedExecutionRuns(executionId: string) {
+  const stored = await getExperimentExecution(executionId);
+  if (!stored) return;
+  for (const mapping of stored.runs.filter((item) => !item.enqueuedAt)) {
+    await benchmarkStore.hydrate();
+    let run = benchmarkStore.getStoredRun(mapping.testRunId);
+    if (!run) {
+      await benchmarkStore.refreshRun(mapping.testRunId);
+      run = benchmarkStore.getStoredRun(mapping.testRunId);
+    }
+    if (!run || ["COMPLETED", "FAILED", "CANCELLED"].includes(run.status)) continue;
+    benchmarkStore.cancelRun(mapping.testRunId);
+    await benchmarkStore.flush(mapping.testRunId);
+  }
+}
+
+async function enqueueMappedRun(
+  execution: ExperimentExecutionWithRuns["execution"],
+  mapping: ExperimentExecutionWithRuns["runs"][number],
+  experiment: Awaited<ReturnType<typeof getExperiment>>,
+) {
+  const claimed = await claimExperimentExecutionRunForEnqueue(mapping.id);
+  if (!claimed) return false;
+
+  try {
+    if (execution.executionMode === "PERFORMANCE" && execution.includeColdSample) {
+      const variant = experiment?.variants.find((item) => item.id === mapping.variantId);
+      if (!variant?.executionTargetId || !variant.executionModelName) {
+        throw new Error("Performance run lost its execution target/model binding.");
+      }
+      await resetOllamaForColdSample(variant.executionTargetId, variant.executionModelName);
+    }
+
+    await enqueueBenchmark(mapping.testRunId);
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not enqueue benchmark run.";
+    await failMappedRun(mapping.testRunId, message);
+    throw error;
+  }
+}
+
 function canonicalValue(result: ModelResult) {
   const response = result.responseText?.trim();
   if (response) return response;
@@ -198,13 +337,16 @@ async function importRunObservations(
   run: TestRun,
 ) {
   const scenario = benchmarkStore.getScenario(mapping.scenarioId);
-  const observations = run.results.map((result) => {
+  const observations = run.results.flatMap((result) => {
+    const sample = performanceSampleIdentity(execution, mapping.scenarioId, result.sampleIndex);
+    if (!sample.measured) return [];
+
     const deterministicGrade =
       scenario?.grader && result.responseText !== null
         ? gradeDeterministicResponse(result.responseText, scenario.grader)
         : null;
-    return {
-      caseId: `${mapping.scenarioId}::sample-${result.sampleIndex}`,
+    return [{
+      caseId: sample.caseId,
       comparisonKind: deterministicGrade?.comparisonKind ?? ("EXACT" as const),
       canonicalValue: deterministicGrade?.canonicalValue ?? canonicalValue(result),
       success: observationSuccess(
@@ -222,6 +364,8 @@ async function importRunObservations(
       },
       metadata: {
         executionId: execution.id,
+        executionMode: execution.executionMode,
+        performancePhase: sample.phase,
         testRunId: run.id,
         resultId: result.id,
         scenarioId: mapping.scenarioId,
@@ -235,7 +379,7 @@ async function importRunObservations(
         deterministicGrade,
         errorMessage: result.errorMessage,
       },
-    };
+    }];
   });
   if (observations.length > 0) {
     await upsertExperimentExecutionObservations(execution.id, mapping.variantId, observations);
@@ -299,6 +443,12 @@ export async function startExperimentExecution(
   }
 
   const preflights = await Promise.all(runnableVariants.map(preflightVariant));
+  if (parsed.executionMode === "PERFORMANCE" && parsed.includeColdSample) {
+    const unsupported = preflights.filter((item) => item.provider !== "ollama");
+    if (unsupported.length > 0) {
+      throw new Error("Verified cold samples currently require Ollama for every performance variant.");
+    }
+  }
   const evaluator = parsed.useEvaluator ? benchmarkStore.getEvaluatorConfig() : undefined;
   if (parsed.useEvaluator && !evaluator) {
     throw new Error("Execution requested evaluator scoring, but no active evaluator with credentials is configured.");
@@ -306,8 +456,11 @@ export async function startExperimentExecution(
 
   const execution = await createExperimentExecutionRecord(experimentId, parsed);
   try {
+    await acquireExecutionTargetLeases(execution.id, preflights.map((item) => item.targetId));
+
     const defaults = benchmarkStore.getSettings().parameters;
-    const plannedRunIds: string[] = [];
+    const plannedMappings: ExperimentExecutionWithRuns["runs"] = [];
+    let sequenceOrder = 0;
 
     // Persist the complete execution plan before starting any worker. This
     // prevents a very fast local run from making a partially-built execution
@@ -321,7 +474,7 @@ export async function startExperimentExecution(
           ollamaUrl: EXECUTION_TARGET_PLACEHOLDER_URL,
           executionTargetId: preflight.targetId,
           scenarioId: scenario.id,
-          samplesPerModel: parsed.samplesPerModel,
+          samplesPerModel: totalSamplesForExecution(execution),
           category: scenario.category,
           attackType: scenario.attackType,
           systemPrompt: scenario.systemPrompt,
@@ -331,24 +484,38 @@ export async function startExperimentExecution(
           evaluator,
         });
         await benchmarkStore.flush(run.id);
-        await addExperimentExecutionRun({
+        plannedMappings.push(await addExperimentExecutionRun({
           executionId: execution.id,
           variantId: preflight.variant.id,
           scenarioId: scenario.id,
           testRunId: run.id,
-        });
-        plannedRunIds.push(run.id);
+          sequenceOrder,
+        }));
+        sequenceOrder += 1;
       }
     }
 
     await updateExperimentExecutionStatus(execution.id, "RUNNING");
     await updateExperimentStatus(experimentId, "RUNNING");
-    for (const runId of plannedRunIds) await enqueueBenchmark(runId);
+
+    if (execution.executionMode === "PERFORMANCE") {
+      const first = plannedMappings[0];
+      if (first) await enqueueMappedRun(execution, first, experiment);
+    } else {
+      for (const mapping of plannedMappings) {
+        await enqueueMappedRun(execution, mapping, experiment);
+      }
+    }
 
     return reconcileExperimentExecution(experimentId, execution.id);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not launch experiment execution.";
+    await cancelUnenqueuedExecutionRuns(execution.id);
     await updateExperimentExecutionStatus(execution.id, "FAILED", message);
+    const failed = await getExperimentExecution(execution.id);
+    if (!failed?.runs.some((mapping) => mapping.enqueuedAt)) {
+      await releaseExecutionTargetLeases(execution.id);
+    }
     await updateExperimentStatus(experimentId, "FAILED");
     throw error;
   }
@@ -386,6 +553,35 @@ export async function reconcileExperimentExecution(
       anyFailed = true;
     }
     if (run && terminal) await importRunObservations(stored.execution, mapping, run);
+  }
+
+  if (
+    !allTerminal
+    && stored.execution.status === "RUNNING"
+    && stored.execution.executionMode === "PERFORMANCE"
+  ) {
+    const hasInFlight = benchmarkRuns.some((item) =>
+      (item.status === "PENDING" || item.status === "RUNNING")
+      && stored.runs.find((mapping) => mapping.id === item.mappingId)?.enqueuedAt
+    );
+    if (!hasInFlight) {
+      const next = stored.runs.find((mapping) => !mapping.enqueuedAt);
+      if (next) {
+        const experiment = await getExperiment(experimentId);
+        if (!experiment) throw new Error("Experiment not found.");
+        try {
+          await enqueueMappedRun(stored.execution, next, experiment);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Could not enqueue next performance run.";
+          await cancelUnenqueuedExecutionRuns(executionId);
+          stored.execution = await updateExperimentExecutionStatus(executionId, "FAILED", message);
+          await releaseExecutionTargetLeases(executionId);
+          await updateExperimentStatus(experimentId, "FAILED");
+          anyFailed = true;
+          allTerminal = false;
+        }
+      }
+    }
   }
 
   const comparisons: ExperimentComparison[] = [];
@@ -429,6 +625,7 @@ export async function reconcileExperimentExecution(
         : "One or more benchmark runs failed or were cancelled."
       : null;
     const updated = await updateExperimentExecutionStatus(executionId, status, errorMessage);
+    await releaseExecutionTargetLeases(executionId);
     await updateExperimentStatus(experimentId, status, validity);
     stored.execution = updated;
   }
