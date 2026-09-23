@@ -101,6 +101,72 @@ describe("performance target isolation", () => {
     expect(await executions.listExecutionTargetLeases()).toHaveLength(0);
   });
 
+  it("does not reclaim a failed execution lease while a mapped TestRun is still active", async () => {
+    const target = await targets.createExecutionTarget({
+      label: "active-run target",
+      provider: "llamacpp",
+      endpoint: "http://127.0.0.1:8081",
+    });
+    const firstFixture = await fixture("active-first");
+    const secondFixture = await fixture("active-second");
+    const input = {
+      scenarioIds: [crypto.randomUUID()],
+      samplesPerModel: 1,
+      executionMode: "PERFORMANCE" as const,
+      warmupSamples: 0,
+      includeColdSample: false,
+      useEvaluator: false,
+      successPolicy: "NONE" as const,
+      successThreshold: 4,
+    };
+    const first = await executions.createExperimentExecutionRecord(firstFixture.experiment.id, input);
+    const second = await executions.createExperimentExecutionRecord(secondFixture.experiment.id, input);
+    const run = benchmarkStore.createRun({
+      provider: "llamacpp",
+      providerUrl: "http://127.0.0.1:8081",
+      ollamaUrl: "http://127.0.0.1:8081",
+      systemPrompt: "Return OK.",
+      userMessages: ["Go."],
+      models: ["model.gguf"],
+      samplesPerModel: 1,
+      parameters: {
+        temperature: 0,
+        numCtx: 1024,
+        topP: 1,
+        repeatPenalty: 1,
+        numPredict: 16,
+        reasoningEffort: "off",
+      },
+    });
+    await benchmarkStore.flush(run.id);
+    await executions.addExperimentExecutionRun({
+      executionId: first.id,
+      variantId: firstFixture.variant.id,
+      scenarioId: input.scenarioIds[0],
+      testRunId: run.id,
+      sequenceOrder: 0,
+      enqueuedAt: new Date().toISOString(),
+    });
+
+    await executions.acquireExecutionTargetLeases(first.id, [target.id]);
+    await executions.updateExperimentExecutionStatus(first.id, "FAILED", "synthetic failure");
+
+    await expect(
+      executions.acquireExecutionTargetLeases(second.id, [target.id]),
+    ).rejects.toThrow(/already leased/);
+
+    benchmarkStore.updateRun(run.id, {
+      status: "FAILED",
+      finishedAt: new Date().toISOString(),
+      errorMessage: "synthetic terminal run",
+    });
+    await benchmarkStore.flush(run.id);
+
+    await executions.acquireExecutionTargetLeases(second.id, [target.id]);
+    expect((await executions.listExecutionTargetLeases()).find((lease) => lease.targetId === target.id)?.executionId)
+      .toBe(second.id);
+  });
+
   it("claims a planned run for enqueue exactly once", async () => {
     const { experiment, variant } = await fixture("claim");
     const execution = await executions.createExperimentExecutionRecord(experiment.id, {
