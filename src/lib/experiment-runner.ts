@@ -25,10 +25,13 @@ import {
   getModelArtifact,
 } from "@/lib/experiment-metadata-store";
 import {
-  upsertExperimentObservations,
-  compareExperimentVariants,
+  buildExperimentComparisonFromObservations,
   type ExperimentComparison,
 } from "@/lib/experiment-observation-store";
+import {
+  listExperimentExecutionObservations,
+  upsertExperimentExecutionObservations,
+} from "@/lib/experiment-execution-observation-store";
 
 type Preflight = {
   variant: ExperimentVariant;
@@ -192,7 +195,7 @@ async function importRunObservations(
     },
   }));
   if (observations.length > 0) {
-    await upsertExperimentObservations(execution.experimentId, mapping.variantId, observations);
+    await upsertExperimentExecutionObservations(execution.id, mapping.variantId, observations);
   }
 }
 
@@ -324,12 +327,24 @@ export async function reconcileExperimentExecution(
     const experiment = await getExperiment(experimentId);
     if (!experiment) throw new Error("Experiment not found.");
 
+    const baselineVariantId = experiment.experiment.baselineVariantId!;
+    const repeatId = experiment.variants.find((item) => item.role === "BASELINE_REPEAT")?.id ?? null;
+    const baselineObservations = await listExperimentExecutionObservations(executionId, baselineVariantId);
+    const repeatObservations = repeatId
+      ? await listExperimentExecutionObservations(executionId, repeatId)
+      : null;
+
     for (const variant of experiment.variants.filter((item) => item.role === "VARIANT" || item.role === "CONTROL")) {
-      try {
-        comparisons.push(await compareExperimentVariants(experimentId, variant.id));
-      } catch {
-        // Keep execution reconciliation useful even if one comparison lacks paired cases.
-      }
+      const variantObservations = await listExperimentExecutionObservations(executionId, variant.id);
+      comparisons.push(buildExperimentComparisonFromObservations({
+        experimentId,
+        baselineVariantId,
+        variantId: variant.id,
+        baselineRepeatVariantId: repeatId,
+        baseline: baselineObservations,
+        variant: variantObservations,
+        repeat: repeatObservations,
+      }));
     }
 
     const validity =
