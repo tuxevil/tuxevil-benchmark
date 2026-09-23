@@ -945,4 +945,37 @@ describe("streamOpenAICompatibleChat", () => {
     expect(result.truncated).toBe(true);
     expect(result.finishReason).toBe("length");
   });
+
+  it("sends deterministic seed when configured", async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((_url, init) => {
+        capturedBody = JSON.parse(init.body as string) as Record<string, unknown>;
+        return Promise.resolve(
+          new Response('data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n', { status: 200 }),
+        );
+      }),
+    );
+
+    const result = await streamOpenAICompatibleChat({
+      endpoint: "http://localhost:8080",
+      model: "seeded-model",
+      provider: "llamacpp",
+      messages: [{ role: "user", content: "hi" }],
+      parameters: {
+        temperature: 0,
+        numCtx: 8192,
+        topP: 1,
+        repeatPenalty: 1,
+        numPredict: 64,
+        seed: 42,
+      },
+      signal: new AbortController().signal,
+    });
+
+    expect(capturedBody!.seed).toBe(42);
+    expect(result.requestBody.seed).toBe(42);
+  });
+
 });

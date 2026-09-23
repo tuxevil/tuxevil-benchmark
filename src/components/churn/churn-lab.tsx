@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ExecutionTargetPanel } from "@/components/churn/execution-target-panel";
+import { ExperimentRunnerPanel } from "@/components/churn/experiment-runner-panel";
 
 type ModelArtifact = {
   id: string;
@@ -14,6 +15,7 @@ type ModelArtifact = {
   effectiveBitsPerWeight: number | null;
   artifactSizeBytes: number | null;
   fingerprint: string;
+  metadata: Record<string, unknown>;
 };
 
 type ExecutionEnvironment = {
@@ -29,6 +31,7 @@ type ExecutionEnvironment = {
   contextSize: number | null;
   flashAttention: boolean | null;
   fingerprint: string;
+  metadata: Record<string, unknown>;
 };
 
 type ExperimentRecord = {
@@ -50,6 +53,8 @@ type ExperimentVariant = {
   role: "BASELINE" | "VARIANT" | "BASELINE_REPEAT" | "CONTROL";
   modelArtifactId: string;
   executionEnvironmentId: string;
+  executionTargetId: string | null;
+  executionModelName: string | null;
   inferenceParameters: Record<string, unknown>;
   reasoningMode: string | null;
 };
@@ -264,6 +269,7 @@ export function ChurnLab() {
   const [experiments, setExperiments] = useState<ExperimentRecord[]>([]);
   const [detail, setDetail] = useState<ExperimentDetail | null>(null);
   const [comparison, setComparison] = useState<Comparison | null>(null);
+  const [automaticComparisons, setAutomaticComparisons] = useState<Comparison[]>([]);
   const [selectedExperimentId, setSelectedExperimentId] = useState("");
   const [compareVariantId, setCompareVariantId] = useState("");
   const [caseFilter, setCaseFilter] = useState("changed");
@@ -359,6 +365,7 @@ export function ChurnLab() {
     if (!id) {
       setDetail(null);
       setComparison(null);
+      setAutomaticComparisons([]);
       return;
     }
     const res = await fetch(`/api/experiments/${encodeURIComponent(id)}`);
@@ -369,6 +376,7 @@ export function ChurnLab() {
     setCompareVariantId(targetVariant?.id ?? "");
     setObservationVariantId(data.experiment.baselineVariantId ?? data.variants[0]?.id ?? "");
     setComparison(null);
+    setAutomaticComparisons([]);
   }, []);
 
   useEffect(() => {
@@ -650,6 +658,7 @@ export function ChurnLab() {
       if (!res.ok) throw new Error(data.error || "Could not import observations.");
       setNotice(`${parsed.length} observations imported into ${detail.variants.find((item) => item.id === observationVariantId)?.name ?? "variant"}.`);
       setComparison(null);
+      setAutomaticComparisons([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not parse/import observations.");
     }
@@ -662,6 +671,11 @@ export function ChurnLab() {
     }
     setError(null);
     setNotice(null);
+    const automatic = automaticComparisons.find((item) => item.variantId === compareVariantId);
+    if (automatic) {
+      setComparison(automatic);
+      return;
+    }
     const repeat = detail.variants.find((item) => item.role === "BASELINE_REPEAT");
     const query = new URLSearchParams({ variantId: compareVariantId });
     if (repeat) query.set("baselineRepeatVariantId", repeat.id);
@@ -682,6 +696,38 @@ export function ChurnLab() {
     if (caseFilter === "changed") return comparison.cases.filter((item) => item.status !== "UNCHANGED");
     return comparison.cases.filter((item) => item.status === caseFilter);
   }, [comparison, caseFilter]);
+
+  const runnerVariants = useMemo(() => {
+    if (!detail) return [];
+    const artifactById = new Map(artifacts.map((item) => [item.id, item]));
+    const environmentById = new Map(environments.map((item) => [item.id, item]));
+
+    return detail.variants.map((variant) => {
+      if (variant.executionTargetId && variant.executionModelName) return variant;
+      const artifact = artifactById.get(variant.modelArtifactId);
+      const environment = environmentById.get(variant.executionEnvironmentId);
+      const artifactTarget =
+        typeof artifact?.metadata?.executionTargetId === "string"
+          ? artifact.metadata.executionTargetId
+          : null;
+      const environmentTarget =
+        typeof environment?.metadata?.executionTargetId === "string"
+          ? environment.metadata.executionTargetId
+          : null;
+      const inferredTarget =
+        artifactTarget && environmentTarget && artifactTarget === environmentTarget
+          ? artifactTarget
+          : null;
+
+      return {
+        ...variant,
+        executionTargetId: variant.executionTargetId ?? inferredTarget,
+        executionModelName:
+          variant.executionModelName
+          ?? (inferredTarget && artifactTarget === inferredTarget ? artifact?.displayName ?? null : null),
+      };
+    });
+  }, [detail, artifacts, environments]);
 
   if (loading) {
     return <div className="churn-loading panel">Loading Churn Lab…</div>;
@@ -933,10 +979,28 @@ export function ChurnLab() {
         </aside>
 
         <div className="churn-workbench-main">
+          {detail && (
+            <ExperimentRunnerPanel
+              key={detail.experiment.id}
+              experimentId={detail.experiment.id}
+              variants={runnerVariants}
+              onBindingsSaved={() => loadExperiment(detail.experiment.id)}
+              onComparisons={(values) => {
+                const next = values as Comparison[];
+                setAutomaticComparisons(next);
+                const first = next[0];
+                if (first) {
+                  setCompareVariantId(first.variantId);
+                  setComparison(first);
+                }
+              }}
+            />
+          )}
+
           <section className="panel churn-card">
             <div className="churn-card-head">
               <div>
-                <p className="card-kicker">Step 3</p>
+                <p className="card-kicker">Manual fallback</p>
                 <h2>Observation Import</h2>
               </div>
               {detail && <span className="churn-count">{detail.variants.length} variants</span>}
@@ -969,7 +1033,7 @@ export function ChurnLab() {
           <section className="panel churn-card">
             <div className="churn-card-head">
               <div>
-                <p className="card-kicker">Step 4</p>
+                <p className="card-kicker">Comparison</p>
                 <h2>Paired Comparison</h2>
               </div>
               {comparison && <span className={`churn-validity ${comparison.summary.determinism.validity.toLowerCase()}`}>{comparison.summary.determinism.validity}</span>}

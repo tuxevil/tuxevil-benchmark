@@ -85,6 +85,7 @@ function initSqliteTables(db: Database.Database) {
       ollama_url TEXT NOT NULL,
       provider TEXT DEFAULT 'ollama',
       provider_url TEXT,
+      execution_target_id TEXT,
       user_messages TEXT NOT NULL,
       selected_models TEXT NOT NULL,
       parameters TEXT NOT NULL,
@@ -202,6 +203,9 @@ function initSqliteTables(db: Database.Database) {
   }
   if (!runColumns.some((column) => column.name === "provider_url")) {
     migrationDb.exec("ALTER TABLE test_runs ADD COLUMN provider_url TEXT");
+  }
+  if (!runColumns.some((column) => column.name === "execution_target_id")) {
+    migrationDb.exec("ALTER TABLE test_runs ADD COLUMN execution_target_id TEXT");
   }
 
   const scenarioColumns = migrationDb.prepare("PRAGMA table_info(scenarios)").all() as SqlRow[];
@@ -616,6 +620,7 @@ export function sqliteLoadSettings(): {
         topP: Number(parsed.topP ?? params.topP),
         repeatPenalty: Number(parsed.repeatPenalty ?? params.repeatPenalty),
         numPredict: Number(parsed.numPredict ?? params.numPredict),
+        seed: parsed.seed === undefined || parsed.seed === null ? undefined : Number(parsed.seed),
       };
     } catch {}
   }
@@ -729,8 +734,8 @@ export function sqlitePersistRun(
 
   const transaction = db.transaction(() => {
     db.prepare(`
-      INSERT INTO test_runs (id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, user_messages, selected_models, parameters, evaluator_config, created_at, updated_at, started_at, finished_at, error_message)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO test_runs (id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, execution_target_id, user_messages, selected_models, parameters, evaluator_config, created_at, updated_at, started_at, finished_at, error_message)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         category = excluded.category,
         attack_type = excluded.attack_type,
@@ -743,6 +748,7 @@ export function sqlitePersistRun(
         ollama_url = excluded.ollama_url,
         provider = excluded.provider,
         provider_url = excluded.provider_url,
+        execution_target_id = excluded.execution_target_id,
         user_messages = excluded.user_messages,
         selected_models = excluded.selected_models,
         parameters = excluded.parameters,
@@ -764,6 +770,7 @@ export function sqlitePersistRun(
       config.ollamaUrl,
       run.provider ?? config.provider ?? "ollama",
       run.providerUrl ?? config.providerUrl ?? config.ollamaUrl,
+      run.executionTargetId ?? null,
       JSON.stringify(run.userMessages),
       JSON.stringify(run.models),
       JSON.stringify(run.parameters),
@@ -1046,6 +1053,7 @@ export function sqliteLoadState(targetRunId?: string) {
       errorMessage: row.error_message ? String(row.error_message) : null,
       provider: (row.provider as import("@/lib/contracts").ModelProvider) || "ollama",
       providerUrl: row.provider_url ? String(row.provider_url) : String(row.ollama_url),
+      executionTargetId: row.execution_target_id ? String(row.execution_target_id) : null,
     };
     return {
       run,

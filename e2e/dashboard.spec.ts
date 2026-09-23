@@ -263,3 +263,107 @@ test("Churn Lab renders the experiment workbench", async ({ page }) => {
   await expect(page.getByText("Observation Import")).toBeVisible();
   await expect(page.getByText("Paired Comparison")).toBeVisible();
 });
+
+
+test("Churn Lab exposes automatic Experiment Runner for a selected experiment", async ({ page }) => {
+  const updatedAt = new Date().toISOString();
+  await page.route(/\/api\/experiments\/artifacts$/, async (route) => {
+    await route.fulfill({ json: { artifacts: [] } });
+  });
+  await page.route(/\/api\/experiments\/environments$/, async (route) => {
+    await route.fulfill({ json: { environments: [] } });
+  });
+  await page.route(/\/api\/experiments\/targets$/, async (route) => {
+    await route.fulfill({
+      json: {
+        targets: [{
+          id: "11111111-1111-4111-8111-111111111111",
+          label: "local llama",
+          provider: "llamacpp",
+          endpoint: "http://127.0.0.1:8080",
+          apiKeyConfigured: false,
+          updatedAt,
+        }],
+      },
+    });
+  });
+  await page.route(/\/api\/scenarios$/, async (route) => {
+    await route.fulfill({
+      json: {
+        scenarios: [{
+          id: "22222222-2222-4222-8222-222222222222",
+          name: "Deterministic smoke case",
+          category: "GENERAL",
+          attackType: null,
+        }],
+      },
+    });
+  });
+  await page.route(/\/api\/experiments$/, async (route) => {
+    await route.fulfill({
+      json: {
+        experiments: [{
+          id: "33333333-3333-4333-8333-333333333333",
+          name: "Runner smoke",
+          factorUnderTest: "MODEL_WEIGHTS",
+          status: "DRAFT",
+          validityStatus: "UNCHECKED",
+          baselineVariantId: "44444444-4444-4444-8444-444444444444",
+          suiteKey: null,
+          notes: "",
+          updatedAt,
+        }],
+      },
+    });
+  });
+  await page.route(/\/api\/experiments\/33333333-3333-4333-8333-333333333333$/, async (route) => {
+    await route.fulfill({
+      json: {
+        experiment: {
+          id: "33333333-3333-4333-8333-333333333333",
+          name: "Runner smoke",
+          factorUnderTest: "MODEL_WEIGHTS",
+          status: "DRAFT",
+          validityStatus: "UNCHECKED",
+          baselineVariantId: "44444444-4444-4444-8444-444444444444",
+          suiteKey: null,
+          notes: "",
+          updatedAt,
+        },
+        variants: [
+          {
+            id: "44444444-4444-4444-8444-444444444444",
+            experimentId: "33333333-3333-4333-8333-333333333333",
+            name: "baseline",
+            role: "BASELINE",
+            modelArtifactId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            executionEnvironmentId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            executionTargetId: null,
+            executionModelName: null,
+            inferenceParameters: {},
+            reasoningMode: null,
+          },
+          {
+            id: "55555555-5555-4555-8555-555555555555",
+            experimentId: "33333333-3333-4333-8333-333333333333",
+            name: "variant",
+            role: "VARIANT",
+            modelArtifactId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            executionEnvironmentId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            executionTargetId: null,
+            executionModelName: null,
+            inferenceParameters: {},
+            reasoningMode: null,
+          },
+        ],
+      },
+    });
+  });
+
+  await page.goto("/churn");
+  const runner = page.locator(".churn-runner");
+  await expect(runner.getByRole("heading", { name: "Experiment Runner" })).toBeVisible();
+  await expect(runner.getByText("Deterministic smoke case")).toBeVisible();
+  await expect(runner.getByText("baseline", { exact: true })).toBeVisible();
+  await expect(runner.getByText("variant", { exact: true })).toBeVisible();
+});

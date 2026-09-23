@@ -142,4 +142,42 @@ describe("streamOllamaChat", () => {
     expect(result.totalDurationMs).toBeNull();
     expect(result.tokPerSec).toBeNull();
   });
+
+  it("sends deterministic seed and target bearer credentials when configured", async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+    let capturedHeaders: Headers | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((_url, init: RequestInit) => {
+        capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>;
+        capturedHeaders = new Headers(init.headers);
+        return Promise.resolve(
+          new Response(
+            `${JSON.stringify({ message: { content: "ok" } })}\n${JSON.stringify({ done: true, eval_count: 1 })}\n`,
+            { status: 200 },
+          ),
+        );
+      }),
+    );
+
+    await streamOllamaChat({
+      endpoint: "http://localhost:11434",
+      model: "seeded-model",
+      messages: [{ role: "user", content: "Hello" }],
+      parameters: {
+        temperature: 0,
+        numCtx: 8192,
+        topP: 1,
+        repeatPenalty: 1,
+        numPredict: 64,
+        seed: 42,
+      },
+      apiKey: "target-secret",
+      signal: new AbortController().signal,
+    });
+
+    expect((capturedBody!.options as Record<string, unknown>).seed).toBe(42);
+    expect(capturedHeaders!.get("authorization")).toBe("Bearer target-secret");
+  });
+
 });

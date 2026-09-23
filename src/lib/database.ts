@@ -981,6 +981,7 @@ function parsePersistedParameters(raw: unknown): import("@/lib/contracts").Bench
       topP: Number(parsed.topP ?? defaults.topP),
       repeatPenalty: Number(parsed.repeatPenalty ?? defaults.repeatPenalty),
       numPredict: Number(parsed.numPredict ?? defaults.numPredict),
+      seed: parsed.seed === undefined || parsed.seed === null ? undefined : Number(parsed.seed),
     };
   } catch {
     return defaults;
@@ -1066,8 +1067,8 @@ export async function loadPersistedState(runId?: string): Promise<DatabaseState 
   try {
     const [runRows, resultRows, turnRows, evaluationRows, scenarioRows] = await sql.begin(async (transaction) => Promise.all([
       runId
-        ? transaction`SELECT id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, user_messages, selected_models, parameters, evaluator_config, created_at, updated_at, started_at, finished_at, error_message FROM test_runs WHERE id = ${runId}`
-        : transaction`SELECT id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, user_messages, selected_models, parameters, evaluator_config, created_at, updated_at, started_at, finished_at, error_message FROM test_runs ORDER BY created_at DESC`,
+        ? transaction`SELECT id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, execution_target_id, user_messages, selected_models, parameters, evaluator_config, created_at, updated_at, started_at, finished_at, error_message FROM test_runs WHERE id = ${runId}`
+        : transaction`SELECT id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, execution_target_id, user_messages, selected_models, parameters, evaluator_config, created_at, updated_at, started_at, finished_at, error_message FROM test_runs ORDER BY created_at DESC`,
       runId
         ? transaction`SELECT id, test_run_id, model_name, sample_index, status, eval_status, response_text, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, error_message, human_status, human_notes FROM model_results WHERE test_run_id = ${runId}`
         : transaction`SELECT id, test_run_id, model_name, sample_index, status, eval_status, response_text, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, error_message, human_status, human_notes FROM model_results`,
@@ -1455,8 +1456,8 @@ async function persistRun(run: TestRun, config: RunPersistenceConfig) {
 
   await sql.begin(async (transaction) => {
     await transaction`
-      INSERT INTO test_runs (id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, user_messages, selected_models, parameters, evaluator_config, created_at, updated_at, started_at, finished_at, error_message)
-      VALUES (${run.id}, ${run.category ?? "GENERAL"}, ${run.attackType ?? null}, ${run.status}, ${run.paused}, ${run.controlVersion}, ${run.scenarioId}, ${run.samplesPerModel}, ${run.systemPrompt}, ${config.ollamaUrl}, ${run.provider ?? config.provider ?? "ollama"}, ${run.providerUrl ?? config.providerUrl ?? config.ollamaUrl}, ${JSON.stringify(run.userMessages)}::jsonb, ${JSON.stringify(run.models)}::jsonb, ${JSON.stringify(run.parameters)}::jsonb, ${evaluatorConfig}::jsonb, ${new Date(run.createdAt)}, ${new Date(run.updatedAt)}, ${dateOrNull(run.startedAt)}, ${dateOrNull(run.finishedAt)}, ${run.errorMessage})
+      INSERT INTO test_runs (id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, execution_target_id, user_messages, selected_models, parameters, evaluator_config, created_at, updated_at, started_at, finished_at, error_message)
+      VALUES (${run.id}, ${run.category ?? "GENERAL"}, ${run.attackType ?? null}, ${run.status}, ${run.paused}, ${run.controlVersion}, ${run.scenarioId}, ${run.samplesPerModel}, ${run.systemPrompt}, ${config.ollamaUrl}, ${run.provider ?? config.provider ?? "ollama"}, ${run.providerUrl ?? config.providerUrl ?? config.ollamaUrl}, ${run.executionTargetId ?? null}, ${JSON.stringify(run.userMessages)}::jsonb, ${JSON.stringify(run.models)}::jsonb, ${JSON.stringify(run.parameters)}::jsonb, ${evaluatorConfig}::jsonb, ${new Date(run.createdAt)}, ${new Date(run.updatedAt)}, ${dateOrNull(run.startedAt)}, ${dateOrNull(run.finishedAt)}, ${run.errorMessage})
       ON CONFLICT (id) DO UPDATE SET
         category = EXCLUDED.category,
         attack_type = EXCLUDED.attack_type,
@@ -1469,6 +1470,7 @@ async function persistRun(run: TestRun, config: RunPersistenceConfig) {
         ollama_url = EXCLUDED.ollama_url,
         provider = EXCLUDED.provider,
         provider_url = EXCLUDED.provider_url,
+        execution_target_id = EXCLUDED.execution_target_id,
         user_messages = EXCLUDED.user_messages,
         selected_models = EXCLUDED.selected_models,
         parameters = EXCLUDED.parameters,
@@ -1546,6 +1548,7 @@ function getClient() {
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS active_provider VARCHAR(32) DEFAULT 'ollama';
       ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS provider VARCHAR(32) DEFAULT 'ollama';
       ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS provider_url TEXT;
+      ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS execution_target_id UUID;
       ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS finish_reason TEXT;
       ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS truncated BOOLEAN;
       ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS wire_diagnostics JSONB;
@@ -1613,6 +1616,7 @@ function restoreRun(row: Record<string, unknown>, results: ModelResult[]): Persi
       errorMessage: row.error_message ? String(row.error_message) : null,
       provider,
       providerUrl,
+      executionTargetId: row.execution_target_id ? String(row.execution_target_id) : null,
     },
     config: { ollamaUrl: String(row.ollama_url), provider, providerUrl, evaluator },
   };

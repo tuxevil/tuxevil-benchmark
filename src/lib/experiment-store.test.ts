@@ -9,12 +9,14 @@ const originalDatabaseUrl = process.env.DATABASE_URL;
 
 let metadata: typeof import("@/lib/experiment-metadata-store");
 let experiments: typeof import("@/lib/experiment-store");
+let targets: typeof import("@/lib/execution-target-store");
 
 beforeAll(async () => {
   delete process.env.DATABASE_URL;
   process.env.SQLITE_PATH = dbPath;
   metadata = await import("@/lib/experiment-metadata-store");
   experiments = await import("@/lib/experiment-store");
+  targets = await import("@/lib/execution-target-store");
 });
 
 afterAll(async () => {
@@ -72,6 +74,18 @@ describe("experiment registry", () => {
     expect(loaded?.experiment.baselineVariantId).toBe(baseline.id);
     expect(loaded?.variants.map((item) => item.id)).toEqual([baseline.id, variant.id]);
     expect((await experiments.listExperiments()).some((item) => item.id === experiment.id)).toBe(true);
+
+    const target = await targets.createExecutionTarget({
+      label: "local runner",
+      provider: "llamacpp",
+      endpoint: "http://127.0.0.1:8080",
+    });
+    const bound = await experiments.updateExperimentVariantBinding(experiment.id, variant.id, {
+      executionTargetId: target.id,
+      executionModelName: "qwen-test.gguf",
+    });
+    expect(bound.executionTargetId).toBe(target.id);
+    expect(bound.executionModelName).toBe("qwen-test.gguf");
   });
 
   it("rejects a second baseline", async () => {

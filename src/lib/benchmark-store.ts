@@ -103,6 +103,7 @@ export const benchmarkStore = {
       ollamaUrl: input.ollamaUrl ?? input.providerUrl ?? state.settings.ollamaUrl,
       provider: input.provider ?? "ollama",
       providerUrl: input.providerUrl ?? input.ollamaUrl ?? state.settings.ollamaUrl,
+      executionTargetId: input.executionTargetId ?? null,
       cancelController: new AbortController(),
       eventSequence: 0,
       listeners: new Set(),
@@ -819,6 +820,7 @@ function snapshot(run: StoredRun, options: { includeRawJson?: boolean } = {}): T
     errorMessage: run.errorMessage,
     provider: run.provider ?? "ollama",
     providerUrl: run.providerUrl ?? run.ollamaUrl,
+    executionTargetId: run.executionTargetId ?? null,
   });
 }
 

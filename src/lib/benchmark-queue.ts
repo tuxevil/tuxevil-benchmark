@@ -90,6 +90,17 @@ async function executeBenchmark(runId: string) {
     status: hasFailures ? "FAILED" : "COMPLETED",
     finishedAt: new Date().toISOString(),
   });
+  await benchmarkStore.flush(runId);
+
+  try {
+    const { reconcileExperimentExecutionsForTestRun } = await import("@/lib/experiment-runner");
+    await reconcileExperimentExecutionsForTestRun(runId);
+  } catch (error) {
+    console.error("[tuxevil-benchmark] experiment reconciliation after run completion failed", {
+      runId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 async function executeModel(runId: string, resultId: string) {
@@ -136,13 +147,25 @@ async function executeModel(runId: string, resultId: string) {
       let partialResponse = "";
       let lastStreamUpdate = 0;
       const provider = activeRun.provider ?? "ollama";
-      const endpoint = activeRun.providerUrl || activeRun.ollamaUrl;
-      const apiKey =
-        provider === "freetoken"
-          ? await benchmarkStore.getFreetokenApiKey()
-          : provider === "llamacpp"
-            ? await benchmarkStore.getLlamacppApiKey()
-            : null;
+      let endpoint = activeRun.providerUrl || activeRun.ollamaUrl;
+      let apiKey: string | null = null;
+      if (activeRun.executionTargetId) {
+        const { getExecutionTargetConnection } = await import("@/lib/execution-target-store");
+        const target = await getExecutionTargetConnection(activeRun.executionTargetId);
+        if (!target) throw new Error("Execution target not found for benchmark run.");
+        if (target.provider !== provider) {
+          throw new Error(`Execution target provider mismatch: expected ${provider}, got ${target.provider}.`);
+        }
+        endpoint = target.endpoint;
+        apiKey = target.apiKey;
+      } else {
+        apiKey =
+          provider === "freetoken"
+            ? await benchmarkStore.getFreetokenApiKey()
+            : provider === "llamacpp"
+              ? await benchmarkStore.getLlamacppApiKey()
+              : null;
+      }
 
       const response = await retryTransient(
         () =>
@@ -153,6 +176,7 @@ async function executeModel(runId: string, resultId: string) {
                 messages: conversation,
                 parameters: activeRun.parameters,
                 signal: activeRun.cancelController.signal,
+                apiKey,
                 onToken: (token) => {
                   partialResponse += token;
                   const now = performance.now();

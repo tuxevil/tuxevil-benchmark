@@ -38,6 +38,7 @@ export const benchmarkParametersSchema = z.object({
   topP: z.number().min(0).max(1),
   repeatPenalty: z.number().min(0).max(3),
   numPredict: z.number().int().min(1).max(32_768),
+  seed: z.number().int().min(0).max(2_147_483_647).optional(),
   reasoningEffort: reasoningEffortSchema.default("off").optional(),
 });
 
@@ -167,7 +168,7 @@ export const settingsUpdateSchema = z.object({
 
 export type BenchmarkParameters = z.infer<typeof benchmarkParametersSchema>;
 export type EvaluatorConfig = z.infer<typeof evaluatorConfigSchema>;
-export type CreateRunInput = z.input<typeof createRunSchema>;
+export type CreateRunInput = z.input<typeof createRunSchema> & { executionTargetId?: string | null };
 export type SettingsUpdateInput = z.infer<typeof settingsUpdateSchema>;
 
 export type RunStatus = "PENDING" | "RUNNING" | "COMPLETED" | "CANCELLED" | "FAILED";
@@ -262,6 +263,7 @@ export type TestRun = {
   errorMessage: string | null;
   provider?: ModelProvider;
   providerUrl?: string;
+  executionTargetId?: string | null;
 };
 
 export type AppSettings = {

@@ -21,7 +21,12 @@ Implemented on `work/experiment-foundation`:
 - private `ExecutionTarget` registry for provider endpoint/credential connectivity;
 - encrypted target credentials kept outside scientific fingerprints;
 - provider Auto Probe for Ollama, llama.cpp and FreeToken/OpenAI-compatible targets;
-- automatic registration of provider-reported ModelArtifact + ExecutionEnvironment snapshots.
+- automatic registration of provider-reported ModelArtifact + ExecutionEnvironment snapshots;
+- operational bindings from ExperimentVariant to ExecutionTarget + provider model identifier;
+- automatic Experiment Runner orchestration through the existing TestRun queue/worker;
+- provider preflight before launch to reject known model/runtime/config contradictions;
+- execution-scoped observations keyed by execution + variant + stable case ID;
+- automatic execution reconciliation, observation capture and paired comparison.
 
 Current API shape:
 
@@ -35,10 +40,15 @@ Current API shape:
 - `GET/POST /api/experiments/targets`
 - `GET/PATCH/DELETE /api/experiments/targets/:id`
 - `POST /api/experiments/targets/:id/probe`
+- `GET/PATCH /api/experiments/:id/variants/:variantId`
+- `POST /api/experiments/:id/execute`
+- `GET /api/experiments/:id/executions/:executionId`
 
-The Churn Lab UI and provider Auto Probe are implemented. The next follow-up is
-to bind experiment variants to execution targets/runs so observations can be
-generated automatically instead of imported manually.
+The Churn Lab UI, provider Auto Probe, and automatic Experiment Runner are
+implemented. Manual ExperimentObservation import remains available as a
+fallback/current working set. Automatic runs persist a separate
+execution-scoped observation set so repeated executions remain historically
+isolated and reproducible.
 
 ## Core principle
 
@@ -151,6 +161,8 @@ A variant binds:
 
 - model artifact;
 - execution environment;
+- optional operational execution target;
+- provider-specific execution model identifier;
 - inference parameters;
 - prompt/template version;
 - reasoning mode;
@@ -162,6 +174,12 @@ experiment is explicitly factorial.
 ### PairedObservation
 
 Every suite should expose a stable `caseId` and a canonical comparison value.
+Manual/current observations are stored at variant scope. Automatic Experiment
+Runner observations are stored at execution scope, preventing a later rerun
+from overwriting or contaminating an earlier execution.
+
+For automatic response runs, the current stable identity is
+`scenarioId::sample-N`.
 
 Examples:
 

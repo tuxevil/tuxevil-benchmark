@@ -185,6 +185,7 @@ export async function streamOpenAICompatibleChat({
     top_p: parameters.topP,
     max_tokens: parameters.numPredict,
   };
+  if (parameters.seed !== undefined) body.seed = parameters.seed;
 
   const reasoningEffort = parameters.reasoningEffort ?? "off";
   if (reasoningEffort !== "default") {
