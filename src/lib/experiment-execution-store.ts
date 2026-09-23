@@ -296,6 +296,21 @@ export async function acquireExecutionTargetLeases(
     const now = new Date().toISOString();
     try {
       db.transaction(() => {
+        db.prepare(`
+          DELETE FROM execution_target_leases
+          WHERE execution_id IN (
+            SELECT e.id
+            FROM experiment_executions e
+            WHERE e.status IN ('COMPLETED', 'FAILED')
+               OR (
+                 e.status = 'PENDING'
+                 AND datetime(e.created_at) < datetime('now', '-15 minutes')
+                 AND NOT EXISTS (
+                   SELECT 1 FROM experiment_execution_runs er WHERE er.execution_id = e.id
+                 )
+               )
+          )
+        `).run();
         for (const targetId of unique) insert.run(targetId, executionId, now);
       })();
     } catch {
@@ -316,6 +331,21 @@ export async function acquireExecutionTargetLeases(
   if (!sql) throw new Error("PostgreSQL is not configured.");
   try {
     await sql.begin(async (tx) => {
+      await tx`
+        DELETE FROM execution_target_leases l
+        USING experiment_executions e
+        WHERE l.execution_id = e.id
+          AND (
+            e.status IN ('COMPLETED', 'FAILED')
+            OR (
+              e.status = 'PENDING'
+              AND e.created_at < CURRENT_TIMESTAMP - interval '15 minutes'
+              AND NOT EXISTS (
+                SELECT 1 FROM experiment_execution_runs er WHERE er.execution_id = e.id
+              )
+            )
+          )
+      `;
       for (const targetId of unique) {
         await tx`
           INSERT INTO execution_target_leases (target_id, execution_id, acquired_at)
