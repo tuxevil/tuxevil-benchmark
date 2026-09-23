@@ -109,6 +109,7 @@ async function requestChat({
         top_p: parameters.topP,
         repeat_penalty: parameters.repeatPenalty,
         num_predict: parameters.numPredict,
+        ...(parameters.seed !== undefined ? { seed: parameters.seed } : {}),
       },
     }),
     signal: requestSignal,
