@@ -142,6 +142,7 @@ describe("performance target isolation", () => {
     });
 
     expect(await executions.isTestRunAwaitingExperimentEnqueue(run.id)).toBe(true);
+    expect(await executions.isTestRunInPerformanceExecution(run.id)).toBe(true);
 
     const firstClaim = await executions.claimExperimentExecutionRunForEnqueue(mapping.id);
     const secondClaim = await executions.claimExperimentExecutionRunForEnqueue(mapping.id);
