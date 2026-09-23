@@ -5,6 +5,7 @@ import { enqueueBenchmark } from "@/lib/benchmark-queue";
 import {
   addExperimentExecutionRun,
   createExperimentExecutionRecord,
+  findExperimentExecutionsForTestRun,
   getExperimentExecution,
   updateExperimentExecutionStatus,
 } from "@/lib/experiment-execution-store";
@@ -364,4 +365,12 @@ export async function reconcileExperimentExecution(
   }
 
   return { ...stored, benchmarkRuns, comparisons };
+}
+
+
+export async function reconcileExperimentExecutionsForTestRun(testRunId: string) {
+  const contexts = await findExperimentExecutionsForTestRun(testRunId);
+  for (const context of contexts) {
+    await reconcileExperimentExecution(context.experimentId, context.executionId);
+  }
 }
