@@ -160,6 +160,17 @@ function buildParameters(
   });
 }
 
+export function runLacksRequiredEvaluation(
+  run: Pick<TestRun, "results">,
+  policy: "NONE" | "EVALUATION_THRESHOLD",
+): boolean {
+  return policy === "EVALUATION_THRESHOLD"
+    && run.results.some((result) =>
+      result.evalStatus === "FAILED"
+      || result.evaluation?.scoreStars == null
+    );
+}
+
 function observationSuccess(
   result: ModelResult,
   policy: "NONE" | "EVALUATION_THRESHOLD",
@@ -344,15 +355,7 @@ export async function reconcileExperimentExecution(
     const terminal = status === "COMPLETED" || status === "FAILED" || status === "CANCELLED";
     allTerminal &&= terminal;
     if (status === "FAILED" || status === "CANCELLED" || status === "UNKNOWN") anyFailed = true;
-    if (
-      run
-      && terminal
-      && stored.execution.successPolicy === "EVALUATION_THRESHOLD"
-      && run.results.some((result) =>
-        result.evalStatus === "FAILED"
-        || result.evaluation?.scoreStars == null
-      )
-    ) {
+    if (run && terminal && runLacksRequiredEvaluation(run, stored.execution.successPolicy)) {
       anyFailed = true;
     }
     if (run && terminal) await importRunObservations(stored.execution, mapping, run);
