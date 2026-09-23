@@ -81,6 +81,7 @@ export const createRunSchema = z
     provider: modelProviderSchema.default("ollama").optional(),
     providerUrl: httpUrlSchema.optional(),
     ollamaUrl: httpUrlSchema.optional(),
+    executionTargetId: z.string().uuid().nullable().optional(),
     scenarioId: z.string().uuid().nullable().optional(),
     samplesPerModel: z.number().int().min(1).max(10).default(2),
     category: testCategorySchema.default("GENERAL"),
@@ -262,6 +263,7 @@ export type TestRun = {
   errorMessage: string | null;
   provider?: ModelProvider;
   providerUrl?: string;
+  executionTargetId?: string | null;
 };
 
 export type AppSettings = {
