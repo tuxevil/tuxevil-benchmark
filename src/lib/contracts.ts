@@ -88,6 +88,9 @@ export const createRunSchema = z
     attackType: securityAttackTypeSchema.nullable().optional(),
     systemPrompt: z.string().trim().min(1).max(50_000),
     userMessages: z.array(z.string().trim().min(1).max(50_000)).min(1).max(100),
+    suiteKey: z.string().trim().min(1).max(255).nullish().transform((v) => v ?? null),
+    suiteVersion: z.string().trim().min(1).max(255).nullish().transform((v) => v ?? null),
+    grader: deterministicGraderSchema.nullish().transform((v) => v ?? null),
     models: z
       .array(z.string().trim().min(1).max(255))
       .min(1)
@@ -266,6 +269,36 @@ export type TestRun = {
   executionTargetId?: string | null;
 };
 
+export const deterministicGraderSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("EXACT_TEXT"),
+    version: z.literal(1).default(1),
+    expected: z.string().max(50_000),
+    caseSensitive: z.boolean().default(true),
+    collapseWhitespace: z.boolean().default(false),
+  }),
+  z.object({
+    type: z.literal("JSON_EXACT"),
+    version: z.literal(1).default(1),
+    expected: z.unknown().refine((value) => value !== undefined, "Expected JSON value is required."),
+  }),
+  z.object({
+    type: z.literal("NUMBER"),
+    version: z.literal(1).default(1),
+    expected: z.number().finite(),
+    tolerance: z.number().finite().min(0).default(0),
+  }),
+  z.object({
+    type: z.literal("CONTAINS_ALL"),
+    version: z.literal(1).default(1),
+    required: z.array(z.string().min(1).max(2_000)).min(1).max(100),
+    forbidden: z.array(z.string().min(1).max(2_000)).max(100).default([]),
+    caseSensitive: z.boolean().default(false),
+  }),
+]);
+
+export type DeterministicGrader = z.infer<typeof deterministicGraderSchema>;
+
 export type AppSettings = {
   ollamaUrl: string;
   freetokenUrl: string;
@@ -288,6 +321,9 @@ export type Scenario = {
   attackType: SecurityAttackType | null;
   systemPrompt: string;
   userMessages: string[];
+  suiteKey: string | null;
+  suiteVersion: string | null;
+  grader: DeterministicGrader | null;
   createdAt: string;
   updatedAt: string;
 };
