@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import "./performance-lab.module.css";
+import styles from "./performance-lab.module.css";
 
 type ExperimentSummary = {
   id: string;
@@ -312,7 +312,7 @@ export function PerformanceLab() {
   const totalRuns = execution?.benchmarkRuns.length ?? 0;
 
   return (
-    <section className="performance-lab">
+    <section className={`performance-lab ${styles.root}`}>
       <div className="performance-hero">
         <div>
           <p className="card-kicker">Isolated local-model measurement</p>
