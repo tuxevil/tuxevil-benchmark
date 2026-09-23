@@ -10,7 +10,7 @@ export const experimentExecutionInputSchema = z.object({
   scenarioIds: z.array(z.string().uuid()).min(1).max(100)
     .refine((ids) => new Set(ids).size === ids.length, "Scenario IDs must be unique."),
   samplesPerModel: z.number().int().min(1).max(10).default(1),
-  useEvaluator: z.boolean().default(true),
+  useEvaluator: z.boolean().default(false),
   successPolicy: experimentSuccessPolicySchema.default("NONE"),
   successThreshold: z.number().int().min(1).max(5).default(4),
 }).refine(
