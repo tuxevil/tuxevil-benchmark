@@ -1,6 +1,7 @@
 import type { BenchmarkParameters, ModelResult, TestRun } from "@/lib/contracts";
 import { benchmarkParametersSchema, reasoningEffortSchema } from "@/lib/contracts";
 import { benchmarkStore } from "@/lib/benchmark-store";
+import { gradeDeterministicResponse, type DeterministicGrade } from "@/lib/deterministic-grader";
 import { enqueueBenchmark } from "@/lib/benchmark-queue";
 import {
   addExperimentExecutionRun,
@@ -14,6 +15,7 @@ import {
   experimentExecutionInputSchema,
   type ExperimentExecutionInput,
   type ExperimentExecutionWithRuns,
+  type ExperimentSuccessPolicy,
 } from "@/lib/experiment-executions";
 import {
   getExperiment,
@@ -162,7 +164,7 @@ function buildParameters(
 
 export function runLacksRequiredEvaluation(
   run: Pick<TestRun, "results">,
-  policy: "NONE" | "EVALUATION_THRESHOLD",
+  policy: ExperimentSuccessPolicy,
 ): boolean {
   return policy === "EVALUATION_THRESHOLD"
     && run.results.some((result) =>
@@ -173,11 +175,13 @@ export function runLacksRequiredEvaluation(
 
 function observationSuccess(
   result: ModelResult,
-  policy: "NONE" | "EVALUATION_THRESHOLD",
+  policy: ExperimentSuccessPolicy,
   threshold: number,
+  deterministicGrade: DeterministicGrade | null,
 ): boolean | null {
   if (policy === "NONE") return null;
   if (result.status === "FAILED" || result.status === "CANCELLED") return false;
+  if (policy === "DETERMINISTIC") return deterministicGrade?.passed ?? null;
   const stars = result.evaluation?.scoreStars;
   return stars == null ? null : stars >= threshold;
 }
@@ -193,31 +197,46 @@ async function importRunObservations(
   mapping: ExperimentExecutionWithRuns["runs"][number],
   run: TestRun,
 ) {
-  const observations = run.results.map((result) => ({
-    caseId: `${mapping.scenarioId}::sample-${result.sampleIndex}`,
-    comparisonKind: "EXACT" as const,
-    canonicalValue: canonicalValue(result),
-    success: observationSuccess(result, execution.successPolicy, execution.successThreshold),
-    telemetry: {
-      ttftMs: result.ttftMs,
-      inputTokens: result.inputTokens,
-      outputTokens: result.outputTokens,
-      tokPerSec: result.tokPerSec,
-      totalDurationMs: result.totalDurationMs,
-    },
-    metadata: {
-      executionId: execution.id,
-      testRunId: run.id,
-      resultId: result.id,
-      scenarioId: mapping.scenarioId,
-      modelName: result.modelName,
-      sampleIndex: result.sampleIndex,
-      status: result.status,
-      evalStatus: result.evalStatus,
-      scoreStars: result.evaluation?.scoreStars ?? null,
-      errorMessage: result.errorMessage,
-    },
-  }));
+  const scenario = benchmarkStore.getScenario(mapping.scenarioId);
+  const observations = run.results.map((result) => {
+    const deterministicGrade =
+      scenario?.grader && result.responseText !== null
+        ? gradeDeterministicResponse(result.responseText, scenario.grader)
+        : null;
+    return {
+      caseId: `${mapping.scenarioId}::sample-${result.sampleIndex}`,
+      comparisonKind: deterministicGrade?.comparisonKind ?? ("EXACT" as const),
+      canonicalValue: deterministicGrade?.canonicalValue ?? canonicalValue(result),
+      success: observationSuccess(
+        result,
+        execution.successPolicy,
+        execution.successThreshold,
+        deterministicGrade,
+      ),
+      telemetry: {
+        ttftMs: result.ttftMs,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        tokPerSec: result.tokPerSec,
+        totalDurationMs: result.totalDurationMs,
+      },
+      metadata: {
+        executionId: execution.id,
+        testRunId: run.id,
+        resultId: result.id,
+        scenarioId: mapping.scenarioId,
+        suiteKey: scenario?.suiteKey ?? null,
+        suiteVersion: scenario?.suiteVersion ?? null,
+        modelName: result.modelName,
+        sampleIndex: result.sampleIndex,
+        status: result.status,
+        evalStatus: result.evalStatus,
+        scoreStars: result.evaluation?.scoreStars ?? null,
+        deterministicGrade,
+        errorMessage: result.errorMessage,
+      },
+    };
+  });
   if (observations.length > 0) {
     await upsertExperimentExecutionObservations(execution.id, mapping.variantId, observations);
   }
@@ -246,6 +265,14 @@ export async function startExperimentExecution(
 
   const scenarios = parsed.scenarioIds.map((id) => benchmarkStore.getScenario(id));
   if (scenarios.some((scenario) => !scenario)) throw new Error("One or more scenarios were not found.");
+  if (parsed.successPolicy === "DETERMINISTIC") {
+    const ungraded = scenarios.filter((scenario) => !scenario?.grader);
+    if (ungraded.length > 0) {
+      throw new Error(
+        `Deterministic success policy requires a grader on every selected scenario. Missing: ${ungraded.map((scenario) => scenario?.name ?? "unknown").join(", ")}.`,
+      );
+    }
+  }
 
   const runnableVariants = experiment.variants.filter((variant) =>
     ["BASELINE", "BASELINE_REPEAT", "VARIANT", "CONTROL"].includes(variant.role),
