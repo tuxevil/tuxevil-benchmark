@@ -38,6 +38,7 @@ export const benchmarkParametersSchema = z.object({
   topP: z.number().min(0).max(1),
   repeatPenalty: z.number().min(0).max(3),
   numPredict: z.number().int().min(1).max(32_768),
+  seed: z.number().int().min(0).max(2_147_483_647).optional(),
   reasoningEffort: reasoningEffortSchema.default("off").optional(),
 });
 
