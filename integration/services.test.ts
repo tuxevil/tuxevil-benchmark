@@ -1,8 +1,8 @@
 import { afterAll, describe, expect, it } from "vitest";
 import postgres from "postgres";
 import Redis from "ioredis";
-import { queuePersistedRun, waitForPersistedRun } from "@/lib/database";
-import type { TestRun } from "@/lib/contracts";
+import { queuePersistedRun, waitForPersistedRun } from "../src/lib/database";
+import type { TestRun } from "../src/lib/contracts";
 
 const databaseUrl = process.env.DATABASE_URL;
 const redisUrl = process.env.REDIS_URL;
