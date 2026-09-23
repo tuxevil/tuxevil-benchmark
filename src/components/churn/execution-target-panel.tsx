@@ -63,10 +63,21 @@ export function ExecutionTargetPanel({
   }, []);
 
   useEffect(() => {
-    void loadTargets().catch((err) => {
-      setError(err instanceof Error ? err.message : "Could not load execution targets.");
-    });
-  }, [loadTargets]);
+    let ignore = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/experiments/targets");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Could not load execution targets.");
+        if (!ignore) setTargets(data.targets ?? []);
+      } catch (err) {
+        if (!ignore) setError(err instanceof Error ? err.message : "Could not load execution targets.");
+      }
+    })();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const createTarget = async () => {
     setError(null);
