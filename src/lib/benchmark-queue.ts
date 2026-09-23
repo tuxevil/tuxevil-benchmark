@@ -175,6 +175,7 @@ async function executeModel(runId: string, resultId: string) {
                 messages: conversation,
                 parameters: activeRun.parameters,
                 signal: activeRun.cancelController.signal,
+                apiKey,
                 onToken: (token) => {
                   partialResponse += token;
                   const now = performance.now();
