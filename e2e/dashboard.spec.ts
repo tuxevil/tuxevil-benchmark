@@ -295,6 +295,9 @@ test("Churn Lab exposes automatic Experiment Runner for a selected experiment", 
           name: "Deterministic smoke case",
           category: "GENERAL",
           attackType: null,
+          suiteKey: "practical-slm",
+          suiteVersion: "1.0.0",
+          grader: { type: "EXACT_TEXT", version: 1, expected: "OK", caseSensitive: true, collapseWhitespace: false },
         }],
       },
     });
@@ -364,6 +367,8 @@ test("Churn Lab exposes automatic Experiment Runner for a selected experiment", 
   const runner = page.locator(".churn-runner");
   await expect(runner.getByRole("heading", { name: "Experiment Runner" })).toBeVisible();
   await expect(runner.getByText("Deterministic smoke case")).toBeVisible();
+  await expect(runner.getByRole("button", { name: "Select Practical SLM" })).toBeVisible();
+  await expect(runner.getByText(/Practical SLM 1\.0\.0 · objective/)).toBeVisible();
   await expect(runner.getByText("baseline", { exact: true })).toBeVisible();
   await expect(runner.getByText("variant", { exact: true })).toBeVisible();
 });

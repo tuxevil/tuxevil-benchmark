@@ -13,6 +13,7 @@ import type {
 
 type SqlRow = Record<string, unknown>;
 import { decryptSecret, encryptSecret } from "@/lib/secrets";
+import { parseDeterministicGrader } from "@/lib/deterministic-grader";
 import { CURRENT_SQLITE_FILENAME, LEGACY_SQLITE_FILENAME } from "@/lib/legacy-identifiers";
 import path from "node:path";
 import { existsSync } from "node:fs";
@@ -68,6 +69,9 @@ function initSqliteTables(db: Database.Database) {
       attack_type TEXT,
       system_prompt TEXT NOT NULL,
       user_messages TEXT NOT NULL,
+      suite_key TEXT,
+      suite_version TEXT,
+      grader_json TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -214,6 +218,15 @@ function initSqliteTables(db: Database.Database) {
   }
   if (!scenarioColumns.some((column) => column.name === "attack_type")) {
     migrationDb.exec("ALTER TABLE scenarios ADD COLUMN attack_type TEXT");
+  }
+  if (!scenarioColumns.some((column) => column.name === "suite_key")) {
+    migrationDb.exec("ALTER TABLE scenarios ADD COLUMN suite_key TEXT");
+  }
+  if (!scenarioColumns.some((column) => column.name === "suite_version")) {
+    migrationDb.exec("ALTER TABLE scenarios ADD COLUMN suite_version TEXT");
+  }
+  if (!scenarioColumns.some((column) => column.name === "grader_json")) {
+    migrationDb.exec("ALTER TABLE scenarios ADD COLUMN grader_json TEXT");
   }
 
   const evalColumns = migrationDb.prepare("PRAGMA table_info(evaluations)").all() as SqlRow[];
@@ -413,14 +426,17 @@ function initSqliteTables(db: Database.Database) {
 export function sqlitePersistScenario(scenario: Scenario) {
   const db = getSqliteDb();
   db.prepare(`
-    INSERT INTO scenarios (id, name, category, attack_type, system_prompt, user_messages, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO scenarios (id, name, category, attack_type, system_prompt, user_messages, suite_key, suite_version, grader_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       category = excluded.category,
       attack_type = excluded.attack_type,
       system_prompt = excluded.system_prompt,
       user_messages = excluded.user_messages,
+      suite_key = excluded.suite_key,
+      suite_version = excluded.suite_version,
+      grader_json = excluded.grader_json,
       updated_at = excluded.updated_at
   `).run(
     scenario.id,
@@ -429,6 +445,9 @@ export function sqlitePersistScenario(scenario: Scenario) {
     scenario.attackType ?? null,
     scenario.systemPrompt,
     JSON.stringify(scenario.userMessages),
+    scenario.suiteKey ?? null,
+    scenario.suiteVersion ?? null,
+    scenario.grader ? JSON.stringify(scenario.grader) : null,
     scenario.createdAt,
     scenario.updatedAt,
   );
@@ -1073,6 +1092,9 @@ export function sqliteLoadState(targetRunId?: string) {
     attackType: (row.attack_type as Scenario["attackType"]) || null,
     systemPrompt: String(row.system_prompt),
     userMessages: JSON.parse(String(row.user_messages)),
+    suiteKey: row.suite_key ? String(row.suite_key) : null,
+    suiteVersion: row.suite_version ? String(row.suite_version) : null,
+    grader: parseDeterministicGrader(row.grader_json),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   }));

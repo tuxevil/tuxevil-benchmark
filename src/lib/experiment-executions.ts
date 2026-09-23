@@ -3,7 +3,7 @@ import { z } from "zod";
 export const experimentExecutionStatusSchema = z.enum(["PENDING", "RUNNING", "COMPLETED", "FAILED"]);
 export type ExperimentExecutionStatus = z.infer<typeof experimentExecutionStatusSchema>;
 
-export const experimentSuccessPolicySchema = z.enum(["NONE", "EVALUATION_THRESHOLD"]);
+export const experimentSuccessPolicySchema = z.enum(["NONE", "DETERMINISTIC", "EVALUATION_THRESHOLD"]);
 export type ExperimentSuccessPolicy = z.infer<typeof experimentSuccessPolicySchema>;
 
 export const experimentExecutionInputSchema = z.object({

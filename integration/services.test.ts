@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 import postgres from "postgres";
 import Redis from "ioredis";
-import { queuePersistedRun, waitForPersistedRun } from "../src/lib/database";
+import { loadPersistedState, persistScenario, queuePersistedRun, waitForPersistedRun } from "../src/lib/database";
 import type { TestRun } from "../src/lib/contracts";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -26,6 +26,46 @@ serviceSuite("local infrastructure", () => {
         AND table_name IN ('app_settings', 'evaluators', 'scenarios', 'test_runs', 'model_results', 'model_result_turns', 'evaluations', 'evaluation_history', 'execution_targets', 'model_artifacts', 'execution_environments', 'experiments', 'experiment_variants', 'experiment_executions', 'experiment_execution_runs', 'experiment_execution_observations', 'experiment_observations')
     `;
     expect(tables).toHaveLength(17);
+  }, 30_000);
+
+  it("round-trips Practical SLM grader metadata through PostgreSQL scenario persistence", async () => {
+    sql ??= postgres(databaseUrl!);
+    const scenarioId = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    await persistScenario({
+      id: scenarioId,
+      name: "integration practical case",
+      category: "GENERAL",
+      attackType: null,
+      systemPrompt: "Return exactly OK.",
+      userMessages: ["Respond now."],
+      suiteKey: "practical-slm",
+      suiteVersion: "1.0.0",
+      grader: {
+        type: "EXACT_TEXT",
+        version: 1,
+        expected: "OK",
+        caseSensitive: true,
+        collapseWhitespace: false,
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const state = await loadPersistedState();
+    const scenario = state?.scenarios.find((item) => item.id === scenarioId);
+    expect(scenario?.suiteKey).toBe("practical-slm");
+    expect(scenario?.suiteVersion).toBe("1.0.0");
+    expect(scenario?.grader).toEqual({
+      type: "EXACT_TEXT",
+      version: 1,
+      expected: "OK",
+      caseSensitive: true,
+      collapseWhitespace: false,
+    });
+
+    await sql`DELETE FROM scenarios WHERE id = ${scenarioId}`;
   }, 30_000);
 
   it("round-trips executionTargetId through PostgreSQL TestRun persistence", async () => {

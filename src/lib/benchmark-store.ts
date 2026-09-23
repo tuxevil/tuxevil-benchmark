@@ -38,6 +38,7 @@ import { evaluateModelResponse, resolveEvaluationMode } from "@/lib/frontier-eva
 import { retryTransient } from "@/lib/retry";
 import { publishRunEvent } from "@/lib/run-events";
 import { LEGACY_SECURITY_SEED_NAMESPACE } from "@/lib/legacy-identifiers";
+import { PRACTICAL_SLM_SCENARIOS, PRACTICAL_SLM_SEED_NAMESPACE, PRACTICAL_SLM_SUITE_KEY, PRACTICAL_SLM_SUITE_VERSION } from "@/lib/practical-slm-suite";
 
 type RunListener = (event: RunEvent) => void;
 
@@ -129,6 +130,7 @@ export const benchmarkStore = {
         state.settings = normalizePersistedSettings(state.settings);
       }
       await seedSecurityScenarios();
+      await seedPracticalSlmScenarios();
     })().finally(() => {
       state.hydrationPromise = undefined;
     });
@@ -653,7 +655,7 @@ export const benchmarkStore = {
     return state.scenarios.get(id) ?? null;
   },
 
-  async createScenario(input: Pick<Scenario, "name" | "category" | "attackType" | "systemPrompt" | "userMessages">) {
+  async createScenario(input: Pick<Scenario, "name" | "category" | "attackType" | "systemPrompt" | "userMessages" | "suiteKey" | "suiteVersion" | "grader">) {
     const now = new Date().toISOString();
     const scenario: Scenario = {
       id: crypto.randomUUID(),
@@ -662,6 +664,9 @@ export const benchmarkStore = {
       name: input.name,
       systemPrompt: input.systemPrompt,
       userMessages: input.userMessages,
+      suiteKey: input.suiteKey ?? null,
+      suiteVersion: input.suiteVersion ?? null,
+      grader: input.grader ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -670,7 +675,7 @@ export const benchmarkStore = {
     return scenario;
   },
 
-  async updateScenario(id: string, input: Pick<Scenario, "name" | "category" | "attackType" | "systemPrompt" | "userMessages">) {
+  async updateScenario(id: string, input: Pick<Scenario, "name" | "category" | "attackType" | "systemPrompt" | "userMessages" | "suiteKey" | "suiteVersion" | "grader">) {
     const scenario = state.scenarios.get(id);
     if (!scenario) return null;
     const updatedScenario: Scenario = {
@@ -678,6 +683,9 @@ export const benchmarkStore = {
       ...input,
       category: input.category ?? scenario.category ?? "GENERAL",
       attackType: input.attackType !== undefined ? input.attackType : scenario.attackType ?? null,
+      suiteKey: input.suiteKey !== undefined ? input.suiteKey : scenario.suiteKey ?? null,
+      suiteVersion: input.suiteVersion !== undefined ? input.suiteVersion : scenario.suiteVersion ?? null,
+      grader: input.grader !== undefined ? input.grader : scenario.grader ?? null,
       updatedAt: new Date().toISOString(),
     };
     await persistScenario(updatedScenario);
@@ -747,6 +755,34 @@ async function seedSecurityScenarios() {
     await persistScenario(scenario);
     state.scenarios.set(scenario.id, scenario);
   }
+}
+
+async function seedPracticalSlmScenarios() {
+  for (const definition of PRACTICAL_SLM_SCENARIOS) {
+    const seededId = practicalScenarioId(definition.key);
+    if (state.scenarios.has(seededId)) continue;
+    const now = new Date().toISOString();
+    const scenario: Scenario = {
+      id: seededId,
+      category: "GENERAL",
+      attackType: null,
+      name: definition.name,
+      systemPrompt: definition.systemPrompt,
+      userMessages: definition.userMessages,
+      suiteKey: PRACTICAL_SLM_SUITE_KEY,
+      suiteVersion: PRACTICAL_SLM_SUITE_VERSION,
+      grader: definition.grader,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await persistScenario(scenario);
+    state.scenarios.set(scenario.id, scenario);
+  }
+}
+
+function practicalScenarioId(key: string) {
+  const hash = createHash("sha256").update(`${PRACTICAL_SLM_SEED_NAMESPACE}:${key}`).digest("hex");
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
 }
 
 function seedScenarioId(attackType: SecurityAttackType) {

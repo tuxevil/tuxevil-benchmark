@@ -37,6 +37,7 @@ import {
   type AnomalyDashboard,
 } from "@/lib/anomalies";
 import { decryptSecret, encryptSecret } from "@/lib/secrets";
+import { parseDeterministicGrader } from "@/lib/deterministic-grader";
 import {
   sqliteAppendEvaluationHistory,
   sqliteDeleteEvaluator,
@@ -751,14 +752,17 @@ export async function persistScenario(scenario: Scenario) {
     return;
   }
   await getClient()!`
-    INSERT INTO scenarios (id, name, category, attack_type, system_prompt, user_messages, created_at, updated_at)
-    VALUES (${scenario.id}, ${scenario.name}, ${scenario.category ?? "GENERAL"}, ${scenario.attackType ?? null}, ${scenario.systemPrompt}, ${JSON.stringify(scenario.userMessages)}::jsonb, ${new Date(scenario.createdAt)}, ${new Date(scenario.updatedAt)})
+    INSERT INTO scenarios (id, name, category, attack_type, system_prompt, user_messages, suite_key, suite_version, grader_json, created_at, updated_at)
+    VALUES (${scenario.id}, ${scenario.name}, ${scenario.category ?? "GENERAL"}, ${scenario.attackType ?? null}, ${scenario.systemPrompt}, ${JSON.stringify(scenario.userMessages)}::jsonb, ${scenario.suiteKey ?? null}, ${scenario.suiteVersion ?? null}, ${scenario.grader ? JSON.stringify(scenario.grader) : null}::jsonb, ${new Date(scenario.createdAt)}, ${new Date(scenario.updatedAt)})
     ON CONFLICT (id) DO UPDATE SET
       name = EXCLUDED.name,
       category = EXCLUDED.category,
       attack_type = EXCLUDED.attack_type,
       system_prompt = EXCLUDED.system_prompt,
       user_messages = EXCLUDED.user_messages,
+      suite_key = EXCLUDED.suite_key,
+      suite_version = EXCLUDED.suite_version,
+      grader_json = EXCLUDED.grader_json,
       updated_at = EXCLUDED.updated_at
   `;
 }
@@ -1078,7 +1082,7 @@ export async function loadPersistedState(runId?: string): Promise<DatabaseState 
       runId
         ? transaction`SELECT model_result_id, evaluator_model, grammar_rating, compliance_rating, accuracy_rating, score_stars, grammar_analysis, compliance_analysis, accuracy_analysis, feedback_text, security_score, injection_successful, system_leakage_detected, vulnerability_analysis, evaluator_raw_json FROM evaluations WHERE model_result_id IN (SELECT id FROM model_results WHERE test_run_id = ${runId})`
         : transaction`SELECT model_result_id, evaluator_model, grammar_rating, compliance_rating, accuracy_rating, score_stars, grammar_analysis, compliance_analysis, accuracy_analysis, feedback_text, security_score, injection_successful, system_leakage_detected, vulnerability_analysis, evaluator_raw_json FROM evaluations`,
-      runId ? emptyRows : transaction`SELECT id, name, category, attack_type, system_prompt, user_messages, created_at, updated_at FROM scenarios ORDER BY updated_at DESC`,
+      runId ? emptyRows : transaction`SELECT id, name, category, attack_type, system_prompt, user_messages, suite_key, suite_version, grader_json, created_at, updated_at FROM scenarios ORDER BY updated_at DESC`,
     ]));
 
     const turnsByResult = groupTurns(turnRows);
@@ -1669,6 +1673,9 @@ function restoreScenario(row: Record<string, unknown>): Scenario {
     attackType: (row.attack_type as Scenario["attackType"]) || null,
     systemPrompt: String(row.system_prompt),
     userMessages: parseJsonArray(row.user_messages),
+    suiteKey: row.suite_key ? String(row.suite_key) : null,
+    suiteVersion: row.suite_version ? String(row.suite_version) : null,
+    grader: parseDeterministicGrader(row.grader_json),
     createdAt: dateToIso(row.created_at),
     updatedAt: dateToIso(row.updated_at),
   };

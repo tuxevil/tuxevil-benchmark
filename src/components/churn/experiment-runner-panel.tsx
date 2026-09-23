@@ -24,6 +24,9 @@ type Scenario = {
   name: string;
   category: "GENERAL" | "SECURITY";
   attackType: string | null;
+  suiteKey?: string | null;
+  suiteVersion?: string | null;
+  grader?: unknown | null;
 };
 
 type Comparison = unknown;
@@ -81,7 +84,7 @@ export function ExperimentRunnerPanel({
   const [selectedScenarios, setSelectedScenarios] = useState<string[]>([]);
   const [samplesPerModel, setSamplesPerModel] = useState("1");
   const [useEvaluator, setUseEvaluator] = useState(false);
-  const [successPolicy, setSuccessPolicy] = useState<"NONE" | "EVALUATION_THRESHOLD">("NONE");
+  const [successPolicy, setSuccessPolicy] = useState<"NONE" | "DETERMINISTIC" | "EVALUATION_THRESHOLD">("NONE");
   const [successThreshold, setSuccessThreshold] = useState("4");
   const [execution, setExecution] = useState<ExecutionView | null>(null);
   const [busy, setBusy] = useState(false);
@@ -118,6 +121,10 @@ export function ExperimentRunnerPanel({
   );
   const scenarioNameById = useMemo(
     () => new Map(scenarios.map((scenario) => [scenario.id, scenario.name])),
+    [scenarios],
+  );
+  const practicalScenarios = useMemo(
+    () => scenarios.filter((scenario) => scenario.suiteKey === "practical-slm"),
     [scenarios],
   );
 
@@ -309,6 +316,19 @@ export function ExperimentRunnerPanel({
         <div className="churn-runner-section-head">
           <strong>Scenarios</strong>
           <div>
+            {practicalScenarios.length > 0 && (
+              <button
+                className="quiet-button"
+                type="button"
+                onClick={() => {
+                  setSelectedScenarios(practicalScenarios.map((scenario) => scenario.id));
+                  setSuccessPolicy("DETERMINISTIC");
+                  setUseEvaluator(false);
+                }}
+              >
+                Select Practical SLM
+              </button>
+            )}
             <button className="quiet-button" type="button" onClick={() => setSelectedScenarios(scenarios.map((scenario) => scenario.id))}>
               Select all
             </button>
@@ -327,7 +347,10 @@ export function ExperimentRunnerPanel({
               />
               <span>
                 <strong>{scenario.name}</strong>
-                <small>{scenario.category}{scenario.attackType ? ` · ${scenario.attackType}` : ""}</small>
+                <small>
+                  {scenario.suiteKey === "practical-slm" ? `Practical SLM ${scenario.suiteVersion ?? ""} · objective` : scenario.category}
+                  {scenario.attackType ? ` · ${scenario.attackType}` : ""}
+                </small>
               </span>
             </label>
           ))}
@@ -345,18 +368,20 @@ export function ExperimentRunnerPanel({
             className="input"
             value={successPolicy}
             onChange={(e) => {
-              const policy = e.target.value as "NONE" | "EVALUATION_THRESHOLD";
+              const policy = e.target.value as "NONE" | "DETERMINISTIC" | "EVALUATION_THRESHOLD";
               setSuccessPolicy(policy);
               if (policy === "EVALUATION_THRESHOLD") setUseEvaluator(true);
+              if (policy === "DETERMINISTIC") setUseEvaluator(false);
             }}
           >
             <option value="NONE">No objective pass/fail</option>
+            <option value="DETERMINISTIC">Deterministic scenario grader</option>
             <option value="EVALUATION_THRESHOLD">Evaluator star threshold</option>
           </select>
         </label>
         <label>
           Threshold
-          <input className="input" type="number" min="1" max="5" value={successThreshold} onChange={(e) => setSuccessThreshold(e.target.value)} disabled={successPolicy === "NONE"} />
+          <input className="input" type="number" min="1" max="5" value={successThreshold} onChange={(e) => setSuccessThreshold(e.target.value)} disabled={successPolicy !== "EVALUATION_THRESHOLD"} />
         </label>
         <label className="churn-check churn-runner-check">
           <input
