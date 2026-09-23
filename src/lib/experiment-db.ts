@@ -75,6 +75,8 @@ export function ensureExperimentSqliteSchema() {
       role TEXT NOT NULL,
       model_artifact_id TEXT NOT NULL,
       execution_environment_id TEXT NOT NULL,
+      execution_target_id TEXT,
+      execution_model_name TEXT,
       inference_parameters TEXT NOT NULL,
       prompt_version TEXT,
       reasoning_mode TEXT,
@@ -84,6 +86,7 @@ export function ensureExperimentSqliteSchema() {
       FOREIGN KEY(experiment_id) REFERENCES experiments(id) ON DELETE CASCADE,
       FOREIGN KEY(model_artifact_id) REFERENCES model_artifacts(id),
       FOREIGN KEY(execution_environment_id) REFERENCES execution_environments(id),
+      FOREIGN KEY(execution_target_id) REFERENCES execution_targets(id) ON DELETE SET NULL,
       FOREIGN KEY(parent_variant_id) REFERENCES experiment_variants(id),
       UNIQUE(experiment_id, name)
     );
