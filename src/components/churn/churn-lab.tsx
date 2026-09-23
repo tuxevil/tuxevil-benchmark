@@ -15,6 +15,7 @@ type ModelArtifact = {
   effectiveBitsPerWeight: number | null;
   artifactSizeBytes: number | null;
   fingerprint: string;
+  metadata: Record<string, unknown>;
 };
 
 type ExecutionEnvironment = {
@@ -30,6 +31,7 @@ type ExecutionEnvironment = {
   contextSize: number | null;
   flashAttention: boolean | null;
   fingerprint: string;
+  metadata: Record<string, unknown>;
 };
 
 type ExperimentRecord = {
@@ -686,6 +688,38 @@ export function ChurnLab() {
     return comparison.cases.filter((item) => item.status === caseFilter);
   }, [comparison, caseFilter]);
 
+  const runnerVariants = useMemo(() => {
+    if (!detail) return [];
+    const artifactById = new Map(artifacts.map((item) => [item.id, item]));
+    const environmentById = new Map(environments.map((item) => [item.id, item]));
+
+    return detail.variants.map((variant) => {
+      if (variant.executionTargetId && variant.executionModelName) return variant;
+      const artifact = artifactById.get(variant.modelArtifactId);
+      const environment = environmentById.get(variant.executionEnvironmentId);
+      const artifactTarget =
+        typeof artifact?.metadata?.executionTargetId === "string"
+          ? artifact.metadata.executionTargetId
+          : null;
+      const environmentTarget =
+        typeof environment?.metadata?.executionTargetId === "string"
+          ? environment.metadata.executionTargetId
+          : null;
+      const inferredTarget =
+        artifactTarget && environmentTarget && artifactTarget === environmentTarget
+          ? artifactTarget
+          : null;
+
+      return {
+        ...variant,
+        executionTargetId: variant.executionTargetId ?? inferredTarget,
+        executionModelName:
+          variant.executionModelName
+          ?? (inferredTarget && artifactTarget === inferredTarget ? artifact?.displayName ?? null : null),
+      };
+    });
+  }, [detail, artifacts, environments]);
+
   if (loading) {
     return <div className="churn-loading panel">Loading Churn Lab…</div>;
   }
@@ -940,7 +974,7 @@ export function ChurnLab() {
             <ExperimentRunnerPanel
               key={detail.experiment.id}
               experimentId={detail.experiment.id}
-              variants={detail.variants}
+              variants={runnerVariants}
               onBindingsSaved={() => loadExperiment(detail.experiment.id)}
               onComparison={(value) => setComparison(value as Comparison)}
             />
