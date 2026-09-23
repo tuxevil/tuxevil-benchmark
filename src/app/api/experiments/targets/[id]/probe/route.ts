@@ -51,9 +51,17 @@ export async function POST(
       return NextResponse.json({ snapshot });
     }
 
+    const artifactInput = {
+      ...snapshot.artifact,
+      metadata: { ...snapshot.artifact.metadata, executionTargetId: id },
+    };
+    const environmentInput = {
+      ...snapshot.environment,
+      metadata: { ...snapshot.environment.metadata, executionTargetId: id },
+    };
     const [artifact, environment] = await Promise.all([
-      upsertModelArtifact(snapshot.artifact),
-      upsertExecutionEnvironment(snapshot.environment),
+      upsertModelArtifact(artifactInput),
+      upsertExecutionEnvironment(environmentInput),
     ]);
 
     return NextResponse.json({
