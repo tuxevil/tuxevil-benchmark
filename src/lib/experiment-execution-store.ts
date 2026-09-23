@@ -336,7 +336,16 @@ export async function acquireExecutionTargetLeases(
         USING experiment_executions e
         WHERE l.execution_id = e.id
           AND (
-            e.status IN ('COMPLETED', 'FAILED')
+            (
+              e.status IN ('COMPLETED', 'FAILED')
+              AND NOT EXISTS (
+                SELECT 1
+                FROM experiment_execution_runs er
+                JOIN test_runs tr ON tr.id = er.test_run_id
+                WHERE er.execution_id = e.id
+                  AND tr.status NOT IN ('COMPLETED', 'FAILED', 'CANCELLED')
+              )
+            )
             OR (
               e.status = 'PENDING'
               AND e.created_at < CURRENT_TIMESTAMP - interval '15 minutes'
