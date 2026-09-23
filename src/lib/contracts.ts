@@ -321,9 +321,9 @@ export type Scenario = {
   attackType: SecurityAttackType | null;
   systemPrompt: string;
   userMessages: string[];
-  suiteKey: string | null;
-  suiteVersion: string | null;
-  grader: DeterministicGrader | null;
+  suiteKey?: string | null;
+  suiteVersion?: string | null;
+  grader?: DeterministicGrader | null;
   createdAt: string;
   updatedAt: string;
 };
