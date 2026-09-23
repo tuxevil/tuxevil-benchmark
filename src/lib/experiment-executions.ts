@@ -53,6 +53,8 @@ export type ExperimentExecutionRun = {
   variantId: string;
   scenarioId: string;
   testRunId: string;
+  sequenceOrder: number;
+  enqueuedAt: string | null;
   createdAt: string;
 };
 
