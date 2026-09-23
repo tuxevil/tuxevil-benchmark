@@ -21,9 +21,9 @@ serviceSuite("local infrastructure", () => {
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = 'public'
-        AND table_name IN ('app_settings', 'evaluators', 'scenarios', 'test_runs', 'model_results', 'model_result_turns', 'evaluations', 'evaluation_history', 'model_artifacts', 'execution_environments', 'experiments', 'experiment_variants', 'experiment_observations')
+        AND table_name IN ('app_settings', 'evaluators', 'scenarios', 'test_runs', 'model_results', 'model_result_turns', 'evaluations', 'evaluation_history', 'execution_targets', 'model_artifacts', 'execution_environments', 'experiments', 'experiment_variants', 'experiment_observations')
     `;
-    expect(tables).toHaveLength(13);
+    expect(tables).toHaveLength(14);
   }, 30_000);
 });
 

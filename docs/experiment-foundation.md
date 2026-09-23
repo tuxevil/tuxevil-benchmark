@@ -17,7 +17,11 @@ Implemented on `work/experiment-foundation`:
 - `Experiment` and `ExperimentVariant` records with one-baseline invariant;
 - per-case `ExperimentObservation` persistence;
 - API endpoints for artifacts, environments, experiments, variants and observations;
-- baseline-vs-variant comparison API backed by persisted observations.
+- baseline-vs-variant comparison API backed by persisted observations;
+- private `ExecutionTarget` registry for provider endpoint/credential connectivity;
+- encrypted target credentials kept outside scientific fingerprints;
+- provider Auto Probe for Ollama, llama.cpp and FreeToken/OpenAI-compatible targets;
+- automatic registration of provider-reported ModelArtifact + ExecutionEnvironment snapshots.
 
 Current API shape:
 
@@ -28,9 +32,13 @@ Current API shape:
 - `GET/POST /api/experiments/:id/variants`
 - `GET/POST /api/experiments/:id/variants/:variantId/observations`
 - `GET /api/experiments/:id/compare?variantId=...&baselineRepeatVariantId=...`
+- `GET/POST /api/experiments/targets`
+- `GET/PATCH/DELETE /api/experiments/targets/:id`
+- `POST /api/experiments/targets/:id/probe`
 
-The dedicated Churn Lab UI and automatic capture of model/runtime metadata from
-providers are intentionally still separate follow-up work.
+The Churn Lab UI and provider Auto Probe are implemented. The next follow-up is
+to bind experiment variants to execution targets/runs so observations can be
+generated automatically instead of imported manually.
 
 ## Core principle
 

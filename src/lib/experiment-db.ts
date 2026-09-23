@@ -16,6 +16,18 @@ export function getExperimentPostgresClient() {
 
 export function ensureExperimentSqliteSchema() {
   getSqliteDb().exec(`
+    CREATE TABLE IF NOT EXISTS execution_targets (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      endpoint TEXT NOT NULL,
+      api_key_encrypted TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS execution_targets_updated_idx
+      ON execution_targets(updated_at DESC);
+
     CREATE TABLE IF NOT EXISTS model_artifacts (
       id TEXT PRIMARY KEY,
       fingerprint TEXT NOT NULL UNIQUE,

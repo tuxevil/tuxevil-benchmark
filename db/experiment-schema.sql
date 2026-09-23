@@ -2,6 +2,19 @@
 -- Kept separate from the legacy schema so experimental data can evolve
 -- independently while db:migrate applies both files.
 
+CREATE TABLE IF NOT EXISTS execution_targets (
+  id UUID PRIMARY KEY,
+  label VARCHAR(255) NOT NULL,
+  provider VARCHAR(32) NOT NULL,
+  endpoint TEXT NOT NULL,
+  api_key_encrypted TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS execution_targets_updated_idx
+  ON execution_targets (updated_at DESC);
+
 CREATE TABLE IF NOT EXISTS model_artifacts (
   id UUID PRIMARY KEY,
   fingerprint VARCHAR(64) NOT NULL UNIQUE,

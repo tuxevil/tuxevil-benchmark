@@ -255,6 +255,7 @@ test("Churn Lab renders the experiment workbench", async ({ page }) => {
   await page.goto("/churn");
 
   await expect(page.getByRole("heading", { name: "Churn Lab" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Execution Targets & Auto Probe" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Model Artifact" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Execution Environment" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Experiment Builder" })).toBeVisible();

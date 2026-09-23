@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ExecutionTargetPanel } from "@/components/churn/execution-target-panel";
 
 type ModelArtifact = {
   id: string;
@@ -709,6 +710,8 @@ export function ChurnLab() {
           {error ?? notice}
         </div>
       )}
+
+      <ExecutionTargetPanel onRegistryChange={loadRegistries} />
 
       <section className="churn-grid churn-registry-grid">
         <div className="panel churn-card">

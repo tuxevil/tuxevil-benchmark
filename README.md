@@ -67,6 +67,7 @@ The application is structured into **5 independent core modules**, cleanly separ
   $$\text{Arena Index} = (W_q \cdot \text{Quality}) + (W_s \cdot \text{Security}) + (W_v \cdot \text{Speed})$$
 - **Granular Inference Telemetry:** Capture Time to First Token (TTFT), token output throughput (tok/sec), thinking token consumption, prompt token count, output token count, and execution latency for every turn and sample.
 - **Controlled Churn Experiments:** Compare baseline and variant outputs case-by-case instead of relying only on aggregate scores. Track agreement/churn, lost vs gained successes, Wilson confidence intervals, exact McNemar p-values, deterministic baseline-repeat noise, and model/runtime fingerprints.
+- **Execution Targets & Auto Probe:** Keep operational connectivity (provider endpoint/API key) separate from scientific fingerprints. Probe Ollama, llama.cpp, or FreeToken/OpenAI-compatible targets and automatically register provider-reported model artifacts and execution-environment snapshots. Target API keys are encrypted at rest and never returned by the target registry API.
 - **Automated Frontier Evaluation (LLM-as-a-Judge):** Evaluate outputs automatically using OpenAI-compatible `/chat/completions` endpoints. Receives structured JSON metrics (1–5 star overall score, Grammar, Compliance, Accuracy, and vulnerability breakdown).
 - **Real-Time Token Streaming & Queue Controls:** Stream output token-by-token over Server-Sent Events (SSE) in the Live Monitor, with queue control actions (*Pause*, *Resume*, *Cancel*, *Retry Failed*).
 - **Theme Support (Light / Dark / System):** Native support for Light mode, Dark mode, and OS preference matching without flash of unstyled content (FOUC).
@@ -326,7 +327,7 @@ For multi-user or background worker processing:
 | `EVALUATOR_BASE_URL` | Base URL for OpenAI-compatible evaluator endpoint. Seeds the evaluator catalog on first startup. | Empty |
 | `EVALUATOR_MODEL` | Judge model name used for evaluation. Seeds the evaluator catalog on first startup. | Empty |
 | `EVALUATOR_API_KEY` | Judge API key. Encrypted at rest when saved via UI. | Empty |
-| `APP_ENCRYPTION_KEY` | 32-byte hex key for AES-256-GCM secret encryption. | Empty |
+| `APP_ENCRYPTION_KEY` | 32-byte hex key for AES-256-GCM encryption of evaluator and execution-target credentials. | Empty |
 | `SQLITE_PATH` | File path for SQLite database in local mode. | `./tuxevil-benchmark.db` (legacy `compare.db` auto-detected when unset) |
 | `DATABASE_URL` | PostgreSQL connection string. Enables Postgres persistence. | Empty |
 | `REDIS_URL` | Redis connection string. Enables BullMQ queuing and SSE events. | Empty |
