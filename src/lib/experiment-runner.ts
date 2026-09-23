@@ -35,6 +35,8 @@ import {
   upsertExperimentExecutionObservations,
 } from "@/lib/experiment-execution-observation-store";
 
+const EXECUTION_TARGET_PLACEHOLDER_URL = "http://execution-target.invalid";
+
 type Preflight = {
   variant: ExperimentVariant;
   provider: NonNullable<TestRun["provider"]>;
@@ -277,8 +279,8 @@ export async function startExperimentExecution(
         if (!scenario) continue;
         const run = benchmarkStore.createRun({
           provider: preflight.provider,
-          providerUrl: preflight.endpoint,
-          ollamaUrl: preflight.endpoint,
+          providerUrl: EXECUTION_TARGET_PLACEHOLDER_URL,
+          ollamaUrl: EXECUTION_TARGET_PLACEHOLDER_URL,
           executionTargetId: preflight.targetId,
           scenarioId: scenario.id,
           samplesPerModel: parsed.samplesPerModel,
