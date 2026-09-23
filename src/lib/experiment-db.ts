@@ -15,7 +15,8 @@ export function getExperimentPostgresClient() {
 }
 
 export function ensureExperimentSqliteSchema() {
-  getSqliteDb().exec(`
+  const db = getSqliteDb();
+  db.exec(`
     CREATE TABLE IF NOT EXISTS execution_targets (
       id TEXT PRIMARY KEY,
       label TEXT NOT NULL,
@@ -148,6 +149,14 @@ export function ensureExperimentSqliteSchema() {
     CREATE INDEX IF NOT EXISTS experiment_observations_variant_idx
       ON experiment_observations(variant_id, case_id);
   `);
+
+  const variantColumns = db.prepare("PRAGMA table_info(experiment_variants)").all() as Array<{ name: string }>;
+  if (!variantColumns.some((column) => column.name === "execution_target_id")) {
+    db.exec("ALTER TABLE experiment_variants ADD COLUMN execution_target_id TEXT REFERENCES execution_targets(id) ON DELETE SET NULL");
+  }
+  if (!variantColumns.some((column) => column.name === "execution_model_name")) {
+    db.exec("ALTER TABLE experiment_variants ADD COLUMN execution_model_name TEXT");
+  }
 }
 
 export async function closeExperimentDb() {
