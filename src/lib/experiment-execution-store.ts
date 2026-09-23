@@ -378,3 +378,33 @@ export async function listExecutionTargetLeases(): Promise<Array<{
     acquiredAt: new Date(String(row.acquired_at)).toISOString(),
   }));
 }
+
+
+export async function isTestRunAwaitingExperimentEnqueue(testRunId: string): Promise<boolean> {
+  if (!experimentUsesPostgres()) {
+    ensureExperimentSqliteSchema();
+    const row = getSqliteDb().prepare(`
+      SELECT 1
+      FROM experiment_execution_runs er
+      JOIN experiment_executions e ON e.id = er.execution_id
+      WHERE er.test_run_id = ?
+        AND er.enqueued_at IS NULL
+        AND e.status IN ('PENDING', 'RUNNING')
+      LIMIT 1
+    `).get(testRunId);
+    return Boolean(row);
+  }
+
+  const sql = getExperimentPostgresClient();
+  if (!sql) return false;
+  const rows = await sql`
+    SELECT 1
+    FROM experiment_execution_runs er
+    JOIN experiment_executions e ON e.id = er.execution_id
+    WHERE er.test_run_id = ${testRunId}
+      AND er.enqueued_at IS NULL
+      AND e.status IN ('PENDING', 'RUNNING')
+    LIMIT 1
+  `;
+  return Boolean(rows[0]);
+}
