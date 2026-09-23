@@ -515,7 +515,11 @@ export async function reconcileExperimentExecution(
     if (run && terminal) await importRunObservations(stored.execution, mapping, run);
   }
 
-  if (!allTerminal && stored.execution.executionMode === "PERFORMANCE") {
+  if (
+    !allTerminal
+    && stored.execution.status === "RUNNING"
+    && stored.execution.executionMode === "PERFORMANCE"
+  ) {
     const hasInFlight = benchmarkRuns.some((item) =>
       (item.status === "PENDING" || item.status === "RUNNING")
       && stored.runs.find((mapping) => mapping.id === item.mappingId)?.enqueuedAt
