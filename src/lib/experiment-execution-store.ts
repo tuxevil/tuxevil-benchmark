@@ -213,3 +213,29 @@ export async function findExperimentExecutionsForTestRun(
     experimentId: String(row.experiment_id),
   }));
 }
+
+
+export async function findActiveExperimentExecution(
+  experimentId: string,
+): Promise<ExperimentExecution | null> {
+  if (!experimentUsesPostgres()) {
+    ensureExperimentSqliteSchema();
+    const row = getSqliteDb().prepare(`
+      SELECT * FROM experiment_executions
+      WHERE experiment_id = ? AND status IN ('PENDING', 'RUNNING')
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).get(experimentId) as Row | undefined;
+    return row ? restoreExecution(row) : null;
+  }
+
+  const sql = getExperimentPostgresClient();
+  if (!sql) return null;
+  const rows = await sql`
+    SELECT * FROM experiment_executions
+    WHERE experiment_id = ${experimentId} AND status IN ('PENDING', 'RUNNING')
+    ORDER BY created_at DESC
+    LIMIT 1
+  `;
+  return rows[0] ? restoreExecution(rows[0] as Row) : null;
+}
