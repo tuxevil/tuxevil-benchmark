@@ -182,12 +182,12 @@ async function probeOllama(input: {
       },
     },
     environment: {
-      label: `${input.label} · ${selected}`,
+      label: input.label,
       runtime: "ollama",
       runtimeVersion: providerVersion,
       runtimeCommit: null,
       gpuModels: [],
-      totalVramBytes: numberValue(running.size_vram),
+      totalVramBytes: null,
       cpuModel: null,
       systemRamBytes: null,
       driverVersion: null,
@@ -206,6 +206,7 @@ async function probeOllama(input: {
       metadata: {
         provider: "ollama",
         active: Boolean(running.name),
+        activeModelVramBytes: numberValue(running.size_vram),
       },
     },
     evidence: {
@@ -305,7 +306,7 @@ async function probeLlamaCpp(input: {
       },
     },
     environment: {
-      label: `${input.label} · ${basename(modelPath) ?? modelName}`,
+      label: input.label,
       runtime: "llama.cpp",
       runtimeVersion: buildInfo,
       runtimeCommit,
@@ -383,7 +384,7 @@ async function probeGeneric(input: {
       metadata: { provider: input.provider },
     },
     environment: {
-      label: `${input.label} · ${selected}`,
+      label: input.label,
       runtime: input.provider,
       runtimeVersion: null,
       runtimeCommit: null,
