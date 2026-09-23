@@ -9,7 +9,7 @@ import {
 
 function knownGoodResponse(grader: (typeof PRACTICAL_SLM_SCENARIOS)[number]["grader"]): string {
   if (grader.type === "EXACT_TEXT") return grader.expected;
-  if (grader.type === "JSON_EXACT") return JSON.stringify(grader.expected);
+  if (grader.type === "JSON_EXACT") return JSON.stringify(grader.expected) ?? "null";
   if (grader.type === "NUMBER") return String(grader.expected);
   return grader.required.join(" ");
 }
