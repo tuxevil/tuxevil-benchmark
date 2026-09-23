@@ -113,7 +113,7 @@ async function preflightVariant(variant: ExperimentVariant): Promise<Preflight> 
     conflict("batch size", environment.batchSize, snapshot.environment.batchSize),
     conflict("ubatch size", environment.ubatchSize, snapshot.environment.ubatchSize),
     conflict("parallel slots", environment.parallel, snapshot.environment.parallel),
-    arrayConflict("runtime flags", environment.runtimeFlags, snapshot.environment.runtimeFlags),
+    arrayConflict("runtime flags", environment.runtimeFlags, snapshot.environment.runtimeFlags ?? []),
     conflict("architecture", artifact.architecture, snapshot.artifact.architecture),
     conflict("parameter count", artifact.totalParameters, snapshot.artifact.totalParameters),
     conflict("quantization", artifact.quantization, snapshot.artifact.quantization),
