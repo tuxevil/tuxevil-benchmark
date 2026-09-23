@@ -5,6 +5,7 @@ import { enqueueBenchmark } from "@/lib/benchmark-queue";
 import {
   addExperimentExecutionRun,
   createExperimentExecutionRecord,
+  findActiveExperimentExecution,
   findExperimentExecutionsForTestRun,
   getExperimentExecution,
   updateExperimentExecutionStatus,
@@ -215,6 +216,10 @@ export async function startExperimentExecution(
   await benchmarkStore.hydrate();
   const experiment = await getExperiment(experimentId);
   if (!experiment) throw new Error("Experiment not found.");
+  const activeExecution = await findActiveExperimentExecution(experimentId);
+  if (activeExecution) {
+    throw new Error(`Experiment already has an active execution (${activeExecution.id}).`);
+  }
   if (!experiment.experiment.baselineVariantId) throw new Error("Experiment has no baseline variant.");
 
   const scenarios = parsed.scenarioIds.map((id) => benchmarkStore.getScenario(id));
