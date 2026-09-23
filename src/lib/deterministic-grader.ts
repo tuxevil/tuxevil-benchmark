@@ -1,4 +1,4 @@
-import type { DeterministicGrader } from "@/lib/contracts";
+import { deterministicGraderSchema, type DeterministicGrader } from "@/lib/contracts";
 
 export type DeterministicGrade = {
   passed: boolean;
@@ -99,4 +99,17 @@ export function gradeDeterministicResponse(
     reason: passed ? "All required fragments were present and forbidden fragments absent." : "Required/forbidden fragment constraints were not satisfied.",
     details: { missing, forbiddenFound },
   };
+}
+
+
+export function parseDeterministicGrader(value: unknown): DeterministicGrader | null {
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  const parsed = deterministicGraderSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
