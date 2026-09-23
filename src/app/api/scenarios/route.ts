@@ -18,5 +18,11 @@ export async function POST(request: Request) {
 
   const parsed = scenarioSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid scenario." }, { status: 400 });
+  if (parsed.data.suiteKey === "practical-slm") {
+    return NextResponse.json(
+      { error: "The practical-slm suite key is reserved for built-in versioned scenarios." },
+      { status: 409 },
+    );
+  }
   return NextResponse.json({ scenario: await benchmarkStore.createScenario(parsed.data) }, { status: 201 });
 }
