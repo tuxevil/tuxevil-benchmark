@@ -90,6 +90,17 @@ async function executeBenchmark(runId: string) {
     status: hasFailures ? "FAILED" : "COMPLETED",
     finishedAt: new Date().toISOString(),
   });
+  await benchmarkStore.flush(runId);
+
+  try {
+    const { reconcileExperimentExecutionsForTestRun } = await import("@/lib/experiment-runner");
+    await reconcileExperimentExecutionsForTestRun(runId);
+  } catch (error) {
+    console.error("[tuxevil-benchmark] experiment reconciliation after run completion failed", {
+      runId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 async function executeModel(runId: string, resultId: string) {
