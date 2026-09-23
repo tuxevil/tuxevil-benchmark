@@ -13,7 +13,10 @@ export const experimentExecutionInputSchema = z.object({
   useEvaluator: z.boolean().default(true),
   successPolicy: experimentSuccessPolicySchema.default("NONE"),
   successThreshold: z.number().int().min(1).max(5).default(4),
-});
+}).refine(
+  (value) => value.successPolicy !== "EVALUATION_THRESHOLD" || value.useEvaluator,
+  { message: "Evaluation threshold success policy requires an evaluator.", path: ["successPolicy"] },
+);
 
 export type ExperimentExecutionInput = z.input<typeof experimentExecutionInputSchema>;
 export type ExperimentExecutionData = z.output<typeof experimentExecutionInputSchema>;
