@@ -327,7 +327,7 @@ For multi-user or background worker processing:
 | `EVALUATOR_BASE_URL` | Base URL for OpenAI-compatible evaluator endpoint. Seeds the evaluator catalog on first startup. | Empty |
 | `EVALUATOR_MODEL` | Judge model name used for evaluation. Seeds the evaluator catalog on first startup. | Empty |
 | `EVALUATOR_API_KEY` | Judge API key. Encrypted at rest when saved via UI. | Empty |
-| `APP_ENCRYPTION_KEY` | 32-byte hex key for AES-256-GCM secret encryption. | Empty |
+| `APP_ENCRYPTION_KEY` | 32-byte hex key for AES-256-GCM encryption of evaluator and execution-target credentials. | Empty |
 | `SQLITE_PATH` | File path for SQLite database in local mode. | `./tuxevil-benchmark.db` (legacy `compare.db` auto-detected when unset) |
 | `DATABASE_URL` | PostgreSQL connection string. Enables Postgres persistence. | Empty |
 | `REDIS_URL` | Redis connection string. Enables BullMQ queuing and SSE events. | Empty |
