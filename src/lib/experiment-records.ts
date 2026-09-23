@@ -47,6 +47,12 @@ export const experimentVariantInputSchema = z.object({
   parentVariantId: z.string().uuid().nullable().default(null),
 });
 
+export const experimentVariantBindingSchema = z.object({
+  executionTargetId: z.string().uuid().nullable(),
+  executionModelName: z.string().trim().min(1).max(512).nullable(),
+});
+
+export type ExperimentVariantBindingInput = z.input<typeof experimentVariantBindingSchema>;
 export type ExperimentVariantInput = z.input<typeof experimentVariantInputSchema>;
 export type ExperimentVariantData = z.output<typeof experimentVariantInputSchema>;
 
