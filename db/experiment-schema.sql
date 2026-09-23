@@ -119,6 +119,24 @@ CREATE TABLE IF NOT EXISTS experiment_execution_runs (
 CREATE INDEX IF NOT EXISTS experiment_execution_runs_execution_idx
   ON experiment_execution_runs (execution_id, variant_id);
 
+CREATE TABLE IF NOT EXISTS experiment_execution_observations (
+  id UUID PRIMARY KEY,
+  execution_id UUID NOT NULL REFERENCES experiment_executions(id) ON DELETE CASCADE,
+  variant_id UUID NOT NULL REFERENCES experiment_variants(id) ON DELETE CASCADE,
+  case_id TEXT NOT NULL,
+  comparison_kind VARCHAR(32) NOT NULL DEFAULT 'EXACT',
+  canonical_value TEXT NOT NULL,
+  success BOOLEAN,
+  telemetry JSONB NOT NULL DEFAULT '{}'::jsonb,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (execution_id, variant_id, case_id)
+);
+
+CREATE INDEX IF NOT EXISTS experiment_execution_observations_idx
+  ON experiment_execution_observations (execution_id, variant_id, case_id);
+
 CREATE TABLE IF NOT EXISTS experiment_observations (
   id UUID PRIMARY KEY,
   experiment_id UUID NOT NULL REFERENCES experiments(id) ON DELETE CASCADE,
