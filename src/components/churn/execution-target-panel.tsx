@@ -40,7 +40,7 @@ const DEFAULT_ENDPOINTS: Record<Provider, string> = {
 export function ExecutionTargetPanel({
   onRegistryChange,
 }: {
-  onRegistryChange: () => void | Promise<void>;
+  onRegistryChange: () => unknown;
 }) {
   const [targets, setTargets] = useState<ExecutionTarget[]>([]);
   const [form, setForm] = useState({
