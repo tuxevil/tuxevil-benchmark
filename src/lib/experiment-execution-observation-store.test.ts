@@ -64,13 +64,13 @@ describe("execution-scoped observations", () => {
       successThreshold: 4,
     };
     const first = await executions.createExperimentExecutionRecord(experiment.id, input);
-    const second = await executions.createExperimentExecutionRecord(experiment.id, input);
-
     await observations.upsertExperimentExecutionObservations(first.id, baseline.id, [{
       caseId: "case-1",
       canonicalValue: "first answer",
       success: null,
     }]);
+    await executions.updateExperimentExecutionStatus(first.id, "COMPLETED");
+    const second = await executions.createExperimentExecutionRecord(experiment.id, input);
     await observations.upsertExperimentExecutionObservations(second.id, baseline.id, [{
       caseId: "case-1",
       canonicalValue: "second answer",
