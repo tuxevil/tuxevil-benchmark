@@ -237,10 +237,8 @@ async function resetOllamaForColdSample(targetId: string, modelName: string) {
   }
 
   const endpoint = target.endpoint.replace(/\/$/, "");
-  const headers = {
-    "content-type": "application/json",
-    ...(target.apiKey?.trim() ? { authorization: `Bearer ${target.apiKey.trim()}` } : {}),
-  };
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (target.apiKey?.trim()) headers.authorization = `Bearer ${target.apiKey.trim()}`;
   const response = await fetch(`${endpoint}/api/generate`, {
     method: "POST",
     headers,
