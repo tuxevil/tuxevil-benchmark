@@ -147,6 +147,26 @@ describe("createRunSchema", () => {
     expect(result.success).toBe(false);
   });
 
+
+  it("strips private executionTargetId from public run input", () => {
+    const parsed = createRunSchema.parse({
+      ollamaUrl: "http://localhost:11434",
+      executionTargetId: "6f6fd3a8-9b7b-4d5e-b2b3-4f3d6c1e2a1b",
+      systemPrompt: "Be concise.",
+      userMessages: ["Explain queues."],
+      models: ["llama3.2"],
+      parameters: {
+        temperature: 0.2,
+        numCtx: 8192,
+        topP: 0.9,
+        repeatPenalty: 1.1,
+        numPredict: 512,
+      },
+    });
+
+    expect("executionTargetId" in parsed).toBe(false);
+  });
+
   it("accepts a scenario id and bounds samples per model", () => {
     const parsed = createRunSchema.safeParse({
       ollamaUrl: "http://localhost:11434",
