@@ -361,8 +361,9 @@ test("Churn Lab exposes automatic Experiment Runner for a selected experiment", 
   });
 
   await page.goto("/churn");
-  await expect(page.getByRole("heading", { name: "Experiment Runner" })).toBeVisible();
-  await expect(page.getByText("Deterministic smoke case")).toBeVisible();
-  await expect(page.getByText("baseline", { exact: true })).toBeVisible();
-  await expect(page.getByText("variant", { exact: true })).toBeVisible();
+  const runner = page.locator(".churn-runner");
+  await expect(runner.getByRole("heading", { name: "Experiment Runner" })).toBeVisible();
+  await expect(runner.getByText("Deterministic smoke case")).toBeVisible();
+  await expect(runner.getByText("baseline", { exact: true })).toBeVisible();
+  await expect(runner.getByText("variant", { exact: true })).toBeVisible();
 });
