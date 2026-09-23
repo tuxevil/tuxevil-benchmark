@@ -938,6 +938,7 @@ export function ChurnLab() {
         <div className="churn-workbench-main">
           {detail && (
             <ExperimentRunnerPanel
+              key={detail.experiment.id}
               experimentId={detail.experiment.id}
               variants={detail.variants}
               onBindingsSaved={() => loadExperiment(detail.experiment.id)}
