@@ -147,7 +147,7 @@ async function executeModel(runId: string, resultId: string) {
       let partialResponse = "";
       let lastStreamUpdate = 0;
       const provider = activeRun.provider ?? "ollama";
-      const endpoint = activeRun.providerUrl || activeRun.ollamaUrl;
+      let endpoint = activeRun.providerUrl || activeRun.ollamaUrl;
       let apiKey: string | null = null;
       if (activeRun.executionTargetId) {
         const { getExecutionTargetConnection } = await import("@/lib/execution-target-store");
@@ -156,6 +156,7 @@ async function executeModel(runId: string, resultId: string) {
         if (target.provider !== provider) {
           throw new Error(`Execution target provider mismatch: expected ${provider}, got ${target.provider}.`);
         }
+        endpoint = target.endpoint;
         apiKey = target.apiKey;
       } else {
         apiKey =
