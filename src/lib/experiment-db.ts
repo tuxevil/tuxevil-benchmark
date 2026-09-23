@@ -96,6 +96,39 @@ export function ensureExperimentSqliteSchema() {
       ON experiment_variants(experiment_id)
       WHERE role = 'BASELINE';
 
+    CREATE TABLE IF NOT EXISTS experiment_executions (
+      id TEXT PRIMARY KEY,
+      experiment_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      scenario_ids TEXT NOT NULL,
+      samples_per_model INTEGER NOT NULL,
+      use_evaluator INTEGER NOT NULL,
+      success_policy TEXT NOT NULL,
+      success_threshold INTEGER NOT NULL,
+      error_message TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      finished_at TEXT,
+      FOREIGN KEY(experiment_id) REFERENCES experiments(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS experiment_executions_experiment_idx
+      ON experiment_executions(experiment_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS experiment_execution_runs (
+      id TEXT PRIMARY KEY,
+      execution_id TEXT NOT NULL,
+      variant_id TEXT NOT NULL,
+      scenario_id TEXT NOT NULL,
+      test_run_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(execution_id) REFERENCES experiment_executions(id) ON DELETE CASCADE,
+      FOREIGN KEY(variant_id) REFERENCES experiment_variants(id) ON DELETE CASCADE,
+      FOREIGN KEY(test_run_id) REFERENCES test_runs(id) ON DELETE CASCADE,
+      UNIQUE(execution_id, variant_id, scenario_id)
+    );
+    CREATE INDEX IF NOT EXISTS experiment_execution_runs_execution_idx
+      ON experiment_execution_runs(execution_id, variant_id);
+
     CREATE TABLE IF NOT EXISTS experiment_observations (
       id TEXT PRIMARY KEY,
       experiment_id TEXT NOT NULL,
