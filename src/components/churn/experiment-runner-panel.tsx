@@ -80,7 +80,7 @@ export function ExperimentRunnerPanel({
   );
   const [selectedScenarios, setSelectedScenarios] = useState<string[]>([]);
   const [samplesPerModel, setSamplesPerModel] = useState("1");
-  const [useEvaluator, setUseEvaluator] = useState(true);
+  const [useEvaluator, setUseEvaluator] = useState(false);
   const [successPolicy, setSuccessPolicy] = useState<"NONE" | "EVALUATION_THRESHOLD">("NONE");
   const [successThreshold, setSuccessThreshold] = useState("4");
   const [execution, setExecution] = useState<ExecutionView | null>(null);
@@ -127,11 +127,7 @@ export function ExperimentRunnerPanel({
 
     for (const variant of variants) {
       let binding = bindings[variant.id];
-      if (
-        variant.role === "BASELINE_REPEAT"
-        && baselineBinding
-        && (!binding?.executionTargetId || !binding?.executionModelName)
-      ) {
+      if (variant.role === "BASELINE_REPEAT" && baselineBinding) {
         binding = baselineBinding;
         setBindings((current) => ({ ...current, [variant.id]: baselineBinding }));
       }
