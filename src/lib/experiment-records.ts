@@ -40,7 +40,7 @@ export const experimentVariantInputSchema = z.object({
   modelArtifactId: z.string().uuid(),
   executionEnvironmentId: z.string().uuid(),
   executionTargetId: z.string().uuid().nullable().default(null),
-  executionModelName: nullableText(512),
+  executionModelName: nullableText(255),
   inferenceParameters: z.record(z.unknown()).default({}),
   promptVersion: nullableText(255),
   reasoningMode: nullableText(64),
@@ -49,7 +49,7 @@ export const experimentVariantInputSchema = z.object({
 
 export const experimentVariantBindingSchema = z.object({
   executionTargetId: z.string().uuid().nullable(),
-  executionModelName: z.string().trim().min(1).max(512).nullable(),
+  executionModelName: z.string().trim().min(1).max(255).nullable(),
 });
 
 export type ExperimentVariantBindingInput = z.input<typeof experimentVariantBindingSchema>;
