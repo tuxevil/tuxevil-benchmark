@@ -94,6 +94,9 @@ CREATE TABLE IF NOT EXISTS experiment_executions (
   status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
   scenario_ids JSONB NOT NULL,
   samples_per_model SMALLINT NOT NULL DEFAULT 1,
+  execution_mode VARCHAR(32) NOT NULL DEFAULT 'STANDARD',
+  warmup_samples SMALLINT NOT NULL DEFAULT 0,
+  include_cold_sample BOOLEAN NOT NULL DEFAULT FALSE,
   use_evaluator BOOLEAN NOT NULL DEFAULT TRUE,
   success_policy VARCHAR(32) NOT NULL DEFAULT 'NONE',
   success_threshold SMALLINT NOT NULL DEFAULT 4,
@@ -106,6 +109,10 @@ CREATE TABLE IF NOT EXISTS experiment_executions (
 CREATE INDEX IF NOT EXISTS experiment_executions_experiment_idx
   ON experiment_executions (experiment_id, created_at DESC);
 
+ALTER TABLE experiment_executions ADD COLUMN IF NOT EXISTS execution_mode VARCHAR(32) NOT NULL DEFAULT 'STANDARD';
+ALTER TABLE experiment_executions ADD COLUMN IF NOT EXISTS warmup_samples SMALLINT NOT NULL DEFAULT 0;
+ALTER TABLE experiment_executions ADD COLUMN IF NOT EXISTS include_cold_sample BOOLEAN NOT NULL DEFAULT FALSE;
+
 CREATE UNIQUE INDEX IF NOT EXISTS experiment_one_active_execution_idx
   ON experiment_executions (experiment_id)
   WHERE status IN ('PENDING', 'RUNNING');
@@ -116,12 +123,26 @@ CREATE TABLE IF NOT EXISTS experiment_execution_runs (
   variant_id UUID NOT NULL REFERENCES experiment_variants(id) ON DELETE CASCADE,
   scenario_id UUID NOT NULL REFERENCES scenarios(id),
   test_run_id UUID NOT NULL REFERENCES test_runs(id) ON DELETE CASCADE,
+  sequence_order INTEGER NOT NULL DEFAULT 0,
+  enqueued_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (execution_id, variant_id, scenario_id)
 );
 
 CREATE INDEX IF NOT EXISTS experiment_execution_runs_execution_idx
   ON experiment_execution_runs (execution_id, variant_id);
+
+ALTER TABLE experiment_execution_runs ADD COLUMN IF NOT EXISTS sequence_order INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE experiment_execution_runs ADD COLUMN IF NOT EXISTS enqueued_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS execution_target_leases (
+  target_id UUID PRIMARY KEY REFERENCES execution_targets(id) ON DELETE CASCADE,
+  execution_id UUID NOT NULL REFERENCES experiment_executions(id) ON DELETE CASCADE,
+  acquired_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS execution_target_leases_execution_idx
+  ON execution_target_leases (execution_id);
 
 CREATE TABLE IF NOT EXISTS experiment_execution_observations (
   id UUID PRIMARY KEY,
