@@ -1,5 +1,5 @@
 import type { BenchmarkParameters, ModelResult, TestRun } from "@/lib/contracts";
-import { reasoningEffortSchema } from "@/lib/contracts";
+import { benchmarkParametersSchema, reasoningEffortSchema } from "@/lib/contracts";
 import { benchmarkStore } from "@/lib/benchmark-store";
 import { enqueueBenchmark } from "@/lib/benchmark-queue";
 import {
@@ -147,7 +147,7 @@ function buildParameters(
 ): BenchmarkParameters {
   const raw = preflight.variant.inferenceParameters;
   const reasoning = reasoningEffortSchema.safeParse(preflight.variant.reasoningMode);
-  return {
+  return benchmarkParametersSchema.parse({
     temperature: numeric(raw.temperature) ?? defaults.temperature,
     numCtx: numeric(raw.numCtx) ?? preflight.contextSize ?? defaults.numCtx,
     topP: numeric(raw.topP) ?? defaults.topP,
@@ -155,7 +155,7 @@ function buildParameters(
     numPredict: numeric(raw.numPredict) ?? defaults.numPredict,
     seed: numeric(raw.seed) ?? defaults.seed,
     reasoningEffort: reasoning.success ? reasoning.data : (defaults.reasoningEffort ?? "off"),
-  };
+  });
 }
 
 function observationSuccess(
