@@ -82,7 +82,6 @@ export const createRunSchema = z
     provider: modelProviderSchema.default("ollama").optional(),
     providerUrl: httpUrlSchema.optional(),
     ollamaUrl: httpUrlSchema.optional(),
-    executionTargetId: z.string().uuid().nullable().optional(),
     scenarioId: z.string().uuid().nullable().optional(),
     samplesPerModel: z.number().int().min(1).max(10).default(2),
     category: testCategorySchema.default("GENERAL"),
@@ -169,7 +168,7 @@ export const settingsUpdateSchema = z.object({
 
 export type BenchmarkParameters = z.infer<typeof benchmarkParametersSchema>;
 export type EvaluatorConfig = z.infer<typeof evaluatorConfigSchema>;
-export type CreateRunInput = z.input<typeof createRunSchema>;
+export type CreateRunInput = z.input<typeof createRunSchema> & { executionTargetId?: string | null };
 export type SettingsUpdateInput = z.infer<typeof settingsUpdateSchema>;
 
 export type RunStatus = "PENDING" | "RUNNING" | "COMPLETED" | "CANCELLED" | "FAILED";
