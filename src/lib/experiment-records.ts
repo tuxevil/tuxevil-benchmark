@@ -39,6 +39,8 @@ export const experimentVariantInputSchema = z.object({
   role: experimentVariantRoleSchema,
   modelArtifactId: z.string().uuid(),
   executionEnvironmentId: z.string().uuid(),
+  executionTargetId: z.string().uuid().nullable().default(null),
+  executionModelName: nullableText(512),
   inferenceParameters: z.record(z.unknown()).default({}),
   promptVersion: nullableText(255),
   reasoningMode: nullableText(64),
