@@ -51,6 +51,12 @@ export type ExperimentExecutionView = ExperimentExecutionWithRuns & {
   comparisons: ExperimentComparison[];
 };
 
+function stableRecord(value: Record<string, unknown>) {
+  return JSON.stringify(
+    Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))),
+  );
+}
+
 function equalIfKnown(expected: unknown, observed: unknown) {
   if (expected === null || expected === undefined || observed === null || observed === undefined) return true;
   return expected === observed;
@@ -215,6 +221,23 @@ export async function startExperimentExecution(
   );
   if (!runnableVariants.some((variant) => variant.role === "VARIANT" || variant.role === "CONTROL")) {
     throw new Error("Experiment needs at least one variant or control.");
+  }
+
+  const baseline = runnableVariants.find((variant) => variant.role === "BASELINE");
+  if (!baseline) throw new Error("Experiment baseline variant was not found.");
+  for (const repeat of runnableVariants.filter((variant) => variant.role === "BASELINE_REPEAT")) {
+    const identical =
+      repeat.modelArtifactId === baseline.modelArtifactId
+      && repeat.executionEnvironmentId === baseline.executionEnvironmentId
+      && repeat.executionTargetId === baseline.executionTargetId
+      && repeat.executionModelName === baseline.executionModelName
+      && repeat.reasoningMode === baseline.reasoningMode
+      && stableRecord(repeat.inferenceParameters) === stableRecord(baseline.inferenceParameters);
+    if (!identical) {
+      throw new Error(
+        `Baseline repeat "${repeat.name}" is not identical to baseline across artifact, environment, target, model and inference parameters.`,
+      );
+    }
   }
 
   const preflights = await Promise.all(runnableVariants.map(preflightVariant));
