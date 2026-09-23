@@ -284,20 +284,41 @@ Preset experiments:
 
 ### 5. Performance Lab
 
-Add:
+The first Performance Lab implementation is available at `/performance`.
 
-- cold/warm/hot TTFT;
-- load time;
-- TPOT / ITL;
-- p50/p90/p95/p99;
-- concurrency sweeps;
-- aggregate throughput;
-- memory/VRAM;
-- optional power and joules/token;
-- eventually joules/successful-task.
+Implemented:
 
-Thermal/idle gating should prevent load from a previous run contaminating the
-next model's speed measurement.
+- `executionMode=PERFORMANCE` on Experiment Runner;
+- exclusive Execution Target leases for the lifetime of an experiment execution;
+- one-TestRun-at-a-time serial scheduling independent of global worker concurrency;
+- durable enqueue claims so polling and worker reconciliation cannot double-enqueue;
+- orphan recovery awareness so planned-but-not-yet-enqueued runs are not mistaken for stalled jobs;
+- configurable warmup samples that execute but are excluded from measured observations;
+- optional verified cold sample for Ollama targets by unloading the model and confirming removal through `/api/ps`;
+- distinct `COLD` and `WARM` observation identities;
+- p50/p90/p95 summaries for TTFT, total duration, tok/s and token counts;
+- objective success rate plus `seconds/successful-task`, output tokens/success and total tokens/success;
+- execution-scoped performance report API and UI.
+
+A performance execution leases all targets used by its variants. This prevents
+another tuxevil Benchmark experiment from using those same targets until the
+execution ends. The performance scheduler additionally runs only one TestRun at
+a time, so baseline and variants cannot compete with each other even when
+`BENCHMARK_CONCURRENCY > 1`.
+
+Verified cold lifecycle control is currently provider-specific. Ollama can be
+unloaded through its API; fixed llama.cpp servers and generic OpenAI-compatible
+targets are therefore warm-only rather than being mislabeled as cold.
+
+Still planned:
+
+- explicit hot-cache phase beyond ordinary warm samples;
+- TPOT / ITL distributions;
+- p99 and concurrency sweeps;
+- aggregate multi-request throughput;
+- memory/VRAM sampling;
+- thermal/idle gating;
+- optional power, joules/token and joules/successful-task.
 
 ### 6. Tool Calling Suite
 
