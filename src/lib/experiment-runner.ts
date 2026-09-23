@@ -342,6 +342,17 @@ export async function reconcileExperimentExecution(
     const terminal = status === "COMPLETED" || status === "FAILED" || status === "CANCELLED";
     allTerminal &&= terminal;
     if (status === "FAILED" || status === "CANCELLED" || status === "UNKNOWN") anyFailed = true;
+    if (
+      run
+      && terminal
+      && stored.execution.successPolicy === "EVALUATION_THRESHOLD"
+      && run.results.some((result) =>
+        result.evalStatus === "FAILED"
+        || result.evaluation?.scoreStars == null
+      )
+    ) {
+      anyFailed = true;
+    }
     if (run && terminal) await importRunObservations(stored.execution, mapping, run);
   }
 
@@ -380,7 +391,11 @@ export async function reconcileExperimentExecution(
             : "UNCHECKED";
 
     const status = anyFailed ? "FAILED" : "COMPLETED";
-    const errorMessage = anyFailed ? "One or more benchmark runs failed or were cancelled." : null;
+    const errorMessage = anyFailed
+      ? stored.execution.successPolicy === "EVALUATION_THRESHOLD"
+        ? "One or more benchmark runs failed, were cancelled, or lacked the required evaluator score."
+        : "One or more benchmark runs failed or were cancelled."
+      : null;
     const updated = await updateExperimentExecutionStatus(executionId, status, errorMessage);
     await updateExperimentStatus(experimentId, status, validity);
     stored.execution = updated;
