@@ -181,3 +181,35 @@ export async function updateExperimentExecutionStatus(
 
   return (await getExperimentExecution(id))!.execution;
 }
+
+
+export async function findExperimentExecutionsForTestRun(
+  testRunId: string,
+): Promise<Array<{ executionId: string; experimentId: string }>> {
+  if (!experimentUsesPostgres()) {
+    ensureExperimentSqliteSchema();
+    const rows = getSqliteDb().prepare(`
+      SELECT DISTINCT er.execution_id, e.experiment_id
+      FROM experiment_execution_runs er
+      JOIN experiment_executions e ON e.id = er.execution_id
+      WHERE er.test_run_id = ?
+    `).all(testRunId) as Array<{ execution_id: string; experiment_id: string }>;
+    return rows.map((row) => ({
+      executionId: String(row.execution_id),
+      experimentId: String(row.experiment_id),
+    }));
+  }
+
+  const sql = getExperimentPostgresClient();
+  if (!sql) return [];
+  const rows = await sql`
+    SELECT DISTINCT er.execution_id, e.experiment_id
+    FROM experiment_execution_runs er
+    JOIN experiment_executions e ON e.id = er.execution_id
+    WHERE er.test_run_id = ${testRunId}
+  `;
+  return rows.map((row) => ({
+    executionId: String(row.execution_id),
+    experimentId: String(row.experiment_id),
+  }));
+}
