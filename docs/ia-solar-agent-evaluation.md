@@ -41,7 +41,7 @@ The model identifiers above are **illustrative**, not verified served aliases. T
 Check offline tests with:
 
 ~~~bash
-python3 -m unittest scripts/test_agent_tool_smoke.py -v
+python3 -m unittest discover -s scripts -p 'test_agent_tool_smoke.py' -v
 ~~~
 
 ## Upgrade plan (not implemented in this PR)
