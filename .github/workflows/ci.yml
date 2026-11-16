@@ -41,6 +41,11 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate deterministic tool-call smoke tests
+        run: python -m unittest scripts/test_agent_tool_smoke.py -v
       - name: Apply PostgreSQL schema
         run: npm run db:migrate
         env:
