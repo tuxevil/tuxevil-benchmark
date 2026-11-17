@@ -91,11 +91,23 @@ export function ArenaLeaderboard({
 
   const getEligibilityBadge = (row: LeaderboardModelRow) => {
     if (row.rankingEligible) return null;
-    const coverage = row.securityScenarioCoverage ?? row.qualityScenarioCoverage;
-    const pct = coverage !== null ? Math.round(coverage * 100) : null;
+    const coverages = [row.securityScenarioCoverage, row.qualityScenarioCoverage].filter(
+      (coverage): coverage is number => coverage !== null,
+    );
+    const minimumCoverage = coverages.length > 0 ? Math.min(...coverages) : null;
+    const pct = minimumCoverage !== null ? Math.round(minimumCoverage * 100) : null;
+    const securityPct = row.securityScenarioCoverage !== null
+      ? `${Math.round(row.securityScenarioCoverage * 100)}%`
+      : "sin datos";
+    const qualityPct = row.qualityScenarioCoverage !== null
+      ? `${Math.round(row.qualityScenarioCoverage * 100)}%`
+      : "sin datos";
     return (
-      <span className="sec-pill red" title={`Falta evaluación de seguridad o cobertura de escenarios (${pct ?? "?"}%) para un ranking justo`}>
-        ⚠ Sin rango {pct !== null ? `(${pct}%)` : ""}
+      <span
+        className="sec-pill red"
+        title={`Se requiere al menos 80% en cada dimensión. Seguridad: ${securityPct}; calidad: ${qualityPct}.`}
+      >
+        ⚠ Sin rango {pct !== null ? `(mín. ${pct}%)` : ""}
       </span>
     );
   };
