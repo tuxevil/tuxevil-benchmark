@@ -16,6 +16,14 @@ The application is built for secure, local, and private model evaluations. It su
 
 > 🌐 **Public Leaderboard:** [https://benchmark.tuxevil.com/](https://benchmark.tuxevil.com/) — static snapshot showcase of evaluated models, security results, and public scenarios.
 
+
+## IA Solar LIVE — perfil rápido (un clic)
+
+En **Test Suites → Mode A**, elige proveedor/modelo, mantén seleccionado **Rápido IA Solar** y pulsa **Ejecutar perfil rápido IA Solar**. Encola **11 escenarios / 13 turnos**, una muestra por escenario, con parámetros breves reproducibles y seguimiento en **Monitor**. No borra ni modifica la batería histórica; puedes volver a **Completo** cuando necesites la evaluación extensa.
+
+Detalles técnicos, límites y uso por API: [docs/ia-solar-quick-profile.md](docs/ia-solar-quick-profile.md). Las pruebas de \u0060tool_calls\u0060 reales siguen separadas en [PR #24](https://github.com/tuxevil/tuxevil-benchmark/pull/24).
+
+
 ## Contents
 
 - [UX/UI Architecture & Navigation](#uxui-architecture--navigation)
