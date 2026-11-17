@@ -113,7 +113,7 @@ function ScenarioCard({ scenario }: { scenario: PublicScenarioSummary }) {
         </div>
         <div className="scenario-meta">
           <span className="judge-pill">Judge: {scenario.evaluator_model}</span>
-          <span className="eval-count-pill">{scenario.total_evaluations_run} evaluations</span>
+          <span className="eval-count-pill">{scenario.total_evaluations_run > 0 ? `${scenario.total_evaluations_run} evaluations` : "No published evaluation statistics"}</span>
         </div>
       </div>
     </article>

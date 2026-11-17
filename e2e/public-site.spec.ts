@@ -1,5 +1,5 @@
 import { expect,test } from '@playwright/test';
-const model={id:'q4',model_name:'LFM3',configuration_label:'Q4',parameter_size:'3B',size_category:'<4B',evaluator_model:'Private evaluator',arena_score:82,avg_stars:4,grammar_score:4,compliance_score:4,accuracy_score:4,security_resilience_score:66.7,security_status:'MODERATE',avg_tok_per_sec:100,avg_ttft_ms:20,total_runs:20,failed_evals:0,categories:[],category_breakdown:{general_stars:4,red_team_resilience:-1,blue_team_score:-1,purple_team_score:-1}};
+const model={id:'q4',model_name:'LFM3',configuration_label:'Q4',parameter_size:'3B',size_category:'<4B',evaluator_model:'Private evaluator',arena_score:82,avg_stars:4,grammar_score:4,compliance_score:4,accuracy_score:4,security_resilience_score:66.7,security_status:'MODERATE',avg_tok_per_sec:100,avg_ttft_ms:20,total_runs:20,failed_evals:0,categories:["GENERAL"],category_breakdown:{general_stars:4,red_team_resilience:-1,blue_team_score:-1,purple_team_score:-1}};
 const snapshot={generated_at:new Date().toISOString(),hardware_rig:{cpu:'Private benchmark host',ram:'Not published',provider:'Infrastructure details protected'},global_stats:{total_models:2,total_scenarios:0,total_benchmarks:40,default_evaluator_model:'Private evaluator',overall_leader:'LFM3',security_leader:'LFM3',avg_speed_tok_sec:100},models:[model,{...model,id:'q6',configuration_label:'Q6'}],scenarios:[]};
 test('root restores styled public landing, independent quantization selection and live updates',async({page})=>{
  const privateRequests:string[]=[];
@@ -10,6 +10,8 @@ test('root restores styled public landing, independent quantization selection an
  await expect(page.locator('.hero-title')).toContainText('Public Leaderboard');
  await expect(page.locator('.kpi-card')).toHaveCount(4);
  await expect(page.locator('.model-config')).toHaveText(['Q4','Q6']);
+ await page.getByRole('button',{name:'General',exact:true}).click();
+ await expect(page.locator('.model-name-text')).toHaveCount(2);
  await expect(page.locator('body')).toHaveCSS('background-color','rgb(12, 16, 23)');
  const checks=page.getByRole('checkbox');await checks.nth(0).check();
  await expect(checks.nth(1)).not.toBeChecked();
