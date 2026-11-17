@@ -171,16 +171,36 @@ test("supports scenario saving and adding conversation turns in test suite edito
   await expect(page.getByText("Turn 2")).toBeVisible();
 });
 
-test("launches a benchmark from the suite editor and routes to the monitor", async ({ page }) => {
+test("launches IA Solar quick profile in one click and routes to Monitor", async ({ page }) => {
+  await page.route(/\/api\/runs\/quick-profile$/, async (route) => {
+    const payload = route.request().postDataJSON();
+    expect(payload.modelName).toBe("llama3.2");
+    expect(payload.provider).toBe("ollama");
+    await route.fulfill({
+      status: 202,
+      json: {
+        version: "ia-solar-quick@1.0.0",
+        cases: 11,
+        turns: 13,
+        queuedRunIds: Array.from({ length: 11 }, (_, i) => "run-" + (i + 1)),
+      },
+    });
+  });
   await page.goto("/suites");
-  await expect(page.locator(".onboarding-mode-box select")).toHaveValue("llama3.2");
-
-  // Launch Mode A: run all scenarios against the onboarded model
-  await page.getByRole("button", { name: /Run ALL Tests on this Model/ }).click();
-
-  // Should redirect to the monitor page
+  await expect(page.locator("#ia-solar-profile")).toHaveValue("quick");
+  await expect(page.locator("#ia-solar-model")).toHaveValue("llama3.2");
+  await expect(page.getByText(/11 casos · 13 turnos/)).toBeVisible();
+  await page.getByRole("button", { name: /Ejecutar perfil rápido IA Solar/ }).click();
   await expect(page).toHaveURL(/\/monitor/);
   await expect(page.getByText("Queue History & Executed Runs")).toBeVisible();
+});
+
+test("preserves historic full-suite onboarding mode", async ({ page }) => {
+  await page.goto("/suites");
+  await page.locator("#ia-solar-profile").selectOption("full");
+  await expect(page.locator("#ia-solar-model")).toHaveValue("llama3.2");
+  await page.getByRole("button", { name: /Ejecutar batería completa/ }).click();
+  await expect(page).toHaveURL(/\/monitor/);
   await expect(page.getByText("#run-1", { exact: false })).toBeVisible();
 });
 
