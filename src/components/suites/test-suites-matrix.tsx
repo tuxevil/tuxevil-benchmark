@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Scenario, TestCategory, SecurityAttackType, BenchmarkParameters, ModelProvider } from "@/lib/contracts";
+import { quickProfileSummary } from "@/lib/ia-solar-quick-profile";
 
 interface TestSuitesMatrixProps {
   ollamaUrl?: string;
@@ -49,6 +50,8 @@ export function TestSuitesMatrix({
 
   // Modo A: Onboarding
   const [onboardingModel, setOnboardingModel] = useState<string>("");
+  const [onboardingProfile, setOnboardingProfile] = useState<"quick" | "full">("quick");
+  const quickSummary = quickProfileSummary();
 
   // Modo B: Update Suite
   const [updateScenarioId, setUpdateScenarioId] = useState<string>("");
@@ -253,27 +256,50 @@ export function TestSuitesMatrix({
     setUserMessages(sc.userMessages);
   };
 
-  // Modo A: Run ALL scenarios on 1 newly downloaded model
+  // Mode A: one-click quick profile, or historic full scenario library.
   const handleRunModoA = async () => {
     if (!onboardingModel) {
-      alert("Please select a model.");
+      alert("Selecciona un modelo antes de iniciar las pruebas.");
       return;
     }
-    const targetScenarios =
-      scenarios.length > 0
-        ? scenarios
-        : [
-            {
-              id: selectedScenarioId || null,
-              category,
-              attackType,
-              systemPrompt,
-              userMessages,
-            },
-          ];
 
     setIsLaunching(true);
     try {
+      if (onboardingProfile === "quick") {
+        const res = await fetch("/api/runs/quick-profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            modelName: onboardingModel,
+            provider: activeProvider,
+            providerUrl: ollamaUrl,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          const alreadyQueued = Array.isArray(data.queuedRunIds) ? data.queuedRunIds.length : 0;
+          alert(`${data.error ?? "No se pudo iniciar el perfil rápido."}${alreadyQueued ? ` Ya se encolaron ${alreadyQueued} casos; revísalos en Monitor.` : ""}`);
+          return;
+        }
+        // All cases have been queued durably, not completed. Monitor shows
+        // their independent run states and lets the user pause/cancel runs.
+        window.location.assign("/monitor");
+        return;
+      }
+
+      const targetScenarios =
+        scenarios.length > 0
+          ? scenarios
+          : [
+              {
+                id: selectedScenarioId || null,
+                category,
+                attackType,
+                systemPrompt,
+                userMessages,
+              },
+            ];
+
       for (const sc of targetScenarios) {
         await onLaunchRun({
           category: sc.category,
@@ -287,6 +313,9 @@ export function TestSuitesMatrix({
           provider: activeProvider,
         });
       }
+    } catch (error) {
+      console.error("Failed to launch benchmark:", error);
+      alert("No se pudo enviar toda la batería. Revisa Monitor antes de reintentar.");
     } finally {
       setIsLaunching(false);
     }
@@ -565,17 +594,34 @@ export function TestSuitesMatrix({
         <div className="matrix-mode-body">
           {mode === "onboarding" && (
             <div className="onboarding-mode-box">
-              <h4>Mode A: Recent Model Onboarding</h4>
+              <h4>☀️ IA Solar · Pruebas por modelo</h4>
               <p className="mode-desc">
-                Select 1 model in your local Ollama to run <strong>ALL</strong> library test scenarios against it.
+                Selecciona un modelo y ejecuta todos los casos del perfil elegido.
+                El perfil rápido no modifica tu biblioteca ni los resultados históricos.
               </p>
 
               <div className="form-group">
-                <label>Select Model:</label>
+                <label htmlFor="ia-solar-profile">Perfil de evaluación:</label>
                 <select
+                  id="ia-solar-profile"
+                  value={onboardingProfile}
+                  onChange={(e) => setOnboardingProfile(e.target.value as "quick" | "full")}
+                  disabled={isLaunching}
+                >
+                  <option value="quick">⚡ Rápido IA Solar (recomendado)</option>
+                  <option value="full">🧪 Completo (biblioteca histórica)</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="ia-solar-model">Modelo:</label>
+                <select
+                  id="ia-solar-model"
                   value={onboardingModel}
                   onChange={(e) => setOnboardingModel(e.target.value)}
+                  disabled={isLaunching || availableModels.length === 0}
                 >
+                  {availableModels.length === 0 && <option value="">No hay modelos detectados: pulsa Refresh</option>}
                   {availableModels.map((m) => (
                     <option key={m.name} value={m.name}>
                       {m.name} ({m.size})
@@ -584,20 +630,41 @@ export function TestSuitesMatrix({
                 </select>
               </div>
 
+              {onboardingProfile === "quick" ? (
+                <p className="mode-desc" role="status">
+                  <strong>{quickSummary.cases} casos · {quickSummary.turns} turnos · 1 muestra</strong>.
+                  Parámetros fijos: temperatura 0, contexto 8192, máximo 512 tokens
+                  y razonamiento desactivado. Se encolan todos los casos en un clic
+                  y puedes ver su progreso en Monitor. El juez LLM se usa solo si
+                  está configurado. Las pruebas de <code>tool_calls</code> reales
+                  se realizan aparte; este perfil mide texto y seguridad conversacional.
+                </p>
+              ) : (
+                <p className="mode-desc">
+                  Ejecuta {scenarios.length || 1} escenarios de la biblioteca con
+                  los parámetros personalizables de abajo. Puede tardar bastante
+                  más y la puntuación no es comparable directamente al perfil rápido.
+                </p>
+              )}
+
               <div className="launch-action-card">
                 <button
                   type="button"
                   className="btn-launch-primary"
                   onClick={handleRunModoA}
-                  disabled={isLaunching}
+                  disabled={isLaunching || !onboardingModel}
                 >
-                  {isLaunching ? "Launching Benchmarks..." : "▶ Run ALL Tests on this Model"}
+                  {isLaunching
+                    ? "Encolando pruebas..."
+                    : onboardingProfile === "quick"
+                      ? "▶ Ejecutar perfil rápido IA Solar"
+                      : "▶ Ejecutar batería completa"}
                 </button>
               </div>
             </div>
           )}
 
-          {mode === "update" && (
+                    {mode === "update" && (
             <div className="update-mode-box">
               <h4>Mode B: Test Suite Update</h4>
               <p className="mode-desc">
@@ -685,7 +752,8 @@ export function TestSuitesMatrix({
             </div>
           )}
 
-          {/* PARAMETERS CONTROL EXPANDABLE */}
+          {/* The quick profile uses fixed, reproducible parameters. */}
+          {!(mode === "onboarding" && onboardingProfile === "quick") && (
           <div className="parameters-card">
             <h5>⚙ Inference Configuration</h5>
             <div className="params-grid">
@@ -772,6 +840,7 @@ export function TestSuitesMatrix({
               </p>
             )}
           </div>
+          )}
         </div>
       </div>
     </div>
