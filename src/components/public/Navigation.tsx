@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { PROJECT_BRAND } from "@/lib/brand";
 
 const TABS = [
   { href: "/", label: "📊 Leaderboard" },
@@ -24,6 +25,7 @@ export function Navigation() {
           {tab.label}
         </Link>
       ))}
+      <a href={PROJECT_BRAND.repositoryUrl} className="nav-tab" target="_blank" rel="noopener noreferrer">GitHub Repo ↗</a>
       <a href="/admin" className="nav-tab" style={{marginLeft:"auto"}}>Admin ↗</a>
     </nav>
   );
