@@ -6,6 +6,7 @@ import {
   IA_SOLAR_QUICK_REQUEST_SCHEMA,
   IA_SOLAR_QUICK_SAMPLES,
   quickProfileSummary,
+  quickProfileCaseName,
 } from "@/lib/ia-solar-quick-profile";
 
 describe("IA Solar quick profile", () => {
@@ -50,6 +51,12 @@ describe("IA Solar quick profile", () => {
     expect(IA_SOLAR_QUICK_REQUEST_SCHEMA.safeParse({ ...valid, provider: "unknown" }).success).toBe(false);
     expect(IA_SOLAR_QUICK_REQUEST_SCHEMA.safeParse({ ...valid, models: ["other"] }).success).toBe(false);
     expect(IA_SOLAR_QUICK_REQUEST_SCHEMA.safeParse({ ...valid, providerUrl: "not-a-url" }).success).toBe(false);
+  });
+
+  it("recognizes quick runs in Monitor without changing persisted run schema", () => {
+    const candidate = IA_SOLAR_QUICK_CASES[0];
+    expect(quickProfileCaseName(candidate)).toBe(candidate.name);
+    expect(quickProfileCaseName({ systemPrompt: "otro", userMessages: ["texto"] })).toBe(null);
   });
 
   it("uses bounded default work for the live broadcast", () => {
