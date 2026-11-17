@@ -1045,7 +1045,12 @@ export function sqliteLoadState(targetRunId?: string) {
     });
   }
 
-  const manifests = new Map((getSqliteDb().prepare("SELECT model_result_id,json_extract(payload_json,'$.manifest') AS manifest FROM result_resource_measurements WHERE json_extract(payload_json,'$.manifest') IS NOT NULL").all() as {model_result_id:string;manifest:string}[]).map(row => [row.model_result_id, JSON.parse(row.manifest)]));
+  const manifestRows = db.prepare("SELECT model_result_id,json_extract(payload_json,'$.manifest') AS manifest FROM result_resource_measurements WHERE json_extract(payload_json,'$.manifest') IS NOT NULL").all() as {model_result_id:string;manifest:string}[];
+  const diagnosticTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='result_diagnostic_events'").get();
+  const diagnosticManifestRows = diagnosticTableExists
+    ? db.prepare("SELECT model_result_id,json_extract(payload_json,'$.manifest') AS manifest FROM result_diagnostic_events WHERE event='metadata_captured' AND json_extract(payload_json,'$.manifest') IS NOT NULL ORDER BY occurred_at,id").all() as {model_result_id:string;manifest:string}[]
+    : [];
+  const manifests = new Map([...diagnosticManifestRows, ...manifestRows].map(row => [row.model_result_id, JSON.parse(row.manifest)]));
   const resultsByRun = new Map<string, ModelResult[]>();
   for (const row of resultRows) {
     const rowId = String(row.id);

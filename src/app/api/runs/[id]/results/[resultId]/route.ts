@@ -1,6 +1,9 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { benchmarkStore } from "@/lib/benchmark-store";
+import { loadResultResourceMeasurement } from "@/lib/resource-measurement-store";
+import { loadResultDiagnosticEvents } from "@/lib/result-diagnostic-store";
+import { resourceSummary } from "@/lib/resource-telemetry";
 
 async function handleGET(request: Request, { params }: { params: Promise<{ id: string; resultId: string }> }) {
   await benchmarkStore.hydrate();
@@ -12,8 +15,19 @@ async function handleGET(request: Request, { params }: { params: Promise<{ id: s
   if (!result) return NextResponse.json({ error: "Result not found." }, { status: 404 });
 
   const includeHistory = new URL(request.url).searchParams.get("includeHistory") === "true";
+  const includeDiagnostics = new URL(request.url).searchParams.get("includeDiagnostics") === "true";
   const evaluationHistory = includeHistory ? await benchmarkStore.getEvaluationHistory(resultId) : undefined;
-  return NextResponse.json({ runId: run.id, result, evaluationHistory });
+  const diagnostics = includeDiagnostics ? await Promise.all([
+    loadResultDiagnosticEvents(resultId),
+    loadResultResourceMeasurement(resultId),
+  ]).then(([events, measurement]) => {
+    const eventManifest = [...events].reverse().find((event) => event.event === "metadata_captured")?.payload.manifest;
+    return {
+    events,
+    manifest: measurement?.manifest ?? result.manifest ?? eventManifest ?? null,
+    measurement: measurement ? resourceSummary(measurement) : null,
+  }}) : undefined;
+  return NextResponse.json({ runId: run.id, result, evaluationHistory, diagnostics });
 }
 
 async function handleDELETE(_request: Request, { params }: { params: Promise<{ id: string; resultId: string }> }) {

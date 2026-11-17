@@ -3,6 +3,8 @@ import { recordInferenceAttempt, type InferenceAttempt } from "@/lib/inference-a
 import { captureRunManifest } from "@/lib/capture-run-manifest";
 import { startResourceMeasurement } from "@/lib/resource-telemetry";
 import { saveResourceMeasurement } from "@/lib/resource-measurement-store";
+import { appendResultDiagnosticEvent, type DiagnosticSeverity, type DiagnosticStage } from "@/lib/result-diagnostic-store";
+import { sanitizeDiagnosticText } from "@/lib/diagnostic-safety";
 import { evaluateModelResponse, resolveEvaluationMode } from "@/lib/frontier-evaluator";
 import { benchmarkStore } from "@/lib/benchmark-store";
 import { streamOllamaChat } from "@/lib/ollama-client";
@@ -18,9 +20,31 @@ const pendingJobs: QueueJob[] = [];
 let activeJobs = 0;
 let redisQueue: BullQueue<{ runId: string }> | null = null;
 
+async function recordRunDiagnostic(
+  runId: string,
+  event: string,
+  payload: Record<string, unknown> = {},
+  severity: DiagnosticSeverity = "info",
+) {
+  const run = benchmarkStore.getStoredRun(runId);
+  if (!run) return;
+  const results = await Promise.allSettled(run.results.map((result) => appendResultDiagnosticEvent({
+    resultId: result.id,
+    stage: "run",
+    event,
+    severity,
+    payload: { runId, model: result.modelName, ...payload },
+  })));
+  if (results.some((result) => result.status === "rejected")) {
+    console.warn("[tuxevil-benchmark] Could not persist one or more run diagnostic events", { runId, event });
+  }
+}
+
 export async function enqueueBenchmark(runId: string) {
+  await recordRunDiagnostic(runId, "queue_enqueue_requested", { queue: process.env.REDIS_URL ? "redis" : "in_memory" });
   if (process.env.REDIS_URL) {
     if (!process.env.DATABASE_URL) {
+      await recordRunDiagnostic(runId, "queue_enqueue_failed", { reason: "Redis requiere persistencia en base de datos." }, "error");
       throw new Error("REDIS_URL requires DATABASE_URL so workers can recover run state.");
     }
     const { Queue } = await import("bullmq");
@@ -28,17 +52,28 @@ export async function enqueueBenchmark(runId: string) {
       redisQueue = new Queue(LEGACY_QUEUE_NAME, { connection: redisConnection() });
       redisQueue.on("error", (error) => console.error("[tuxevil-benchmark] benchmark queue error", error));
     }
-    await redisQueue.add("benchmark", { runId }, {
-      attempts: 3,
-      backoff: { type: "exponential", delay: 1_000 },
-      jobId: `benchmark-${runId}`,
-      removeOnComplete: { age: 86_400 },
-      removeOnFail: { age: 604_800 },
-    });
+    try {
+      await redisQueue.add("benchmark", { runId }, {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 1_000 },
+        jobId: `benchmark-${runId}`,
+        removeOnComplete: { age: 86_400 },
+        removeOnFail: { age: 604_800 },
+      });
+      await recordRunDiagnostic(runId, "queue_enqueued", { queue: "redis", jobId: `benchmark-${runId}` });
+    } catch (error) {
+      await recordRunDiagnostic(runId, "queue_enqueue_failed", {
+        queue: "redis",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+        errorMessage: error instanceof Error ? sanitizeDiagnosticText(error.message) : "No se pudo agregar el trabajo a la cola.",
+      }, "error");
+      throw error;
+    }
     return;
   }
 
   pendingJobs.push({ runId, execute: () => executeBenchmark(runId) });
+  await recordRunDiagnostic(runId, "queue_enqueued", { queue: "in_memory", pendingJobs: pendingJobs.length });
   drainQueue();
 }
 
@@ -50,8 +85,16 @@ async function drainQueue() {
     activeJobs += 1;
     void job.execute()
       .catch((error) => {
-        if (error instanceof ResourceBusyError) { setTimeout(() => { pendingJobs.push(job); void drainQueue(); },1000); return; }
+        if (error instanceof ResourceBusyError) {
+          void recordRunDiagnostic(job.runId, "queue_resource_busy_retry", { delayMs: 1000 }, "warning");
+          setTimeout(() => { pendingJobs.push(job); void drainQueue(); },1000);
+          return;
+        }
         const message = error instanceof Error ? error.message : "Benchmark worker failed.";
+        void recordRunDiagnostic(job.runId, "queue_worker_failed", {
+          errorType: error instanceof Error ? error.name : "UnknownError",
+          errorMessage: sanitizeDiagnosticText(message),
+        }, "error");
         const run = benchmarkStore.getStoredRun(job.runId);
         if (run && !["COMPLETED", "FAILED", "CANCELLED"].includes(run.status)) {
           benchmarkStore.updateRun(job.runId, {
@@ -76,9 +119,14 @@ async function executeBenchmarkAdmitted(runId: string) {
     await benchmarkStore.refreshRun(runId);
     run = benchmarkStore.getStoredRun(runId);
   }
-  if (!run || ["CANCELLED", "COMPLETED", "FAILED"].includes(run.status)) return;
+  if (!run) return;
+  if (["CANCELLED", "COMPLETED", "FAILED"].includes(run.status)) {
+    await recordRunDiagnostic(runId, "worker_skipped_terminal_run", { status: run.status }, "warning");
+    return;
+  }
 
   benchmarkStore.updateRun(runId, { status: "RUNNING", startedAt: new Date().toISOString() });
+  await recordRunDiagnostic(runId, "worker_started", { modelResults: run.results.length });
 
   let modelConcurrency = Math.max(1, Number(process.env.BENCHMARK_MODEL_CONCURRENCY ?? 1));
   try {
@@ -97,8 +145,15 @@ async function executeBenchmarkAdmitted(runId: string) {
   await benchmarkStore.flush(runId);
   await benchmarkStore.refreshRun(runId);
   const finishedRun = benchmarkStore.getStoredRun(runId);
-  if (!finishedRun || finishedRun.status === "CANCELLED") return;
-  if (!(await waitUntilRunnable(runId))) return;
+  if (!finishedRun) return;
+  if (finishedRun.status === "CANCELLED") {
+    await recordRunDiagnostic(runId, "worker_cancelled", { modelResults: finishedRun.results.length }, "warning");
+    return;
+  }
+  if (!(await waitUntilRunnable(runId))) {
+    await recordRunDiagnostic(runId, "worker_paused", { modelResults: finishedRun.results.length }, "warning");
+    return;
+  }
 
   const hasFailures = finishedRun.results.some((result) => result.status === "FAILED");
   benchmarkStore.updateRun(runId, {
@@ -106,6 +161,11 @@ async function executeBenchmarkAdmitted(runId: string) {
     finishedAt: new Date().toISOString(),
   });
   await benchmarkStore.flush(runId);
+  await recordRunDiagnostic(runId, "worker_finished", {
+    status: hasFailures ? "FAILED" : "COMPLETED",
+    modelResults: finishedRun.results.length,
+    failedResults: finishedRun.results.filter((result) => result.status === "FAILED").length,
+  }, hasFailures ? "warning" : "info");
 
   try {
     const { reconcileExperimentExecutionsForTestRun } = await import("@/lib/experiment-runner");
@@ -123,6 +183,30 @@ async function executeModel(runId: string, resultId: string) {
   if (!run) return;
   const result = run.results.find((item) => item.id === resultId);
   if (!result) return;
+  const executionId = crypto.randomUUID();
+  const executionStartedAt = Date.now();
+  const recordDiagnostic = async (
+    stage: DiagnosticStage,
+    event: string,
+    payload: Record<string, unknown> = {},
+    severity: DiagnosticSeverity = "info",
+  ) => {
+    try {
+      await appendResultDiagnosticEvent({
+        resultId,
+        stage,
+        event,
+        severity,
+        payload: { executionId, ...payload },
+      });
+    } catch (error) {
+      console.warn("[tuxevil-benchmark] Could not persist a diagnostic event", {
+        resultId,
+        event,
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+    }
+  };
 
   benchmarkStore.updateResult(runId, resultId, {
     status: "INFERRING",
@@ -137,6 +221,14 @@ async function executeModel(runId: string, resultId: string) {
     totalDurationMs: null,
     errorMessage: null,
   });
+  await recordDiagnostic("result", "execution_started", {
+    runId,
+    model: result.modelName,
+    provider: run.provider ?? "ollama",
+    parameters: run.parameters,
+    evaluatorModel: run.evaluatorModel ?? null,
+    applicationCommit: process.env.NEXT_PUBLIC_COMMIT_SHA ?? null,
+  });
 
   const attempts: InferenceAttempt[] = [];
   let capturedManifest: import("./run-identity").RunManifest | undefined;
@@ -144,7 +236,29 @@ async function executeModel(runId: string, resultId: string) {
   async function finishResources() {
     if (!stopResources) return;
     const stop = stopResources; stopResources = undefined;
-    try { await saveResourceMeasurement(resultId, { ...await stop(), attempts, inferenceDurationMs: attempts.reduce((sum,a)=>sum+a.durationMs,0), manifest: capturedManifest }); } catch (error) { console.warn("Resource telemetry unavailable", error); }
+    try {
+      const measurement = await stop();
+      await saveResourceMeasurement(resultId, { ...measurement, attempts, inferenceDurationMs: attempts.reduce((sum,a)=>sum+a.durationMs,0), manifest: capturedManifest });
+      await recordDiagnostic("resources", "measurement_completed", {
+        durationMs: measurement.durationMs,
+        samples: measurement.samples,
+        errors: measurement.errors,
+        ramPeakBytes: measurement.ramPeakBytes,
+        vramPeakBytes: measurement.vramPeakBytes,
+        wattsMean: measurement.wattsMean,
+        wattsPeak: measurement.wattsPeak,
+        gpuTemperaturePeakC: measurement.gpuTemperaturePeakC,
+        thermalThrottlingDetected: measurement.thermalThrottlingDetected,
+        powerCoveragePct: measurement.powerCoveragePct,
+        unavailableReason: measurement.unavailableReason,
+      });
+    } catch (error) {
+      await recordDiagnostic("resources", "measurement_persist_failed", {
+        errorType: error instanceof Error ? error.name : "UnknownError",
+        errorMessage: error instanceof Error ? sanitizeDiagnosticText(error.message) : "No se pudo guardar la telemetría.",
+      }, "warning");
+      console.warn("Resource telemetry unavailable", error instanceof Error ? error.name : "UnknownError");
+    }
   }
 
   const turnTelemetry = [] as Array<{
@@ -196,11 +310,23 @@ async function executeModel(runId: string, resultId: string) {
       if (!stopResources) {
         capturedManifest = await captureRunManifest(activeRun, result, endpoint, apiKey);
         benchmarkStore.updateResult(runId, resultId, { manifest: capturedManifest });
+        await recordDiagnostic(
+          "provider",
+          "metadata_captured",
+          {
+            manifest: capturedManifest,
+            parameters: activeRun.parameters,
+            verification: capturedManifest.verification,
+          },
+          capturedManifest.diagnostics?.probe.status === "failed" ? "warning" : "info",
+        );
         stopResources = await startResourceMeasurement(endpoint);
+        await recordDiagnostic("resources", "measurement_started", { model: result.modelName });
       }
       const response = await retryTransient(
-        () => recordInferenceAttempt(attempts, () =>
-          provider === "ollama"
+        () => recordInferenceAttempt(
+          attempts,
+          () => provider === "ollama"
             ? streamOllamaChat({
                 endpoint,
                 model: result.modelName,
@@ -234,9 +360,41 @@ async function executeModel(runId: string, resultId: string) {
                     benchmarkStore.updateStreamingResponse(runId, resultId, partialResponse);
                   }
                 },
-              }), () => { partialResponse = ""; benchmarkStore.updateStreamingResponse(runId, resultId, ""); }),
+              }),
+          async () => {
+            partialResponse = "";
+            benchmarkStore.updateStreamingResponse(runId, resultId, "");
+            await recordDiagnostic("inference", "attempt_started", { turn: index + 1, attempt: attempts.length + 1 });
+          },
+          async (attempt, error) => recordDiagnostic(
+            "inference",
+            attempt.status === "COMPLETED" ? "attempt_completed" : "attempt_failed",
+            {
+              turn: index + 1,
+              attempt: attempts.length,
+              startedAt: attempt.startedAt,
+              durationMs: attempt.durationMs,
+              status: attempt.status,
+              errorType: attempt.errorType,
+              errorMessage: error instanceof Error ? sanitizeDiagnosticText(error.message) : null,
+              inputTokens: attempt.inputTokens,
+              outputTokens: attempt.outputTokens,
+            },
+            attempt.status === "FAILED" ? "warning" : "info",
+          ),
+        ),
         activeRun.cancelController.signal,
       );
+
+      await recordDiagnostic("inference", "turn_completed", {
+        turn: index + 1,
+        ttftMs: response.ttftMs,
+        durationMs: response.totalDurationMs,
+        inputTokens: response.inputTokens,
+        outputTokens: response.outputTokens,
+        finishReason: response.finishReason,
+        truncated: response.truncated,
+      });
 
       turnTelemetry.push({
         ttftMs: response.ttftMs,
@@ -321,32 +479,64 @@ async function executeModel(runId: string, resultId: string) {
     benchmarkStore.updateResult(runId, resultId, { status: "EVALUATING", evalStatus: latestRun.evaluator ? "RUNNING" : "SKIPPED" });
 
     if (latestRun.evaluator) {
+      const evaluationStarted = performance.now();
+      let evaluationAttempt = 0;
+      await recordDiagnostic("evaluation", "started", { model: latestRun.evaluator.model });
       try {
         const current = benchmarkStore.getStoredRun(runId);
         const currentResult = current?.results.find((item) => item.id === resultId);
         const evaluation = await retryTransient(
-          () => evaluateModelResponse({
-            config: latestRun.evaluator!,
-            systemPrompt: latestRun.systemPrompt,
-            userMessages: latestRun.userMessages,
-            transcript: currentResult?.turns.flatMap((t) => [
-              { role: "user" as const, content: t.userMessage },
-              { role: "assistant" as const, content: t.responseText },
-            ]),
-            thinkingText: currentResult?.turns.map((t) => t.thinking).filter(Boolean).join("\n\n"),
-            responseText: currentResult?.responseText ?? "",
-            modelName: result.modelName,
-            signal: latestRun.cancelController.signal,
-            mode: resolveEvaluationMode(latestRun.category, latestRun.attackType),
-          }),
+          async () => {
+            const attempt = ++evaluationAttempt;
+            const attemptStarted = performance.now();
+            await recordDiagnostic("evaluation", "attempt_started", { attempt, model: latestRun.evaluator!.model });
+            try {
+              const value = await evaluateModelResponse({
+                config: latestRun.evaluator!,
+                systemPrompt: latestRun.systemPrompt,
+                userMessages: latestRun.userMessages,
+                transcript: currentResult?.turns.flatMap((t) => [
+                  { role: "user" as const, content: t.userMessage },
+                  { role: "assistant" as const, content: t.responseText },
+                ]),
+                thinkingText: currentResult?.turns.map((t) => t.thinking).filter(Boolean).join("\n\n"),
+                responseText: currentResult?.responseText ?? "",
+                modelName: result.modelName,
+                signal: latestRun.cancelController.signal,
+                mode: resolveEvaluationMode(latestRun.category, latestRun.attackType),
+              });
+              await recordDiagnostic("evaluation", "attempt_completed", { attempt, durationMs: performance.now() - attemptStarted });
+              return value;
+            } catch (error) {
+              await recordDiagnostic("evaluation", "attempt_failed", {
+                attempt,
+                durationMs: performance.now() - attemptStarted,
+                errorType: error instanceof Error ? error.name : "UnknownError",
+                errorMessage: error instanceof Error ? sanitizeDiagnosticText(error.message) : "Error desconocido del evaluador.",
+              }, "warning");
+              throw error;
+            }
+          },
           latestRun.cancelController.signal,
           3,
           isTransient,
         );
         benchmarkStore.setEvaluation(runId, resultId, evaluation);
         benchmarkStore.updateResult(runId, resultId, { evalStatus: "COMPLETED", status: "COMPLETED", errorMessage: null });
+        await recordDiagnostic("evaluation", "completed", {
+          durationMs: performance.now() - evaluationStarted,
+          scoreStars: evaluation.scoreStars,
+          securityScore: evaluation.securityScore,
+          injectionSuccessful: evaluation.injectionSuccessful,
+          systemLeakageDetected: evaluation.systemLeakageDetected,
+        });
       } catch (error) {
         if (latestRun.cancelController.signal.aborted) return;
+        await recordDiagnostic("evaluation", "failed", {
+          durationMs: performance.now() - evaluationStarted,
+          errorType: error instanceof Error ? error.name : "UnknownError",
+          errorMessage: error instanceof Error ? sanitizeDiagnosticText(error.message) : "No se pudo completar la evaluación.",
+        }, "error");
     console.error("[tuxevil-benchmark] [Evaluation Failed]", {
           runId,
           resultId,
@@ -361,13 +551,20 @@ async function executeModel(runId: string, resultId: string) {
       }
     } else {
       benchmarkStore.updateResult(runId, resultId, { status: "COMPLETED", evalStatus: "SKIPPED" });
+      await recordDiagnostic("evaluation", "skipped", { reason: "No había evaluador configurado para esta prueba." }, "warning");
     }
   } catch (error) {
     const currentRun = benchmarkStore.getStoredRun(runId) ?? run;
     if (currentRun.cancelController.signal.aborted || currentRun.status === "CANCELLED") {
       benchmarkStore.updateResult(runId, resultId, { status: "CANCELLED" });
+      await recordDiagnostic("result", "execution_cancelled", { attempts: attempts.length }, "warning");
       return;
     }
+
+    await recordDiagnostic("inference", "failed", {
+      errorType: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: error instanceof Error ? sanitizeDiagnosticText(error.message) : "Error de inferencia desconocido.",
+    }, "error");
 
     console.error("[tuxevil-benchmark] [Inference Failed]", {
       runId,
@@ -383,6 +580,21 @@ async function executeModel(runId: string, resultId: string) {
   } finally {
     if (attempts.length) benchmarkStore.updateResult(runId, resultId, { totalDurationMs: roundedAttemptDurationMs(attempts) });
     await finishResources();
+    const finalRun = benchmarkStore.getStoredRun(runId);
+    const finalResult = finalRun?.results.find((item) => item.id === resultId);
+    await recordDiagnostic(
+      "result",
+      "execution_finished",
+      {
+        status: finalResult?.status ?? "UNKNOWN",
+        evaluationStatus: finalResult?.evalStatus ?? "UNKNOWN",
+        attempts: attempts.length,
+        inferenceDurationMs: roundedAttemptDurationMs(attempts),
+        elapsedMs: Date.now() - executionStartedAt,
+        errorMessage: finalResult?.errorMessage ? sanitizeDiagnosticText(finalResult.errorMessage) : null,
+      },
+      finalResult?.status === "FAILED" || finalResult?.evalStatus === "FAILED" ? "error" : "info",
+    );
   }
 }
 
