@@ -156,3 +156,14 @@ export function quickProfileSummary() {
     toolCallsTested: false,
   };
 }
+
+/** Display quick-suite case names in the normal monitor without DB migrations. */
+export function quickProfileCaseName(run: Pick<Scenario, "systemPrompt" | "userMessages">): string | null {
+  const found = IA_SOLAR_QUICK_CASES.find(
+    (item) =>
+      item.systemPrompt === run.systemPrompt &&
+      item.userMessages.length === run.userMessages.length &&
+      item.userMessages.every((message, index) => message === run.userMessages[index]),
+  );
+  return found?.name ?? null;
+}
