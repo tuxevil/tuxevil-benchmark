@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { TestRun, ModelResult } from "@/lib/contracts";
+import { quickProfileCaseName } from "@/lib/ia-solar-quick-profile";
 import { TestInspectorDrawer } from "@/components/inspector/test-inspector-drawer";
 
 interface LiveMonitorPanelProps {
@@ -355,6 +356,9 @@ export function LiveMonitorPanel({ ollamaUrl }: LiveMonitorPanelProps) {
                     <tr key={r.id}>
                       <td className="id-cell">
                         <strong>#{r.id.slice(0, 8)}</strong>
+                        {quickProfileCaseName(r) && (
+                          <span className="date-sub">{quickProfileCaseName(r)}</span>
+                        )}
                         <span className="date-sub">{new Date(r.createdAt).toLocaleString()}</span>
                       </td>
                       <td>
