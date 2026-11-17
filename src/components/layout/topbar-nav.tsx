@@ -45,7 +45,7 @@ export function TopbarNav({
   return (
     <header className="topbar-nav">
       <div className="topbar-left">
-        <Link href="/" className="brand-link" onClick={() => handleNav("analytics")}>
+        <Link href="/admin" className="brand-link" onClick={() => handleNav("analytics")}>
           <div className="brand-mark">{PROJECT_BRAND.mark}</div>
           <div className="brand-title-group">
             <span className="brand-title">{PROJECT_BRAND.displayName}</span>
@@ -55,9 +55,9 @@ export function TopbarNav({
       </div>
 
       <nav className="topbar-menu">
-        <Link href="/backups" className={`topbar-item ${activeTab === "backups" ? "active" : ""}`}><span className="nav-icon">▣</span><span className="nav-label">Respaldos</span></Link>
+        <Link href="/admin/backups" className={`topbar-item ${activeTab === "backups" ? "active" : ""}`}><span className="nav-icon">▣</span><span className="nav-label">Respaldos</span></Link>
         <Link
-          href="/"
+          href="/admin"
           className={`topbar-item ${isAnalyticsActive ? "active" : ""}`}
           onClick={() => handleNav("analytics")}
         >
@@ -66,7 +66,7 @@ export function TopbarNav({
         </Link>
 
         <Link
-          href="/suites"
+          href="/admin/suites"
           className={`topbar-item ${isSuitesActive ? "active" : ""}`}
           onClick={() => handleNav("suites")}
         >
@@ -75,7 +75,7 @@ export function TopbarNav({
         </Link>
 
         <Link
-          href="/churn"
+          href="/admin/churn"
           className={`topbar-item ${isChurnActive ? "active" : ""}`}
           onClick={() => handleNav("churn")}
         >
@@ -84,7 +84,7 @@ export function TopbarNav({
         </Link>
 
         <Link
-          href="/performance"
+          href="/admin/performance"
           className={`topbar-item ${isPerformanceActive ? "active" : ""}`}
           onClick={() => handleNav("performance")}
         >
@@ -93,7 +93,7 @@ export function TopbarNav({
         </Link>
 
         <Link
-          href="/monitor"
+          href="/admin/monitor"
           className={`topbar-item ${isMonitorActive ? "active" : ""}`}
           onClick={() => handleNav("monitor")}
         >
@@ -103,7 +103,7 @@ export function TopbarNav({
         </Link>
 
         <Link
-          href="/settings"
+          href="/admin/settings"
           className={`topbar-item ${isSettingsActive ? "active" : ""}`}
           onClick={() => handleNav("settings")}
         >
@@ -143,7 +143,7 @@ export function TopbarNav({
 
         {isRunActive ? (
           <Link
-            href="/monitor"
+            href="/admin/monitor"
             className="topbar-active-run-pill"
             onClick={() => handleNav("monitor")}
           >

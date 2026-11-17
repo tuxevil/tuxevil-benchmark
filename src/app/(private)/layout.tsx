@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ThemeProvider } from "@/components/theme-provider";
 import { PROJECT_BRAND } from "@/lib/brand";
 import { LEGACY_THEME_STORAGE_KEY } from "@/lib/legacy-identifiers";
-import "./globals.css";
+import "../globals.css";
 
 export const metadata: Metadata = {
   title: `${PROJECT_BRAND.displayName} / Local model benchmarking`,

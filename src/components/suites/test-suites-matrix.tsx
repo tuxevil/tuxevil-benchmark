@@ -289,7 +289,7 @@ export function TestSuitesMatrix({
         }
         // All cases have been queued durably, not completed. Monitor shows
         // their independent run states and lets the user pause/cancel runs.
-        router.push("/monitor");
+        router.push("/admin/monitor");
         return;
       }
 

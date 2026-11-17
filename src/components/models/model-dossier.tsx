@@ -76,7 +76,7 @@ export function ModelDossier({ modelName, provider, modelSummary, runs, hideBack
       {/* BACK BUTTON */}
       {!hideBackLink && (
         <div className="dossier-back">
-          <Link href="/" className="back-link">
+          <Link href="/admin" className="back-link">
             ← Back to Leaderboard
           </Link>
         </div>

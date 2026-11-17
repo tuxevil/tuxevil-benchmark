@@ -405,7 +405,7 @@ export function ArenaLeaderboard({
                           [View Profile]
                         </button>
                       ) : (
-                        <Link href={`/models/${encodeURIComponent(m.modelName)}`} className="btn-profile-link">
+                        <Link href={`/admin/models/${encodeURIComponent(m.modelName)}`} className="btn-profile-link">
                           [View Profile]
                         </Link>
                       )}

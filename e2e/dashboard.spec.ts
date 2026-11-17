@@ -152,14 +152,14 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("renders the arena dashboard and displays top model winner", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/admin");
   await expect(page.getByText("tuxevil Benchmark")).toBeVisible();
   await expect(page.getByText("Overall Leader")).toBeVisible();
   await expect(page.locator(".winner-name", { hasText: "llama3.2" }).first()).toBeVisible();
 });
 
 test("supports scenario saving and adding conversation turns in test suite editor", async ({ page }) => {
-  await page.goto("/suites");
+  await page.goto("/admin/suites");
 
   // Save scenario
   await page.getByPlaceholder("e.g. Delimiter Hijacking Test v1").fill("Smoke test");
@@ -186,7 +186,7 @@ test("launches µTuxbot Chatbot Plus as the recommended one-click profile", asyn
       },
     });
   });
-  await page.goto("/suites");
+  await page.goto("/admin/suites");
   await expect(page.locator("#ia-solar-profile")).toHaveValue("chatbot");
   await expect(page.locator("#ia-solar-model")).toHaveValue("llama3.2");
   await expect(page.getByText(/20 casos · 26 turnos/)).toBeVisible();
@@ -210,7 +210,7 @@ test("launches IA Solar quick profile in one click and routes to Monitor", async
       },
     });
   });
-  await page.goto("/suites");
+  await page.goto("/admin/suites");
   await page.locator("#ia-solar-profile").selectOption("quick");
   await expect(page.locator("#ia-solar-profile")).toHaveValue("quick");
   await expect(page.locator("#ia-solar-model")).toHaveValue("llama3.2");
@@ -221,7 +221,7 @@ test("launches IA Solar quick profile in one click and routes to Monitor", async
 });
 
 test("preserves historic full-suite onboarding mode", async ({ page }) => {
-  await page.goto("/suites");
+  await page.goto("/admin/suites");
   await page.locator("#ia-solar-profile").selectOption("full");
   await expect(page.locator("#ia-solar-model")).toHaveValue("llama3.2");
   await page.getByRole("button", { name: /Ejecutar batería completa/ }).click();
@@ -230,7 +230,7 @@ test("preserves historic full-suite onboarding mode", async ({ page }) => {
 });
 
 test("displays executed runs and detailed inspection on the monitor page", async ({ page }) => {
-  await page.goto("/monitor");
+  await page.goto("/admin/monitor");
 
   await expect(page.getByText("Queue History & Executed Runs")).toBeVisible();
   await expect(page.locator("tr", { hasText: "llama3.2" }).first()).toBeVisible();
@@ -240,7 +240,7 @@ test("displays executed runs and detailed inspection on the monitor page", async
 });
 
 test("saves global settings in settings page", async ({ page }) => {
-  await page.goto("/settings");
+  await page.goto("/admin/settings");
   await page.getByPlaceholder("https://api.openai.com/v1").fill("https://judge.example/v1");
   await page.getByPlaceholder("gpt-4o-mini, openrouter/auto...").fill("judge");
   await page.getByPlaceholder("sk-...").fill("sk-test-123");
@@ -297,7 +297,7 @@ function createRun(status: string, resultPatch: Record<string, unknown> = {}) {
 
 
 test("Churn Lab renders the experiment workbench", async ({ page }) => {
-  await page.goto("/churn");
+  await page.goto("/admin/churn");
 
   await expect(page.getByRole("heading", { name: "Churn Lab" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Execution Targets & Auto Probe" })).toBeVisible();
@@ -408,7 +408,7 @@ test("Churn Lab exposes automatic Experiment Runner for a selected experiment", 
     });
   });
 
-  await page.goto("/churn");
+  await page.goto("/admin/churn");
   const runner = page.locator(".churn-runner");
   await expect(runner.getByRole("heading", { name: "Experiment Runner" })).toBeVisible();
   await expect(runner.getByText("Deterministic smoke case")).toBeVisible();
@@ -496,7 +496,7 @@ test("Performance Lab renders isolated Practical SLM execution controls", async 
     });
   });
 
-  await page.goto("/performance");
+  await page.goto("/admin/performance");
 
   await expect(page.getByRole("heading", { name: "Performance Lab" })).toBeVisible();
   await expect(page.getByText("seconds / successful task")).toBeVisible();

@@ -82,8 +82,8 @@ export default function SuitesPage() {
       if (res.ok) {
         const data = await res.json();
         setActiveRun(data.run);
-        if (!window.location.pathname.includes("/monitor")) {
-          router.push("/monitor");
+        if (!window.location.pathname.includes("/admin/monitor")) {
+          router.push("/admin/monitor");
         }
       } else {
         const err = await res.json();

@@ -1,0 +1,11 @@
+import { describe,it,expect } from 'vitest';
+import { buildPublicSnapshot,publicLabel } from './public-snapshot-builder';
+import { approvedScenarioDefinitions } from './public-scenarios';
+import type { LeaderboardData,LeaderboardModelRow } from './contracts';
+const row={identityKey:'internal identity',modelName:'LFM-Q4',configurationLabel:'Q4',paramSizeLabel:'3B',paramSizeValue:3,totalRuns:20,failedEvals:0,avgQualityStars:null,avgGrammar:null,avgCompliance:null,avgAccuracy:null,securityResilienceScore:null,avgTokPerSec:100,avgTtftMs:15,rankingEligible:false,arenaIndex:20} as LeaderboardModelRow;
+const data={models:[row,{...row,identityKey:'other',modelName:'private-model'}]} as LeaderboardData;
+describe('public snapshot boundary',()=>{
+ it('requires explicit model approval and emits only public fields',()=>{expect(buildPublicSnapshot(data,new Set()).models).toEqual([]);const snapshot=buildPublicSnapshot(data,new Set(['LFM-Q4']));expect(snapshot.models).toHaveLength(1);expect(snapshot.models[0].security_status).toBe('UNASSESSED');expect(snapshot.models[0].avg_stars).toBe(-1);expect(JSON.stringify(snapshot)).not.toContain('internal identity');expect(JSON.stringify(snapshot)).not.toContain('private-model');expect(snapshot.global_stats.overall_leader).toBe('Awaiting complete coverage');});
+ it('retains distinct quantization identities and blocks infrastructure labels',()=>{const source={models:[row,{...row,identityKey:'Q6',configurationLabel:'Q6'}]} as LeaderboardData;const snapshot=buildPublicSnapshot(source,new Set(['LFM-Q4']));expect(snapshot.models[0].id).not.toBe(snapshot.models[1].id);expect(publicLabel('http://192.168.2.4:8080','hidden')).toBe('hidden');});
+ it('never publishes unapproved scenario fields or internal addresses',()=>{const s={id:'case',title:'Test',category:'GENERAL',description:'Public description',system_prompt:'Public instruction',user_messages:['Question'],expected_behavior:'Answer',apiKey:'secret'};const result=approvedScenarioDefinitions([s]);expect(result).toHaveLength(1);expect(JSON.stringify(result)).not.toContain('secret');expect(approvedScenarioDefinitions([{...s,system_prompt:'Contact 10.0.0.8'}])).toEqual([]);});
+});
