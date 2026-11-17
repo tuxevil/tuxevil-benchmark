@@ -24,7 +24,7 @@ export function Navigation() {
           {tab.label}
         </Link>
       ))}
-      <Link href="/admin" className="nav-tab" style={{marginLeft:"auto"}}>Admin ↗</Link>
+      <a href="/admin" className="nav-tab" style={{marginLeft:"auto"}}>Admin ↗</a>
     </nav>
   );
 }
