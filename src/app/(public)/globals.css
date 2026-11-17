@@ -99,6 +99,8 @@ code,
 
 .nav-tabs {
   display: flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
