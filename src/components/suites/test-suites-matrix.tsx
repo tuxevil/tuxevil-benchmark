@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Scenario, TestCategory, SecurityAttackType, BenchmarkParameters, ModelProvider } from "@/lib/contracts";
 import { quickProfileSummary } from "@/lib/ia-solar-quick-profile";
+import { chatbotPlusSummary } from "@/lib/ia-solar-chatbot-plus-profile";
 
 interface TestSuitesMatrixProps {
   ollamaUrl?: string;
@@ -50,8 +51,9 @@ export function TestSuitesMatrix({
 
   // Modo A: Onboarding
   const [onboardingModel, setOnboardingModel] = useState<string>("");
-  const [onboardingProfile, setOnboardingProfile] = useState<"quick" | "full">("quick");
+  const [onboardingProfile, setOnboardingProfile] = useState<"quick" | "chatbot" | "full">("chatbot");
   const quickSummary = quickProfileSummary();
+  const chatbotSummary = chatbotPlusSummary();
 
   // Modo B: Update Suite
   const [updateScenarioId, setUpdateScenarioId] = useState<string>("");
@@ -265,8 +267,8 @@ export function TestSuitesMatrix({
 
     setIsLaunching(true);
     try {
-      if (onboardingProfile === "quick") {
-        const res = await fetch("/api/runs/quick-profile", {
+      if (onboardingProfile === "quick" || onboardingProfile === "chatbot") {
+        const res = await fetch(onboardingProfile === "chatbot" ? "/api/runs/chatbot-plus" : "/api/runs/quick-profile", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -605,10 +607,11 @@ export function TestSuitesMatrix({
                 <select
                   id="ia-solar-profile"
                   value={onboardingProfile}
-                  onChange={(e) => setOnboardingProfile(e.target.value as "quick" | "full")}
+                  onChange={(e) => setOnboardingProfile(e.target.value as "quick" | "chatbot" | "full")}
                   disabled={isLaunching}
                 >
-                  <option value="quick">⚡ Rápido IA Solar (recomendado)</option>
+                  <option value="chatbot">🌞 µTuxbot Plus · Chatbots (20 casos)</option>
+                  <option value="quick">⚡ Rápido IA Solar v1 · Comparación histórica</option>
                   <option value="full">🧪 Completo (biblioteca histórica)</option>
                 </select>
               </div>
@@ -630,7 +633,17 @@ export function TestSuitesMatrix({
                 </select>
               </div>
 
-              {onboardingProfile === "quick" ? (
+              {onboardingProfile === "chatbot" ? (
+                <p className="mode-desc" role="status">
+                  <strong>{chatbotSummary.cases} casos · {chatbotSummary.turns} turnos · 1 muestra</strong>.
+                  Perfil de chatbots web: las 11 pruebas originales más preguntas
+                  factuales, contexto, memoria, contradicciones, JSON, soporte
+                  y seguridad textual de µTuxbot. Contexto 8192, 768 tokens
+                  máximos de respuesta, temperatura 0. Tiempo orientativo:
+                  alrededor del doble del perfil rápido, no garantizado.
+                  Las puntuaciones de ambos perfiles no son equivalentes.
+                </p>
+              ) : onboardingProfile === "quick" ? (
                 <p className="mode-desc" role="status">
                   <strong>{quickSummary.cases} casos · {quickSummary.turns} turnos · 1 muestra</strong>.
                   Parámetros fijos: temperatura 0, contexto 8192, máximo 512 tokens
@@ -658,7 +671,9 @@ export function TestSuitesMatrix({
                     ? "Encolando pruebas..."
                     : onboardingProfile === "quick"
                       ? "▶ Ejecutar perfil rápido IA Solar"
-                      : "▶ Ejecutar batería completa"}
+                      : onboardingProfile === "chatbot"
+                        ? "▶ Ejecutar µTuxbot Plus"
+                        : "▶ Ejecutar batería completa"}
                 </button>
               </div>
             </div>
@@ -753,7 +768,7 @@ export function TestSuitesMatrix({
           )}
 
           {/* The quick profile uses fixed, reproducible parameters. */}
-          {!(mode === "onboarding" && onboardingProfile === "quick") && (
+          {!(mode === "onboarding" && (onboardingProfile === "quick" || onboardingProfile === "chatbot")) && (
           <div className="parameters-card">
             <h5>⚙ Inference Configuration</h5>
             <div className="params-grid">
