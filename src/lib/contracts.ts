@@ -38,6 +38,7 @@ export const benchmarkParametersSchema = z.object({
   topP: z.number().min(0).max(1),
   repeatPenalty: z.number().min(0).max(3),
   numPredict: z.number().int().min(1).max(32_768),
+  seed: z.number().int().min(0).max(2_147_483_647).optional(),
   reasoningEffort: reasoningEffortSchema.default("off").optional(),
 });
 
@@ -72,9 +73,9 @@ export type EvaluatorEntry = {
   apiKeyConfigured: boolean;
 };
 
-export const modelProviderSchema = z.enum(["ollama", "freetoken", "llamacpp"]);
+export const modelProviderSchema = z.enum(["ollama", "freetoken", "llamacpp", "strata"]);
 export type ModelProvider = z.infer<typeof modelProviderSchema>;
-export const MODEL_PROVIDERS = ["ollama", "freetoken", "llamacpp"] as const;
+export const MODEL_PROVIDERS = ["ollama", "freetoken", "llamacpp", "strata"] as const;
 
 export const createRunSchema = z
   .object({
@@ -141,12 +142,15 @@ export const settingsUpdateSchema = z.object({
     .transform((value) => value ?? undefined),
   clearFreetokenApiKey: z.boolean().default(false),
   llamacppUrl: httpUrlSchema.optional(),
-  llamacppApiKey: z
+  llamacppApiKey: z.string().max(4_096).nullish().transform((value) => value ?? undefined),
+  strataUrl: httpUrlSchema.optional(),
+  strataApiKey: z
     .string()
     .max(4_096)
     .nullish()
     .transform((value) => value ?? undefined),
   clearLlamacppApiKey: z.boolean().default(false),
+  clearStrataApiKey: z.boolean().default(false),
   activeProvider: modelProviderSchema.optional(),
   evaluatorBaseUrl: z
     .union([
@@ -167,7 +171,7 @@ export const settingsUpdateSchema = z.object({
 
 export type BenchmarkParameters = z.infer<typeof benchmarkParametersSchema>;
 export type EvaluatorConfig = z.infer<typeof evaluatorConfigSchema>;
-export type CreateRunInput = z.input<typeof createRunSchema>;
+export type CreateRunInput = z.input<typeof createRunSchema> & { executionTargetId?: string | null };
 export type SettingsUpdateInput = z.infer<typeof settingsUpdateSchema>;
 
 export type RunStatus = "PENDING" | "RUNNING" | "COMPLETED" | "CANCELLED" | "FAILED";
@@ -262,7 +266,38 @@ export type TestRun = {
   errorMessage: string | null;
   provider?: ModelProvider;
   providerUrl?: string;
+  executionTargetId?: string | null;
 };
+
+export const deterministicGraderSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("EXACT_TEXT"),
+    version: z.literal(1).default(1),
+    expected: z.string().max(50_000),
+    caseSensitive: z.boolean().default(true),
+    collapseWhitespace: z.boolean().default(false),
+  }),
+  z.object({
+    type: z.literal("JSON_EXACT"),
+    version: z.literal(1).default(1),
+    expected: z.unknown().refine((value) => value !== undefined, "Expected JSON value is required."),
+  }),
+  z.object({
+    type: z.literal("NUMBER"),
+    version: z.literal(1).default(1),
+    expected: z.number().finite(),
+    tolerance: z.number().finite().min(0).default(0),
+  }),
+  z.object({
+    type: z.literal("CONTAINS_ALL"),
+    version: z.literal(1).default(1),
+    required: z.array(z.string().min(1).max(2_000)).min(1).max(100),
+    forbidden: z.array(z.string().min(1).max(2_000)).max(100).default([]),
+    caseSensitive: z.boolean().default(false),
+  }),
+]);
+
+export type DeterministicGrader = z.infer<typeof deterministicGraderSchema>;
 
 export type AppSettings = {
   ollamaUrl: string;
@@ -270,6 +305,8 @@ export type AppSettings = {
   freetokenApiKeyConfigured: boolean;
   llamacppUrl: string;
   llamacppApiKeyConfigured: boolean;
+  strataUrl: string;
+  strataApiKeyConfigured: boolean;
   activeProvider: ModelProvider;
   evaluatorBaseUrl: string;
   evaluatorModel: string;
@@ -286,6 +323,9 @@ export type Scenario = {
   attackType: SecurityAttackType | null;
   systemPrompt: string;
   userMessages: string[];
+  suiteKey?: string | null;
+  suiteVersion?: string | null;
+  grader?: DeterministicGrader | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -297,6 +337,9 @@ export const scenarioSchema = z
     attackType: securityAttackTypeSchema.nullish().transform((v) => v ?? null),
     systemPrompt: z.string().trim().min(1).max(50_000),
     userMessages: z.array(z.string().trim().min(1).max(50_000)).min(1).max(100),
+    suiteKey: z.string().trim().min(1).max(255).nullable().optional(),
+    suiteVersion: z.string().trim().min(1).max(255).nullable().optional(),
+    grader: deterministicGraderSchema.nullable().optional(),
   })
   .refine(
     (data) => data.category !== "SECURITY" || Boolean(data.attackType),

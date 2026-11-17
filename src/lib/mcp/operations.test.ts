@@ -199,7 +199,7 @@ describe("getSettings", () => {
   it("returns the settings payload", async () => {
     mockFetchSequence({
       settings: {
-        ollamaUrl: "http://10.128.128.254:11434",
+        ollamaUrl: "http://127.0.0.1:11434",
         evaluatorBaseUrl: "https://api.openai.com/v1",
         evaluatorModel: "gpt-5.6-luna",
         evaluatorApiKeyConfigured: true,
@@ -207,7 +207,7 @@ describe("getSettings", () => {
       },
     });
     const result = (await getSettings()) as { settings: { ollamaUrl: string } };
-    expect(result.settings.ollamaUrl).toBe("http://10.128.128.254:11434");
+    expect(result.settings.ollamaUrl).toBe("http://127.0.0.1:11434");
   });
 });
 
@@ -217,7 +217,7 @@ describe("updateSettings", () => {
   it("maps snake_case arguments to the API body and PATCHes", async () => {
     const mock = mockFetchSequence({
       settings: {
-        ollamaUrl: "http://10.128.128.254:11434",
+        ollamaUrl: "http://127.0.0.1:11434",
         evaluatorBaseUrl: "",
         evaluatorModel: "",
         evaluatorApiKeyConfigured: false,
@@ -225,16 +225,16 @@ describe("updateSettings", () => {
       },
     });
     const result = (await updateSettings({
-      ollama_url: "http://10.128.128.254:11434",
+      ollama_url: "http://127.0.0.1:11434",
       parameters: { temperature: 0.5, num_ctx: 2048 },
     })) as { settings: { ollamaUrl: string } };
-    expect(result.settings.ollamaUrl).toBe("http://10.128.128.254:11434");
+    expect(result.settings.ollamaUrl).toBe("http://127.0.0.1:11434");
 
     const [url, init] = mock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("http://localhost:3000/api/settings");
     expect(init.method).toBe("PATCH");
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
-    expect(body.ollamaUrl).toBe("http://10.128.128.254:11434");
+    expect(body.ollamaUrl).toBe("http://127.0.0.1:11434");
     expect(body.parameters).toEqual({ temperature: 0.5, numCtx: 2048 });
   });
 

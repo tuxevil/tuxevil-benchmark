@@ -33,6 +33,10 @@ export async function PATCH(request: Request) {
     const endpointError = validateProviderEndpoint(parsed.data.llamacppUrl, "llama.cpp");
     if (endpointError) return NextResponse.json({ error: endpointError }, { status: 400 });
   }
+  if (parsed.data.strataUrl) {
+    const endpointError = validateProviderEndpoint(parsed.data.strataUrl, "Strata");
+    if (endpointError) return NextResponse.json({ error: endpointError }, { status: 400 });
+  }
 
   try {
     return NextResponse.json({ settings: await benchmarkStore.updateSettings(parsed.data) });

@@ -60,6 +60,24 @@ describe("discoverProviderModels", () => {
     expect(result.models[1].name).toBe("freetoken-model-2");
   });
 
+  it("discovers Strata models using bearer authentication and the v1 endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: [{ id: "qwen3.8-flash-next-iq3_xxs" }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await discoverProviderModels({
+      provider: "strata",
+      endpoint: "http://127.0.0.1:8081/v1",
+      apiKey: "test-strata-key",
+    });
+    expect(result.provider).toBe("strata");
+    expect(result.models[0].name).toBe("qwen3.8-flash-next-iq3_xxs");
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      "http://127.0.0.1:8081/v1/models",
+      expect.objectContaining({ headers: expect.objectContaining({ authorization: "Bearer test-strata-key" }) }),
+    );
+  });
+
   it("discovers models from llama.cpp endpoint", async () => {
     vi.stubGlobal(
       "fetch",

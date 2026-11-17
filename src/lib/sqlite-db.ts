@@ -13,6 +13,7 @@ import type {
 
 type SqlRow = Record<string, unknown>;
 import { decryptSecret, encryptSecret } from "@/lib/secrets";
+import { parseDeterministicGrader } from "@/lib/deterministic-grader";
 import { CURRENT_SQLITE_FILENAME, LEGACY_SQLITE_FILENAME } from "@/lib/legacy-identifiers";
 import path from "node:path";
 import { existsSync } from "node:fs";
@@ -34,6 +35,7 @@ export function getSqliteDb(): Database.Database {
 }
 
 function initSqliteTables(db: Database.Database) {
+  db.exec(`CREATE TABLE IF NOT EXISTS result_resource_measurements (model_result_id TEXT PRIMARY KEY REFERENCES model_results(id) ON DELETE CASCADE, payload_json TEXT NOT NULL)`);
   db.exec(`
     CREATE TABLE IF NOT EXISTS app_settings (
       id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -42,6 +44,8 @@ function initSqliteTables(db: Database.Database) {
       freetoken_api_key_encrypted TEXT,
       llamacpp_url TEXT,
       llamacpp_api_key_encrypted TEXT,
+      strata_url TEXT,
+      strata_api_key_encrypted TEXT,
       active_provider TEXT,
       evaluator_base_url TEXT,
       evaluator_model TEXT,
@@ -68,6 +72,9 @@ function initSqliteTables(db: Database.Database) {
       attack_type TEXT,
       system_prompt TEXT NOT NULL,
       user_messages TEXT NOT NULL,
+      suite_key TEXT,
+      suite_version TEXT,
+      grader_json TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -85,6 +92,7 @@ function initSqliteTables(db: Database.Database) {
       ollama_url TEXT NOT NULL,
       provider TEXT DEFAULT 'ollama',
       provider_url TEXT,
+      execution_target_id TEXT,
       user_messages TEXT NOT NULL,
       selected_models TEXT NOT NULL,
       parameters TEXT NOT NULL,
@@ -203,6 +211,9 @@ function initSqliteTables(db: Database.Database) {
   if (!runColumns.some((column) => column.name === "provider_url")) {
     migrationDb.exec("ALTER TABLE test_runs ADD COLUMN provider_url TEXT");
   }
+  if (!runColumns.some((column) => column.name === "execution_target_id")) {
+    migrationDb.exec("ALTER TABLE test_runs ADD COLUMN execution_target_id TEXT");
+  }
 
   const scenarioColumns = migrationDb.prepare("PRAGMA table_info(scenarios)").all() as SqlRow[];
   if (!scenarioColumns.some((column) => column.name === "category")) {
@@ -210,6 +221,15 @@ function initSqliteTables(db: Database.Database) {
   }
   if (!scenarioColumns.some((column) => column.name === "attack_type")) {
     migrationDb.exec("ALTER TABLE scenarios ADD COLUMN attack_type TEXT");
+  }
+  if (!scenarioColumns.some((column) => column.name === "suite_key")) {
+    migrationDb.exec("ALTER TABLE scenarios ADD COLUMN suite_key TEXT");
+  }
+  if (!scenarioColumns.some((column) => column.name === "suite_version")) {
+    migrationDb.exec("ALTER TABLE scenarios ADD COLUMN suite_version TEXT");
+  }
+  if (!scenarioColumns.some((column) => column.name === "grader_json")) {
+    migrationDb.exec("ALTER TABLE scenarios ADD COLUMN grader_json TEXT");
   }
 
   const evalColumns = migrationDb.prepare("PRAGMA table_info(evaluations)").all() as SqlRow[];
@@ -338,8 +358,14 @@ function initSqliteTables(db: Database.Database) {
   if (!settingsColumns.some((column) => column.name === "llamacpp_url")) {
     migrationDb.exec("ALTER TABLE app_settings ADD COLUMN llamacpp_url TEXT");
   }
+  if (!settingsColumns.some((column) => column.name === "strata_url")) {
+    migrationDb.exec("ALTER TABLE app_settings ADD COLUMN strata_url TEXT");
+  }
   if (!settingsColumns.some((column) => column.name === "llamacpp_api_key_encrypted")) {
     migrationDb.exec("ALTER TABLE app_settings ADD COLUMN llamacpp_api_key_encrypted TEXT");
+  }
+  if (!settingsColumns.some((column) => column.name === "strata_api_key_encrypted")) {
+    migrationDb.exec("ALTER TABLE app_settings ADD COLUMN strata_api_key_encrypted TEXT");
   }
   if (!settingsColumns.some((column) => column.name === "active_provider")) {
     migrationDb.exec("ALTER TABLE app_settings ADD COLUMN active_provider TEXT");
@@ -409,14 +435,17 @@ function initSqliteTables(db: Database.Database) {
 export function sqlitePersistScenario(scenario: Scenario) {
   const db = getSqliteDb();
   db.prepare(`
-    INSERT INTO scenarios (id, name, category, attack_type, system_prompt, user_messages, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO scenarios (id, name, category, attack_type, system_prompt, user_messages, suite_key, suite_version, grader_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       category = excluded.category,
       attack_type = excluded.attack_type,
       system_prompt = excluded.system_prompt,
       user_messages = excluded.user_messages,
+      suite_key = excluded.suite_key,
+      suite_version = excluded.suite_version,
+      grader_json = excluded.grader_json,
       updated_at = excluded.updated_at
   `).run(
     scenario.id,
@@ -425,6 +454,9 @@ export function sqlitePersistScenario(scenario: Scenario) {
     scenario.attackType ?? null,
     scenario.systemPrompt,
     JSON.stringify(scenario.userMessages),
+    scenario.suiteKey ?? null,
+    scenario.suiteVersion ?? null,
+    scenario.grader ? JSON.stringify(scenario.grader) : null,
     scenario.createdAt,
     scenario.updatedAt,
   );
@@ -595,6 +627,9 @@ export function sqliteLoadSettings(): {
   llamacppUrl: string;
   llamacppApiKey: string | null;
   llamacppApiKeyConfigured: boolean;
+  strataUrl: string;
+  strataApiKey: string | null;
+  strataApiKeyConfigured: boolean;
   activeProvider: import("@/lib/contracts").ModelProvider;
   evaluators: EvaluatorEntry[];
   activeEvaluatorId: string | null;
@@ -616,6 +651,7 @@ export function sqliteLoadSettings(): {
         topP: Number(parsed.topP ?? params.topP),
         repeatPenalty: Number(parsed.repeatPenalty ?? params.repeatPenalty),
         numPredict: Number(parsed.numPredict ?? params.numPredict),
+        seed: parsed.seed === undefined || parsed.seed === null ? undefined : Number(parsed.seed),
       };
     } catch {}
   }
@@ -633,6 +669,12 @@ export function sqliteLoadSettings(): {
       llamacppApiKey = decryptSecret(String(row.llamacpp_api_key_encrypted));
     } catch {}
   }
+  let strataApiKey: string | null = null;
+  if (row.strata_api_key_encrypted) {
+    try {
+      strataApiKey = decryptSecret(String(row.strata_api_key_encrypted));
+    } catch {}
+  }
 
   return {
     ollamaUrl: String(row.ollama_url || "http://localhost:11434"),
@@ -642,6 +684,9 @@ export function sqliteLoadSettings(): {
     llamacppUrl: String(row.llamacpp_url || "http://localhost:8080"),
     llamacppApiKey,
     llamacppApiKeyConfigured: Boolean(row.llamacpp_api_key_encrypted),
+    strataUrl: String(row.strata_url || "http://127.0.0.1:8081/v1"),
+    strataApiKey,
+    strataApiKeyConfigured: Boolean(row.strata_api_key_encrypted),
     activeProvider: (String(row.active_provider || "ollama") as import("@/lib/contracts").ModelProvider),
     evaluators,
     activeEvaluatorId,
@@ -658,6 +703,9 @@ export function sqlitePersistSettings(settings: {
   llamacppUrl?: string;
   llamacppApiKey?: string | null;
   clearLlamacppApiKey?: boolean;
+  strataUrl?: string;
+  strataApiKey?: string | null;
+  clearStrataApiKey?: boolean;
   activeProvider?: import("@/lib/contracts").ModelProvider;
   evaluators: EvaluatorEntry[];
   activeEvaluatorId: string | null;
@@ -681,16 +729,24 @@ export function sqlitePersistSettings(settings: {
   } else if (settings.llamacppApiKey) {
     llamacppEncrypted = encryptSecret(settings.llamacppApiKey);
   }
+  let strataEncrypted = existing?.strata_api_key_encrypted ? String(existing.strata_api_key_encrypted) : null;
+  if (settings.clearStrataApiKey) {
+    strataEncrypted = null;
+  } else if (settings.strataApiKey) {
+    strataEncrypted = encryptSecret(settings.strataApiKey);
+  }
 
   getSqliteDb().prepare(`
-    INSERT INTO app_settings (id, ollama_url, freetoken_url, freetoken_api_key_encrypted, llamacpp_url, llamacpp_api_key_encrypted, active_provider, evaluator_base_url, evaluator_model, evaluator_api_key_encrypted, active_evaluator_id, parameters_json, updated_at)
-    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO app_settings (id, ollama_url, freetoken_url, freetoken_api_key_encrypted, llamacpp_url, llamacpp_api_key_encrypted, strata_url, strata_api_key_encrypted, active_provider, evaluator_base_url, evaluator_model, evaluator_api_key_encrypted, active_evaluator_id, parameters_json, updated_at)
+    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       ollama_url = excluded.ollama_url,
       freetoken_url = excluded.freetoken_url,
       freetoken_api_key_encrypted = excluded.freetoken_api_key_encrypted,
       llamacpp_url = excluded.llamacpp_url,
       llamacpp_api_key_encrypted = excluded.llamacpp_api_key_encrypted,
+      strata_url = excluded.strata_url,
+      strata_api_key_encrypted = excluded.strata_api_key_encrypted,
       active_provider = excluded.active_provider,
       evaluator_base_url = excluded.evaluator_base_url,
       evaluator_model = excluded.evaluator_model,
@@ -704,6 +760,8 @@ export function sqlitePersistSettings(settings: {
     freetokenEncrypted,
     settings.llamacppUrl ?? (existing?.llamacpp_url ? String(existing.llamacpp_url) : "http://localhost:8080"),
     llamacppEncrypted,
+    settings.strataUrl ?? (existing?.strata_url ? String(existing.strata_url) : "http://127.0.0.1:8081/v1"),
+    strataEncrypted,
     settings.activeProvider ?? (existing?.active_provider ? String(existing.active_provider) : "ollama"),
     active?.baseUrl ?? null,
     active?.model ?? null,
@@ -729,8 +787,8 @@ export function sqlitePersistRun(
 
   const transaction = db.transaction(() => {
     db.prepare(`
-      INSERT INTO test_runs (id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, user_messages, selected_models, parameters, evaluator_config, created_at, updated_at, started_at, finished_at, error_message)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO test_runs (id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, execution_target_id, user_messages, selected_models, parameters, evaluator_config, created_at, updated_at, started_at, finished_at, error_message)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         category = excluded.category,
         attack_type = excluded.attack_type,
@@ -743,6 +801,7 @@ export function sqlitePersistRun(
         ollama_url = excluded.ollama_url,
         provider = excluded.provider,
         provider_url = excluded.provider_url,
+        execution_target_id = excluded.execution_target_id,
         user_messages = excluded.user_messages,
         selected_models = excluded.selected_models,
         parameters = excluded.parameters,
@@ -764,6 +823,7 @@ export function sqlitePersistRun(
       config.ollamaUrl,
       run.provider ?? config.provider ?? "ollama",
       run.providerUrl ?? config.providerUrl ?? config.ollamaUrl,
+      run.executionTargetId ?? null,
       JSON.stringify(run.userMessages),
       JSON.stringify(run.models),
       JSON.stringify(run.parameters),
@@ -1046,6 +1106,7 @@ export function sqliteLoadState(targetRunId?: string) {
       errorMessage: row.error_message ? String(row.error_message) : null,
       provider: (row.provider as import("@/lib/contracts").ModelProvider) || "ollama",
       providerUrl: row.provider_url ? String(row.provider_url) : String(row.ollama_url),
+      executionTargetId: row.execution_target_id ? String(row.execution_target_id) : null,
     };
     return {
       run,
@@ -1065,6 +1126,9 @@ export function sqliteLoadState(targetRunId?: string) {
     attackType: (row.attack_type as Scenario["attackType"]) || null,
     systemPrompt: String(row.system_prompt),
     userMessages: JSON.parse(String(row.user_messages)),
+    suiteKey: row.suite_key ? String(row.suite_key) : null,
+    suiteVersion: row.suite_version ? String(row.suite_version) : null,
+    grader: parseDeterministicGrader(row.grader_json),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   }));

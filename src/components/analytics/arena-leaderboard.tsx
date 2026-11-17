@@ -346,7 +346,7 @@ export function ArenaLeaderboard({
                              border: `1px solid ${m.provider === "freetoken" ? "rgba(234,179,8,0.4)" : "rgba(139,92,246,0.4)"}`,
                            }}
                          >
-                           {m.provider === "freetoken" ? "⚡ FreeToken" : "🦙 llama.cpp"}
+                           {m.provider === "strata" ? "Strata" : m.provider === "freetoken" ? "⚡ FreeToken" : "🦙 llama.cpp"}
                          </span>
                        )}
                        {m.reasoningEffort && m.reasoningEffort !== "off" && (

@@ -196,10 +196,15 @@ export type ExperimentComparison = {
   cases: ExperimentCaseDiff[];
 };
 
+export type ComparableObservation = Pick<
+  ExperimentObservation,
+  "caseId" | "canonicalValue" | "success"
+>;
+
 function buildCaseDiffs(
-  baseline: ExperimentObservation[],
-  variant: ExperimentObservation[],
-  repeat: ExperimentObservation[] | null,
+  baseline: ComparableObservation[],
+  variant: ComparableObservation[],
+  repeat: ComparableObservation[] | null,
 ): ExperimentCaseDiff[] {
   const baselineByCase = new Map(baseline.map((item) => [item.caseId, item]));
   const variantByCase = new Map(variant.map((item) => [item.caseId, item]));
@@ -275,14 +280,42 @@ export async function compareExperimentVariants(
     repeatId ? listExperimentObservations(experimentId, repeatId) : Promise.resolve(null),
   ]);
 
-  const hasRepeatObservations = Boolean(repeat && repeat.length > 0);
+  return buildExperimentComparisonFromObservations({
+    experimentId,
+    baselineVariantId,
+    variantId,
+    baselineRepeatVariantId: repeatId,
+    baseline,
+    variant,
+    repeat,
+  });
+}
 
+
+export function buildExperimentComparisonFromObservations(input: {
+  experimentId: string;
+  baselineVariantId: string;
+  variantId: string;
+  baselineRepeatVariantId: string | null;
+  baseline: ComparableObservation[];
+  variant: ComparableObservation[];
+  repeat: ComparableObservation[] | null;
+}): ExperimentComparison {
+  const hasRepeatObservations = Boolean(input.repeat && input.repeat.length > 0);
   const summary = comparePairedObservations(
-    baseline.map((item) => ({ caseId: item.caseId, value: item.canonicalValue, success: item.success })),
-    variant.map((item) => ({ caseId: item.caseId, value: item.canonicalValue, success: item.success })),
+    input.baseline.map((item) => ({
+      caseId: item.caseId,
+      value: item.canonicalValue,
+      success: item.success,
+    })),
+    input.variant.map((item) => ({
+      caseId: item.caseId,
+      value: item.canonicalValue,
+      success: item.success,
+    })),
     hasRepeatObservations
       ? {
-          baselineRepeat: repeat!.map((item) => ({
+          baselineRepeat: input.repeat!.map((item) => ({
             caseId: item.caseId,
             value: item.canonicalValue,
             success: item.success,
@@ -292,11 +325,15 @@ export async function compareExperimentVariants(
   );
 
   return {
-    experimentId,
-    baselineVariantId,
-    variantId,
-    baselineRepeatVariantId: repeatId,
+    experimentId: input.experimentId,
+    baselineVariantId: input.baselineVariantId,
+    variantId: input.variantId,
+    baselineRepeatVariantId: input.baselineRepeatVariantId,
     summary,
-    cases: buildCaseDiffs(baseline, variant, hasRepeatObservations ? repeat : null),
+    cases: buildCaseDiffs(
+      input.baseline,
+      input.variant,
+      hasRepeatObservations ? input.repeat : null,
+    ),
   };
 }

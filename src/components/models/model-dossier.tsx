@@ -91,7 +91,7 @@ export function ModelDossier({ modelName, provider, modelSummary, runs, hideBack
                 {modelSummary?.paramSizeLabel ?? "Model"} Parameters
               </span>
               <span className="meta-pill runtime">
-                {provider === "freetoken" ? "FreeToken" : provider === "llamacpp" ? "llama.cpp" : "Ollama"}
+                {provider === "freetoken" ? "FreeToken" : provider === "strata" ? "Strata" : provider === "llamacpp" ? "llama.cpp" : "Ollama"}
               </span>
               <span className="meta-pill time">Last run: Recently</span>
             </div>

@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
 
   let defaultUrl = settings.ollamaUrl;
   if (provider === "freetoken") defaultUrl = settings.freetokenUrl;
+  else if (provider === "strata") defaultUrl = settings.strataUrl;
   else if (provider === "llamacpp") defaultUrl = settings.llamacppUrl;
 
   const endpointParam = request.nextUrl.searchParams.get("url")?.trim() || defaultUrl;
@@ -28,6 +29,8 @@ export async function GET(request: NextRequest) {
   let apiKey: string | null = null;
   if (provider === "freetoken") {
     apiKey = await benchmarkStore.getFreetokenApiKey();
+  } else if (provider === "strata") {
+    apiKey = await benchmarkStore.getStrataApiKey();
   } else if (provider === "llamacpp") {
     apiKey = await benchmarkStore.getLlamacppApiKey();
   }

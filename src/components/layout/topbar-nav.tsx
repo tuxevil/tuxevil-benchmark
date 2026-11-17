@@ -5,7 +5,7 @@ import type { ModelProvider, TestRun } from "@/lib/contracts";
 import { useTheme } from "@/components/theme-provider";
 import { PROJECT_BRAND } from "@/lib/brand";
 
-export type ActiveTab = "analytics" | "suites" | "churn" | "monitor" | "settings" | "wizard" | "history";
+export type ActiveTab = "backups" | "analytics" | "suites" | "churn" | "performance" | "monitor" | "settings" | "wizard" | "history";
 
 interface TopbarNavProps {
   activeTab: ActiveTab;
@@ -29,11 +29,12 @@ export function TopbarNav({
   const isAnalyticsActive = activeTab === "analytics";
   const isSuitesActive = activeTab === "suites" || activeTab === "wizard";
   const isChurnActive = activeTab === "churn";
+  const isPerformanceActive = activeTab === "performance";
   const isMonitorActive = activeTab === "monitor" || activeTab === "history";
   const isSettingsActive = activeTab === "settings";
 
   const providerLabel =
-    activeProvider === "freetoken" ? "FreeToken" : activeProvider === "llamacpp" ? "llama.cpp" : "Ollama";
+    activeProvider === "freetoken" ? "FreeToken" : activeProvider === "strata" ? "Strata" : activeProvider === "llamacpp" ? "llama.cpp" : "Ollama";
 
   const handleNav = (tab: ActiveTab) => {
     if (onTabChange) {
@@ -54,6 +55,7 @@ export function TopbarNav({
       </div>
 
       <nav className="topbar-menu">
+        <Link href="/backups" className={`topbar-item ${activeTab === "backups" ? "active" : ""}`}><span className="nav-icon">▣</span><span className="nav-label">Respaldos</span></Link>
         <Link
           href="/"
           className={`topbar-item ${isAnalyticsActive ? "active" : ""}`}
@@ -79,6 +81,15 @@ export function TopbarNav({
         >
           <span className="nav-icon">🧬</span>
           <span className="nav-label">Churn Lab</span>
+        </Link>
+
+        <Link
+          href="/performance"
+          className={`topbar-item ${isPerformanceActive ? "active" : ""}`}
+          onClick={() => handleNav("performance")}
+        >
+          <span className="nav-icon">⏱️</span>
+          <span className="nav-label">Performance</span>
         </Link>
 
         <Link

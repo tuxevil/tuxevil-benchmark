@@ -12,7 +12,20 @@ describe("normalizeChatEndpoint", () => {
 });
 
 describe("streamOpenAICompatibleChat", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
+
+  it("allows a longer inference timeout for slow models", async () => {
+    vi.stubEnv("BENCHMARK_INFERENCE_TIMEOUT_MS", "900000");
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response('data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n')));
+    await streamOpenAICompatibleChat({
+      endpoint: "http://localhost:8000/v1", model: "model", provider: "strata",
+      messages: [{ role: "user", content: "Hello" }],
+      parameters: { temperature: 0.2, numCtx: 8192, topP: 0.9, repeatPenalty: 1.1, numPredict: 512 },
+      signal: new AbortController().signal,
+    });
+    expect(timeout).toHaveBeenCalledWith(900_000);
+  });
 
   it("parses streamed SSE chunks and calculates telemetry", async () => {
     vi.stubGlobal(
@@ -945,4 +958,37 @@ describe("streamOpenAICompatibleChat", () => {
     expect(result.truncated).toBe(true);
     expect(result.finishReason).toBe("length");
   });
+
+  it("sends deterministic seed when configured", async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((_url, init) => {
+        capturedBody = JSON.parse(init.body as string) as Record<string, unknown>;
+        return Promise.resolve(
+          new Response('data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n', { status: 200 }),
+        );
+      }),
+    );
+
+    const result = await streamOpenAICompatibleChat({
+      endpoint: "http://localhost:8080",
+      model: "seeded-model",
+      provider: "llamacpp",
+      messages: [{ role: "user", content: "hi" }],
+      parameters: {
+        temperature: 0,
+        numCtx: 8192,
+        topP: 1,
+        repeatPenalty: 1,
+        numPredict: 64,
+        seed: 42,
+      },
+      signal: new AbortController().signal,
+    });
+
+    expect(capturedBody!.seed).toBe(42);
+    expect(result.requestBody.seed).toBe(42);
+  });
+
 });

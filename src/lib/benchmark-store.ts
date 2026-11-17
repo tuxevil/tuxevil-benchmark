@@ -38,6 +38,7 @@ import { evaluateModelResponse, resolveEvaluationMode } from "@/lib/frontier-eva
 import { retryTransient } from "@/lib/retry";
 import { publishRunEvent } from "@/lib/run-events";
 import { LEGACY_SECURITY_SEED_NAMESPACE } from "@/lib/legacy-identifiers";
+import { PRACTICAL_SLM_SCENARIOS, PRACTICAL_SLM_SEED_NAMESPACE, PRACTICAL_SLM_SUITE_KEY, PRACTICAL_SLM_SUITE_VERSION } from "@/lib/practical-slm-suite";
 
 type RunListener = (event: RunEvent) => void;
 
@@ -103,6 +104,7 @@ export const benchmarkStore = {
       ollamaUrl: input.ollamaUrl ?? input.providerUrl ?? state.settings.ollamaUrl,
       provider: input.provider ?? "ollama",
       providerUrl: input.providerUrl ?? input.ollamaUrl ?? state.settings.ollamaUrl,
+      executionTargetId: input.executionTargetId ?? null,
       cancelController: new AbortController(),
       eventSequence: 0,
       listeners: new Set(),
@@ -111,6 +113,11 @@ export const benchmarkStore = {
     state.runs.set(id, run);
     emit(run, "run.created");
     return snapshot(run);
+  },
+
+  invalidateResultCache() {
+    state.runs.clear();
+    state.hydrated = false;
   },
 
   async hydrate() {
@@ -128,6 +135,7 @@ export const benchmarkStore = {
         state.settings = normalizePersistedSettings(state.settings);
       }
       await seedSecurityScenarios();
+      await seedPracticalSlmScenarios();
     })().finally(() => {
       state.hydrationPromise = undefined;
     });
@@ -142,6 +150,8 @@ export const benchmarkStore = {
       freetokenApiKeyConfigured: Boolean(state.settings.freetokenApiKeyConfigured || state.settings.freetokenApiKey),
       llamacppUrl: state.settings.llamacppUrl ?? "http://localhost:8080",
       llamacppApiKeyConfigured: Boolean(state.settings.llamacppApiKeyConfigured || state.settings.llamacppApiKey),
+      strataUrl: state.settings.strataUrl ?? "http://127.0.0.1:8081/v1",
+      strataApiKeyConfigured: Boolean(state.settings.strataApiKeyConfigured || state.settings.strataApiKey),
       activeProvider: state.settings.activeProvider ?? "ollama",
       evaluatorBaseUrl: active?.baseUrl ?? "",
       evaluatorModel: active?.model ?? "",
@@ -158,6 +168,9 @@ export const benchmarkStore = {
 
   async getLlamacppApiKey(): Promise<string | null> {
     return state.settings.llamacppApiKey ?? null;
+  },
+  async getStrataApiKey(): Promise<string | null> {
+    return state.settings.strataApiKey ?? null;
   },
 
   getEvaluatorConfig(): CreateRunInput["evaluator"] {
@@ -382,6 +395,9 @@ export const benchmarkStore = {
     llamacppUrl?: string;
     llamacppApiKey?: string;
     clearLlamacppApiKey?: boolean;
+    strataUrl?: string;
+    strataApiKey?: string;
+    clearStrataApiKey?: boolean;
     activeProvider?: import("@/lib/contracts").ModelProvider;
     evaluatorBaseUrl?: string;
     evaluatorModel?: string;
@@ -434,6 +450,12 @@ export const benchmarkStore = {
     } else if (input.llamacppApiKey !== undefined) {
       llamacppApiKey = input.llamacppApiKey.trim() || null;
     }
+    let strataApiKey = state.settings.strataApiKey ?? null;
+    if (input.clearStrataApiKey) {
+      strataApiKey = null;
+    } else if (input.strataApiKey !== undefined) {
+      strataApiKey = input.strataApiKey.trim() || null;
+    }
 
     const nextSettings: PersistedSettings = {
       ollamaUrl: input.ollamaUrl ?? state.settings.ollamaUrl,
@@ -443,6 +465,9 @@ export const benchmarkStore = {
       llamacppUrl: input.llamacppUrl ?? state.settings.llamacppUrl,
       llamacppApiKey,
       llamacppApiKeyConfigured: Boolean(llamacppApiKey),
+      strataUrl: input.strataUrl ?? state.settings.strataUrl,
+      strataApiKey,
+      strataApiKeyConfigured: Boolean(strataApiKey),
       activeProvider: input.activeProvider ?? state.settings.activeProvider ?? "ollama",
       evaluators,
       activeEvaluatorId,
@@ -652,7 +677,7 @@ export const benchmarkStore = {
     return state.scenarios.get(id) ?? null;
   },
 
-  async createScenario(input: Pick<Scenario, "name" | "category" | "attackType" | "systemPrompt" | "userMessages">) {
+  async createScenario(input: Pick<Scenario, "name" | "category" | "attackType" | "systemPrompt" | "userMessages" | "suiteKey" | "suiteVersion" | "grader">) {
     const now = new Date().toISOString();
     const scenario: Scenario = {
       id: crypto.randomUUID(),
@@ -661,6 +686,9 @@ export const benchmarkStore = {
       name: input.name,
       systemPrompt: input.systemPrompt,
       userMessages: input.userMessages,
+      suiteKey: input.suiteKey ?? null,
+      suiteVersion: input.suiteVersion ?? null,
+      grader: input.grader ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -669,7 +697,7 @@ export const benchmarkStore = {
     return scenario;
   },
 
-  async updateScenario(id: string, input: Pick<Scenario, "name" | "category" | "attackType" | "systemPrompt" | "userMessages">) {
+  async updateScenario(id: string, input: Pick<Scenario, "name" | "category" | "attackType" | "systemPrompt" | "userMessages" | "suiteKey" | "suiteVersion" | "grader">) {
     const scenario = state.scenarios.get(id);
     if (!scenario) return null;
     const updatedScenario: Scenario = {
@@ -677,6 +705,9 @@ export const benchmarkStore = {
       ...input,
       category: input.category ?? scenario.category ?? "GENERAL",
       attackType: input.attackType !== undefined ? input.attackType : scenario.attackType ?? null,
+      suiteKey: input.suiteKey !== undefined ? input.suiteKey : scenario.suiteKey ?? null,
+      suiteVersion: input.suiteVersion !== undefined ? input.suiteVersion : scenario.suiteVersion ?? null,
+      grader: input.grader !== undefined ? input.grader : scenario.grader ?? null,
       updatedAt: new Date().toISOString(),
     };
     await persistScenario(updatedScenario);
@@ -746,6 +777,34 @@ async function seedSecurityScenarios() {
     await persistScenario(scenario);
     state.scenarios.set(scenario.id, scenario);
   }
+}
+
+async function seedPracticalSlmScenarios() {
+  for (const definition of PRACTICAL_SLM_SCENARIOS) {
+    const seededId = practicalScenarioId(definition.key);
+    if (state.scenarios.has(seededId)) continue;
+    const now = new Date().toISOString();
+    const scenario: Scenario = {
+      id: seededId,
+      category: "GENERAL",
+      attackType: null,
+      name: definition.name,
+      systemPrompt: definition.systemPrompt,
+      userMessages: definition.userMessages,
+      suiteKey: PRACTICAL_SLM_SUITE_KEY,
+      suiteVersion: PRACTICAL_SLM_SUITE_VERSION,
+      grader: definition.grader,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await persistScenario(scenario);
+    state.scenarios.set(scenario.id, scenario);
+  }
+}
+
+function practicalScenarioId(key: string) {
+  const hash = createHash("sha256").update(`${PRACTICAL_SLM_SEED_NAMESPACE}:${key}`).digest("hex");
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
 }
 
 function seedScenarioId(attackType: SecurityAttackType) {
@@ -819,6 +878,7 @@ function snapshot(run: StoredRun, options: { includeRawJson?: boolean } = {}): T
     errorMessage: run.errorMessage,
     provider: run.provider ?? "ollama",
     providerUrl: run.providerUrl ?? run.ollamaUrl,
+    executionTargetId: run.executionTargetId ?? null,
   });
 }
 
@@ -850,6 +910,9 @@ function normalizePersistedSettings(settings: PersistedSettings): PersistedSetti
     llamacppUrl: legacy.llamacppUrl || "http://localhost:8080",
     llamacppApiKey: legacy.llamacppApiKey ?? null,
     llamacppApiKeyConfigured: Boolean(legacy.llamacppApiKeyConfigured || legacy.llamacppApiKey),
+    strataUrl: legacy.strataUrl || "http://127.0.0.1:8081/v1",
+    strataApiKey: legacy.strataApiKey ?? null,
+    strataApiKeyConfigured: Boolean(legacy.strataApiKeyConfigured || legacy.strataApiKey),
     activeProvider: legacy.activeProvider ?? "ollama",
     evaluators,
     activeEvaluatorId: legacy.activeEvaluatorId ?? (evaluators.length > 0 ? evaluators[0].id : null),
@@ -874,6 +937,9 @@ function defaultSettings(): PersistedSettings {
     llamacppUrl: process.env.LLAMACPP_URL ?? "http://localhost:8080",
     llamacppApiKey: process.env.LLAMACPP_API_KEY ?? null,
     llamacppApiKeyConfigured: Boolean(process.env.LLAMACPP_API_KEY),
+    strataUrl: process.env.STRATA_URL ?? "http://127.0.0.1:8081/v1",
+    strataApiKey: process.env.STRATA_API_KEY ?? null,
+    strataApiKeyConfigured: Boolean(process.env.STRATA_API_KEY),
     activeProvider: "ollama",
     evaluators,
     activeEvaluatorId: evaluators.length > 0 ? "env-evaluator" : null,

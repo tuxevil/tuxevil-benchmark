@@ -3,6 +3,9 @@ CREATE TABLE IF NOT EXISTS scenarios (
   name VARCHAR(255) NOT NULL,
   system_prompt TEXT NOT NULL,
   user_messages JSONB NOT NULL,
+  suite_key VARCHAR(255),
+  suite_version VARCHAR(255),
+  grader_json JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -24,6 +27,8 @@ ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS freetoken_url TEXT;
 ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS freetoken_api_key_encrypted TEXT;
 ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS llamacpp_url TEXT;
 ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS llamacpp_api_key_encrypted TEXT;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS strata_url TEXT;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS strata_api_key_encrypted TEXT;
 ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS active_provider VARCHAR(32) DEFAULT 'ollama';
 
 CREATE TABLE IF NOT EXISTS evaluators (
@@ -79,6 +84,7 @@ ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS scenario_id UUID;
 ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS samples_per_model SMALLINT NOT NULL DEFAULT 1;
 ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS provider VARCHAR(32) DEFAULT 'ollama';
 ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS provider_url TEXT;
+ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS execution_target_id UUID;
 
 CREATE TABLE IF NOT EXISTS model_results (
   id UUID PRIMARY KEY,
@@ -102,6 +108,9 @@ CREATE TABLE IF NOT EXISTS model_results (
 
 ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS category VARCHAR(16) NOT NULL DEFAULT 'GENERAL';
 ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS attack_type VARCHAR(32);
+ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS suite_key VARCHAR(255);
+ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS suite_version VARCHAR(255);
+ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS grader_json JSONB;
 
 ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS category VARCHAR(16) NOT NULL DEFAULT 'GENERAL';
 ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS attack_type VARCHAR(32);
@@ -194,3 +203,5 @@ LEFT JOIN evaluations e ON e.model_result_id = m.id
 WHERE m.status = 'COMPLETED' AND m.eval_status <> 'FAILED'
 GROUP BY m.model_name;
 
+
+CREATE TABLE IF NOT EXISTS result_resource_measurements (model_result_id UUID PRIMARY KEY REFERENCES model_results(id) ON DELETE CASCADE, payload_json JSONB NOT NULL);

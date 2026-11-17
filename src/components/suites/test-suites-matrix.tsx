@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Scenario, TestCategory, SecurityAttackType, BenchmarkParameters, ModelProvider } from "@/lib/contracts";
 import { quickProfileSummary } from "@/lib/ia-solar-quick-profile";
 import { chatbotPlusSummary } from "@/lib/ia-solar-chatbot-plus-profile";
@@ -28,6 +29,7 @@ export function TestSuitesMatrix({
   onProviderChange,
   onLaunchRun,
 }: TestSuitesMatrixProps) {
+  const router = useRouter();
   // Scenarios state
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [availableModels, setAvailableModels] = useState<Array<{ name: string; size: string }>>([]);
@@ -45,6 +47,8 @@ export function TestSuitesMatrix({
   ]);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
   const [savingNotice, setSavingNotice] = useState<string | null>(null);
+  const selectedScenario = scenarios.find((scenario) => scenario.id === selectedScenarioId) ?? null;
+  const selectedIsPractical = selectedScenario?.suiteKey === "practical-slm";
 
   // Right Panel - Matrix Launcher Mode
   const [mode, setMode] = useState<"onboarding" | "update" | "custom">("onboarding");
@@ -94,7 +98,7 @@ export function TestSuitesMatrix({
         const list = data.models ?? [];
         setAvailableModels(list);
         if (list.length > 0) {
-          if (activeProvider === "freetoken" || activeProvider === "llamacpp") {
+          if (activeProvider !== "ollama") {
             setOnboardingModel(list[0].name);
             setSelectedModels([list[0].name]);
           } else {
@@ -133,7 +137,7 @@ export function TestSuitesMatrix({
           const list = modData.models ?? [];
           setAvailableModels(list);
           if (list.length > 0) {
-            if (activeProvider === "freetoken" || activeProvider === "llamacpp") {
+            if (activeProvider !== "ollama") {
               setOnboardingModel(list[0].name);
               setSelectedModels([list[0].name]);
             } else {
@@ -285,7 +289,7 @@ export function TestSuitesMatrix({
         }
         // All cases have been queued durably, not completed. Monitor shows
         // their independent run states and lets the user pause/cancel runs.
-        window.location.assign("/monitor");
+        router.push("/monitor");
         return;
       }
 
@@ -410,7 +414,7 @@ export function TestSuitesMatrix({
               <option value="">-- Select Saved Scenario --</option>
               {scenarios.map((s) => (
                 <option key={s.id} value={s.id}>
-                  [{s.category}] {s.name}
+                  [{s.suiteKey === "practical-slm" ? "Practical SLM" : s.category}] {s.name}
                 </option>
               ))}
             </select>
@@ -515,10 +519,13 @@ export function TestSuitesMatrix({
           <button type="button" className="btn-save-library" onClick={handleSaveScenario}>
             💾 Save to Library
           </button>
-          {selectedScenarioId && (
+          {selectedScenarioId && !selectedIsPractical && (
             <button type="button" className="btn-delete-library" onClick={handleDeleteScenario}>
               🗑️ Delete from Library
             </button>
+          )}
+          {selectedIsPractical && (
+            <span className="sub">🔒 Versioned Practical SLM case · Save to Library creates a customizable copy.</span>
           )}
         </div>
       </div>
@@ -534,12 +541,12 @@ export function TestSuitesMatrix({
               onClick={fetchOllamaModels}
               disabled={isRefreshingModels}
             >
-              {isRefreshingModels ? "🔄 Loading..." : `🔄 Refresh ${activeProvider === "freetoken" ? "FreeToken" : activeProvider === "llamacpp" ? "llama.cpp" : "Ollama"}`}
+              {isRefreshingModels ? "🔄 Loading..." : `🔄 Refresh ${activeProvider === "freetoken" ? "FreeToken" : activeProvider === "strata" ? "Strata" : activeProvider === "llamacpp" ? "llama.cpp" : "Ollama"}`}
             </button>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", marginBottom: "0.25rem" }}>
-            {(["ollama", "freetoken", "llamacpp"] as const).map((p) => {
-              const label = p === "freetoken" ? "⚡ FreeToken" : p === "llamacpp" ? "🦙 llama.cpp" : "🦙 Ollama";
+            {(["ollama", "freetoken", "llamacpp", "strata"] as const).map((p) => {
+              const label = p === "freetoken" ? "⚡ FreeToken" : p === "strata" ? "Strata" : p === "llamacpp" ? "🦙 llama.cpp" : "🦙 Ollama";
               const isSelected = activeProvider === p;
               return (
                 <button

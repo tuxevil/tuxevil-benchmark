@@ -156,7 +156,7 @@ export async function streamOpenAICompatibleChat({
   apiKey?: string | null;
   signal: AbortSignal;
   onToken?: (token: string) => void;
-  provider: "freetoken" | "llamacpp";
+  provider: "freetoken" | "llamacpp" | "strata";
   providerName?: string;
   /**
    * When true, captures the raw SSE stream into WireDiagnostics.rawSse.
@@ -166,7 +166,11 @@ export async function streamOpenAICompatibleChat({
 }): Promise<OpenAIChatResult> {
   const startedAt = performance.now();
   const url = normalizeChatEndpoint(endpoint);
-  const timeoutSignal = AbortSignal.timeout(120_000);
+  const configuredTimeout = Number(process.env.BENCHMARK_INFERENCE_TIMEOUT_MS);
+  const timeoutMs = Number.isSafeInteger(configuredTimeout) && configuredTimeout > 0 && configuredTimeout <= 2_147_483_647
+    ? configuredTimeout
+    : 120_000;
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
   const requestSignal = AbortSignal.any([signal, timeoutSignal]);
 
   const headers: Record<string, string> = {
@@ -185,6 +189,7 @@ export async function streamOpenAICompatibleChat({
     top_p: parameters.topP,
     max_tokens: parameters.numPredict,
   };
+  if (parameters.seed !== undefined) body.seed = parameters.seed;
 
   const reasoningEffort = parameters.reasoningEffort ?? "off";
   if (reasoningEffort !== "default") {

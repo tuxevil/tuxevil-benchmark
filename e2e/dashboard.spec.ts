@@ -300,10 +300,209 @@ test("Churn Lab renders the experiment workbench", async ({ page }) => {
   await page.goto("/churn");
 
   await expect(page.getByRole("heading", { name: "Churn Lab" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Execution Targets & Auto Probe" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Model Artifact" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Execution Environment" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Experiment Builder" })).toBeVisible();
   await expect(page.getByText("Quant / weights")).toBeVisible();
   await expect(page.getByText("Observation Import")).toBeVisible();
   await expect(page.getByText("Paired Comparison")).toBeVisible();
+});
+
+
+test("Churn Lab exposes automatic Experiment Runner for a selected experiment", async ({ page }) => {
+  const updatedAt = new Date().toISOString();
+  await page.route(/\/api\/experiments\/artifacts$/, async (route) => {
+    await route.fulfill({ json: { artifacts: [] } });
+  });
+  await page.route(/\/api\/experiments\/environments$/, async (route) => {
+    await route.fulfill({ json: { environments: [] } });
+  });
+  await page.route(/\/api\/experiments\/targets$/, async (route) => {
+    await route.fulfill({
+      json: {
+        targets: [{
+          id: "11111111-1111-4111-8111-111111111111",
+          label: "local llama",
+          provider: "llamacpp",
+          endpoint: "http://127.0.0.1:8080",
+          apiKeyConfigured: false,
+          updatedAt,
+        }],
+      },
+    });
+  });
+  await page.route(/\/api\/scenarios$/, async (route) => {
+    await route.fulfill({
+      json: {
+        scenarios: [{
+          id: "22222222-2222-4222-8222-222222222222",
+          name: "Deterministic smoke case",
+          category: "GENERAL",
+          attackType: null,
+          suiteKey: "practical-slm",
+          suiteVersion: "1.0.0",
+          grader: { type: "EXACT_TEXT", version: 1, expected: "OK", caseSensitive: true, collapseWhitespace: false },
+        }],
+      },
+    });
+  });
+  await page.route(/\/api\/experiments$/, async (route) => {
+    await route.fulfill({
+      json: {
+        experiments: [{
+          id: "33333333-3333-4333-8333-333333333333",
+          name: "Runner smoke",
+          factorUnderTest: "MODEL_WEIGHTS",
+          status: "DRAFT",
+          validityStatus: "UNCHECKED",
+          baselineVariantId: "44444444-4444-4444-8444-444444444444",
+          suiteKey: null,
+          notes: "",
+          updatedAt,
+        }],
+      },
+    });
+  });
+  await page.route(/\/api\/experiments\/33333333-3333-4333-8333-333333333333$/, async (route) => {
+    await route.fulfill({
+      json: {
+        experiment: {
+          id: "33333333-3333-4333-8333-333333333333",
+          name: "Runner smoke",
+          factorUnderTest: "MODEL_WEIGHTS",
+          status: "DRAFT",
+          validityStatus: "UNCHECKED",
+          baselineVariantId: "44444444-4444-4444-8444-444444444444",
+          suiteKey: null,
+          notes: "",
+          updatedAt,
+        },
+        variants: [
+          {
+            id: "44444444-4444-4444-8444-444444444444",
+            experimentId: "33333333-3333-4333-8333-333333333333",
+            name: "baseline",
+            role: "BASELINE",
+            modelArtifactId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            executionEnvironmentId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            executionTargetId: null,
+            executionModelName: null,
+            inferenceParameters: {},
+            reasoningMode: null,
+          },
+          {
+            id: "55555555-5555-4555-8555-555555555555",
+            experimentId: "33333333-3333-4333-8333-333333333333",
+            name: "variant",
+            role: "VARIANT",
+            modelArtifactId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            executionEnvironmentId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            executionTargetId: null,
+            executionModelName: null,
+            inferenceParameters: {},
+            reasoningMode: null,
+          },
+        ],
+      },
+    });
+  });
+
+  await page.goto("/churn");
+  const runner = page.locator(".churn-runner");
+  await expect(runner.getByRole("heading", { name: "Experiment Runner" })).toBeVisible();
+  await expect(runner.getByText("Deterministic smoke case")).toBeVisible();
+  await expect(runner.getByRole("button", { name: "Select Practical SLM" })).toBeVisible();
+  await expect(runner.getByText(/Practical SLM 1\.0\.0 · objective/)).toBeVisible();
+  await expect(runner.getByText("baseline", { exact: true })).toBeVisible();
+  await expect(runner.getByText("variant", { exact: true })).toBeVisible();
+});
+
+
+test("Performance Lab renders isolated Practical SLM execution controls", async ({ page }) => {
+  const experimentId = "33333333-3333-4333-8333-333333333333";
+  const targetId = "11111111-1111-4111-8111-111111111111";
+  const scenarioId = "22222222-2222-4222-8222-222222222222";
+
+  await page.route(/\/api\/experiments$/, async (route) => {
+    await route.fulfill({
+      json: {
+        experiments: [{
+          id: experimentId,
+          name: "Qwen vs Bonsai",
+          factorUnderTest: "MODEL",
+          status: "READY",
+          validityStatus: "UNCHECKED",
+        }],
+      },
+    });
+  });
+  await page.route(/\/api\/scenarios$/, async (route) => {
+    await route.fulfill({
+      json: {
+        scenarios: [{
+          id: scenarioId,
+          name: "Practical SLM · Reasoning · Multiplication",
+          category: "GENERAL",
+          attackType: null,
+          suiteKey: "practical-slm",
+          suiteVersion: "1.0.0",
+          grader: { type: "NUMBER", version: 1, expected: 391, tolerance: 0 },
+        }],
+      },
+    });
+  });
+  await page.route(/\/api\/experiments\/targets$/, async (route) => {
+    await route.fulfill({
+      json: {
+        targets: [{
+          id: targetId,
+          label: "example-host llama.cpp",
+          provider: "llamacpp",
+          endpoint: "http://127.0.0.1:8080",
+          apiKeyConfigured: false,
+        }],
+      },
+    });
+  });
+  await page.route(new RegExp(`/api/experiments/${experimentId}$`), async (route) => {
+    await route.fulfill({
+      json: {
+        experiment: {
+          id: experimentId,
+          name: "Qwen vs Bonsai",
+          factorUnderTest: "MODEL",
+          status: "READY",
+          validityStatus: "UNCHECKED",
+          baselineVariantId: "44444444-4444-4444-8444-444444444444",
+        },
+        variants: [
+          {
+            id: "44444444-4444-4444-8444-444444444444",
+            name: "Qwen IQ3",
+            role: "BASELINE",
+            executionTargetId: targetId,
+            executionModelName: "qwen.gguf",
+          },
+          {
+            id: "55555555-5555-4555-8555-555555555555",
+            name: "Bonsai PQ2",
+            role: "VARIANT",
+            executionTargetId: targetId,
+            executionModelName: "bonsai.gguf",
+          },
+        ],
+      },
+    });
+  });
+
+  await page.goto("/performance");
+
+  await expect(page.getByRole("heading", { name: "Performance Lab" })).toBeVisible();
+  await expect(page.getByText("seconds / successful task")).toBeVisible();
+  await expect(page.getByText("Reasoning · Multiplication")).toBeVisible();
+  await expect(page.getByText("Qwen IQ3")).toBeVisible();
+  await expect(page.getByText("Bonsai PQ2")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run isolated performance benchmark" })).toBeEnabled();
+  await expect(page.getByLabel("Verified cold sample")).toBeDisabled();
 });

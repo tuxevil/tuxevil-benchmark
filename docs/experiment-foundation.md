@@ -17,7 +17,19 @@ Implemented on `work/experiment-foundation`:
 - `Experiment` and `ExperimentVariant` records with one-baseline invariant;
 - per-case `ExperimentObservation` persistence;
 - API endpoints for artifacts, environments, experiments, variants and observations;
-- baseline-vs-variant comparison API backed by persisted observations.
+- baseline-vs-variant comparison API backed by persisted observations;
+- private `ExecutionTarget` registry for provider endpoint/credential connectivity;
+- encrypted target credentials kept outside scientific fingerprints;
+- provider Auto Probe for Ollama, llama.cpp and FreeToken/OpenAI-compatible targets;
+- automatic registration of provider-reported ModelArtifact + ExecutionEnvironment snapshots;
+- operational bindings from ExperimentVariant to ExecutionTarget + provider model identifier;
+- automatic Experiment Runner orchestration through the existing TestRun queue/worker;
+- provider preflight before launch to reject known model/runtime/config contradictions;
+- execution-scoped observations keyed by execution + variant + stable case ID;
+- automatic execution reconciliation, observation capture and paired comparison;
+- versioned Practical SLM v1 suite with 15 deterministic scenarios;
+- deterministic grader engine for exact text, exact JSON, numeric answers, and required/forbidden content;
+- deterministic experiment success policy that does not require an LLM judge.
 
 Current API shape:
 
@@ -28,9 +40,18 @@ Current API shape:
 - `GET/POST /api/experiments/:id/variants`
 - `GET/POST /api/experiments/:id/variants/:variantId/observations`
 - `GET /api/experiments/:id/compare?variantId=...&baselineRepeatVariantId=...`
+- `GET/POST /api/experiments/targets`
+- `GET/PATCH/DELETE /api/experiments/targets/:id`
+- `POST /api/experiments/targets/:id/probe`
+- `GET/PATCH /api/experiments/:id/variants/:variantId`
+- `POST /api/experiments/:id/execute`
+- `GET /api/experiments/:id/executions/:executionId`
 
-The dedicated Churn Lab UI and automatic capture of model/runtime metadata from
-providers are intentionally still separate follow-up work.
+The Churn Lab UI, provider Auto Probe, and automatic Experiment Runner are
+implemented. Manual ExperimentObservation import remains available as a
+fallback/current working set. Automatic runs persist a separate
+execution-scoped observation set so repeated executions remain historically
+isolated and reproducible.
 
 ## Core principle
 
@@ -143,6 +164,8 @@ A variant binds:
 
 - model artifact;
 - execution environment;
+- optional operational execution target;
+- provider-specific execution model identifier;
 - inference parameters;
 - prompt/template version;
 - reasoning mode;
@@ -154,6 +177,12 @@ experiment is explicitly factorial.
 ### PairedObservation
 
 Every suite should expose a stable `caseId` and a canonical comparison value.
+Manual/current observations are stored at variant scope. Automatic Experiment
+Runner observations are stored at execution scope, preventing a later rerun
+from overwriting or contaminating an earlier execution.
+
+For automatic response runs, the current stable identity is
+`scenarioId::sample-N`.
 
 Examples:
 
@@ -215,16 +244,31 @@ Expose CRUD/read APIs and preserve backward compatibility with existing runs.
 
 ### 3. Practical SLM Suite
 
-Mostly deterministic graders:
+Practical SLM v1 is implemented as the immutable `practical-slm@1.0.0`
+scenario set. It currently contains 15 deterministic cases across:
 
-- extraction;
 - classification;
-- strict JSON;
-- instruction following;
-- RAG with fixed retrieved context;
-- short reasoning;
-- coding with executable tests;
-- consistency checks.
+- strict JSON extraction;
+- instruction/format following;
+- short arithmetic reasoning;
+- fixed-context retrieval;
+- multi-turn state retention.
+
+The deterministic grader types are:
+
+- `EXACT_TEXT`;
+- `JSON_EXACT` (canonical object-key ordering);
+- `NUMBER` with explicit tolerance;
+- `CONTAINS_ALL` with required and forbidden fragments.
+
+Experiment Runner can use `successPolicy=DETERMINISTIC`, in which case every
+selected scenario must have a valid grader and no frontier evaluator is
+required. Grader outcome and diagnostics are stored in the execution-scoped
+observation metadata.
+
+Coding with executable tests and broader consistency/property testing remain
+follow-up work because they require a sandbox/execution model rather than
+response-only deterministic grading.
 
 ### 4. Churn Lab
 
@@ -240,20 +284,41 @@ Preset experiments:
 
 ### 5. Performance Lab
 
-Add:
+The first Performance Lab implementation is available at `/performance`.
 
-- cold/warm/hot TTFT;
-- load time;
-- TPOT / ITL;
-- p50/p90/p95/p99;
-- concurrency sweeps;
-- aggregate throughput;
-- memory/VRAM;
-- optional power and joules/token;
-- eventually joules/successful-task.
+Implemented:
 
-Thermal/idle gating should prevent load from a previous run contaminating the
-next model's speed measurement.
+- `executionMode=PERFORMANCE` on Experiment Runner;
+- exclusive Execution Target leases for the lifetime of an experiment execution;
+- one-TestRun-at-a-time serial scheduling independent of global worker concurrency;
+- durable enqueue claims so polling and worker reconciliation cannot double-enqueue;
+- orphan recovery awareness so planned-but-not-yet-enqueued runs are not mistaken for stalled jobs;
+- configurable warmup samples that execute but are excluded from measured observations;
+- optional verified cold sample for Ollama targets by unloading the model and confirming removal through `/api/ps`;
+- distinct `COLD` and `WARM` observation identities;
+- p50/p90/p95 summaries for TTFT, total duration, tok/s and token counts;
+- objective success rate plus `seconds/successful-task`, output tokens/success and total tokens/success;
+- execution-scoped performance report API and UI.
+
+A performance execution leases all targets used by its variants. This prevents
+another tuxevil Benchmark experiment from using those same targets until the
+execution ends. The performance scheduler additionally runs only one TestRun at
+a time, so baseline and variants cannot compete with each other even when
+`BENCHMARK_CONCURRENCY > 1`.
+
+Verified cold lifecycle control is currently provider-specific. Ollama can be
+unloaded through its API; fixed llama.cpp servers and generic OpenAI-compatible
+targets are therefore warm-only rather than being mislabeled as cold.
+
+Still planned:
+
+- explicit hot-cache phase beyond ordinary warm samples;
+- TPOT / ITL distributions;
+- p99 and concurrency sweeps;
+- aggregate multi-request throughput;
+- memory/VRAM sampling;
+- thermal/idle gating;
+- optional power, joules/token and joules/successful-task.
 
 ### 6. Tool Calling Suite
 

@@ -20,7 +20,7 @@ export function decryptSecret(value: string) {
 
 function encryptionKey() {
   const configured = process.env.APP_ENCRYPTION_KEY?.trim();
-  if (!configured) throw new Error("APP_ENCRYPTION_KEY is required to persist evaluator credentials.");
+  if (!configured) throw new Error("APP_ENCRYPTION_KEY is required to persist encrypted credentials.");
   if (/^[0-9a-f]{64}$/i.test(configured)) return Buffer.from(configured, "hex");
   return createHash("sha256").update(configured).digest();
 }

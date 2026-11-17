@@ -62,7 +62,7 @@ const LEAK_MARKERS = [
   "raw_json",
   "rawJson",
   "api.openai.com",
-  "10.128.128.254",
+  "127.0.0.1",
 ];
 
 function bucketFor(attackType: string | null): CategoryBucket | null {
@@ -223,6 +223,9 @@ function main() {
       const json = JSON.stringify(snapshot, null, 2);
 
       const leaks = LEAK_MARKERS.filter((marker) => json.toLowerCase().includes(marker.toLowerCase()));
+      if (/\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b/.test(json)) {
+        leaks.push("private network address");
+      }
       if (leaks.length > 0) {
         console.error(`[export-public-snapshot] REFUSING to write snapshot: leak markers found: ${leaks.join(", ")}`);
         process.exit(1);

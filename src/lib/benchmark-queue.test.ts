@@ -277,6 +277,46 @@ describe("enqueueBenchmark", () => {
     expect(result.outputTokens).toBe(12);
   });
 
+  it("runs a benchmark model using Strata provider", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          [
+            'data: {"id":"chatcmpl-ft","choices":[{"delta":{"content":"Strata response"}}]}',
+            'data: {"id":"chatcmpl-ft","choices":[{"delta":{"content":" completed."}}]}',
+            'data: {"id":"chatcmpl-ft","choices":[],"usage":{"prompt_tokens":5,"completion_tokens":12,"total_tokens":17}}',
+            "data: [DONE]",
+          ].join("\n\n"),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    const run = benchmarkStore.createRun({
+      provider: "strata",
+      providerUrl: "http://127.0.0.1:8081/v1",
+      samplesPerModel: 1,
+      systemPrompt: "Be concise.",
+      userMessages: ["Hello Strata."],
+      models: [`strata-model-${crypto.randomUUID()}`],
+      parameters: { temperature: 0.2, numCtx: 8192, topP: 0.9, repeatPenalty: 1.1, numPredict: 64 },
+    });
+
+    expect(run.provider).toBe("strata");
+    expect(run.providerUrl).toBe("http://127.0.0.1:8081/v1");
+
+    enqueueBenchmark(run.id);
+    const completed = await waitForRun(run.id);
+    const result = completed.results[0];
+
+    expect(completed.status).toBe("COMPLETED");
+    expect(result.status).toBe("COMPLETED");
+    expect(result.responseText).toBe("Strata response completed.");
+    expect(result.inputTokens).toBe(5);
+    expect(result.outputTokens).toBe(12);
+  });
+
   it("runs a benchmark model using llama.cpp provider with timings", async () => {
     vi.stubGlobal(
       "fetch",
