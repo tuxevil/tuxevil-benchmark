@@ -44,10 +44,15 @@ export async function reconcileOrphanedRuns(options: { maxRecoveries?: number } 
       const jobId = `benchmark-${run.id}`;
       const job = await queue.getJob(jobId);
       const jobState = job ? await job.getState() : null;
-      if (jobState && jobState !== "failed") {
+      const hasIncompleteResults = run.results.some((entry) =>
+        ["PENDING", "INFERRING", "EVALUATING"].includes(entry.status),
+      );
+      const completedJobNeedsRecovery = jobState === "completed" && hasIncompleteResults;
+      if (jobState && jobState !== "failed" && !completedJobNeedsRecovery) {
         result.skipped.push(run.id);
         continue;
       }
+      if (completedJobNeedsRecovery) await job?.remove();
 
       const recoveryKey = `${RECOVERY_KEY_PREFIX}${run.id}`;
       const recoveries = Number((await redis.get(recoveryKey)) ?? 0);

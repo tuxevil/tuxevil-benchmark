@@ -309,7 +309,7 @@ async function executeModel(runId: string, resultId: string) {
     const totals = aggregateTelemetry(turnTelemetry);
     benchmarkStore.updateResult(runId, resultId, {
       ...totals,
-      totalDurationMs: attempts.reduce((sum,a)=>sum+a.durationMs,0),
+      totalDurationMs: roundedAttemptDurationMs(attempts),
       finishReason: lastTurn?.finishReason ?? null,
       truncated: lastTurn?.truncated ?? false,
     });
@@ -381,7 +381,7 @@ async function executeModel(runId: string, resultId: string) {
       errorMessage: error instanceof Error ? error.message : "Unknown inference error.",
     });
   } finally {
-    if (attempts.length) benchmarkStore.updateResult(runId, resultId, {totalDurationMs: attempts.reduce((sum,a)=>sum+a.durationMs,0)});
+    if (attempts.length) benchmarkStore.updateResult(runId, resultId, { totalDurationMs: roundedAttemptDurationMs(attempts) });
     await finishResources();
   }
 }
@@ -414,6 +414,10 @@ function aggregateTelemetry(turns: Array<{
 function sumNullable(values: Array<number | null>) {
   if (values.every((value) => value === null)) return null;
   return values.reduce<number>((total, value) => total + (value ?? 0), 0);
+}
+
+function roundedAttemptDurationMs(attempts: InferenceAttempt[]) {
+  return Math.round(attempts.reduce((total, attempt) => total + attempt.durationMs, 0));
 }
 
 async function executeBenchmark(runId: string) {
