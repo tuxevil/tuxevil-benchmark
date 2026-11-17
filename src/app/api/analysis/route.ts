@@ -1,7 +1,8 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { aggregateScenarioAnalysis } from "@/lib/database";
 
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   const url = new URL(request.url);
   const scenarioId = url.searchParams.get("scenarioId")?.trim() || null;
   const systemPrompt = url.searchParams.get("systemPrompt") ?? "";
@@ -24,4 +25,8 @@ export async function GET(request: Request) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 404 });
   }
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
 }

@@ -1,8 +1,9 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { benchmarkStore } from "@/lib/benchmark-store";
 import { scenarioSchema } from "@/lib/contracts";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handleGET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   await benchmarkStore.hydrate();
   const { id } = await params;
   const scenario = benchmarkStore.getScenario(id);
@@ -11,7 +12,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     : NextResponse.json({ error: "Scenario not found." }, { status: 404 });
 }
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handlePATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await benchmarkStore.hydrate();
   const { id } = await params;
   const existing = benchmarkStore.getScenario(id);
@@ -36,7 +37,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     : NextResponse.json({ error: "Scenario not found." }, { status: 404 });
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handleDELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   await benchmarkStore.hydrate();
   const { id } = await params;
   const existing = benchmarkStore.getScenario(id);
@@ -57,4 +58,16 @@ async function readJson(request: Request) {
   } catch {
     return null;
   }
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
+}
+
+export async function PATCH(...args: Parameters<typeof handlePATCH>) {
+ const denied=await requireAdmin("PATCH"); if(denied)return denied; return handlePATCH(...args);
+}
+
+export async function DELETE(...args: Parameters<typeof handleDELETE>) {
+ const denied=await requireAdmin("DELETE"); if(denied)return denied; return handleDELETE(...args);
 }

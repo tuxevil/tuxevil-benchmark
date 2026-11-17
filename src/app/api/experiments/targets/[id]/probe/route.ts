@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getExecutionTargetConnection } from "@/lib/execution-target-store";
@@ -12,7 +13,7 @@ const probeInputSchema = z.object({
   register: z.boolean().default(true),
 });
 
-export async function POST(
+async function handlePOST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -72,4 +73,8 @@ export async function POST(
     const message = error instanceof Error ? error.message : "Provider probe failed.";
     return NextResponse.json({ error: message }, { status: 502 });
   }
+}
+
+export async function POST(...args: Parameters<typeof handlePOST>) {
+ const denied=await requireAdmin("POST"); if(denied)return denied; return handlePOST(...args);
 }

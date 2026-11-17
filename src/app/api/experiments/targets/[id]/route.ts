@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { executionTargetUpdateSchema } from "@/lib/execution-targets";
 import {
@@ -6,7 +7,7 @@ import {
   updateExecutionTarget,
 } from "@/lib/execution-target-store";
 
-export async function GET(
+async function handleGET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -17,7 +18,7 @@ export async function GET(
     : NextResponse.json({ error: "Execution target not found." }, { status: 404 });
 }
 
-export async function PATCH(
+async function handlePATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -48,7 +49,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function handleDELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -57,4 +58,16 @@ export async function DELETE(
   return deleted
     ? new NextResponse(null, { status: 204 })
     : NextResponse.json({ error: "Execution target not found." }, { status: 404 });
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
+}
+
+export async function PATCH(...args: Parameters<typeof handlePATCH>) {
+ const denied=await requireAdmin("PATCH"); if(denied)return denied; return handlePATCH(...args);
+}
+
+export async function DELETE(...args: Parameters<typeof handleDELETE>) {
+ const denied=await requireAdmin("DELETE"); if(denied)return denied; return handleDELETE(...args);
 }

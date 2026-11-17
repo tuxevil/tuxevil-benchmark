@@ -1,13 +1,14 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { benchmarkStore } from "@/lib/benchmark-store";
 import { scenarioSchema } from "@/lib/contracts";
 
-export async function GET() {
+async function handleGET() {
   await benchmarkStore.hydrate();
   return NextResponse.json({ scenarios: benchmarkStore.listScenarios() });
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   await benchmarkStore.hydrate();
   let body: unknown;
   try {
@@ -25,4 +26,12 @@ export async function POST(request: Request) {
     );
   }
   return NextResponse.json({ scenario: await benchmarkStore.createScenario(parsed.data) }, { status: 201 });
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
+}
+
+export async function POST(...args: Parameters<typeof handlePOST>) {
+ const denied=await requireAdmin("POST"); if(denied)return denied; return handlePOST(...args);
 }

@@ -1,0 +1,9 @@
+'use client';
+import { useEffect,useState } from 'react';
+type Model={name:string;configuration:string;security:number|null;quality:number|null;speed:number|null;runs:number;eligible:boolean;score:number};
+export default function Live(){
+ const [data,setData]=useState<{updatedAt:string;models:Model[]}|null>(null);const [error,setError]=useState(false);
+ useEffect(()=>{let stopped=false;let timer:ReturnType<typeof setTimeout>;const poll=async()=>{try{const response=await fetch('/api/public/results',{cache:'no-store'});if(!response.ok)throw Error();const next=await response.json();if(!stopped){setData(next);setError(false);}}catch{if(!stopped)setError(true);}finally{if(!stopped)timer=setTimeout(poll,3000);}};void poll();return()=>{stopped=true;clearTimeout(timer);};},[]);
+ const value=(n:number|null,suffix='')=>n==null?'Sin evaluar':`${n.toFixed(1)}${suffix}`;
+ return <main style={{maxWidth:1200,margin:'auto',padding:'48px 24px'}}><h1>tuxevil Benchmark · Live</h1><p>Resultados públicos · actualización automática</p>{error&&<p role="status">Actualización temporalmente no disponible. Se conservan los últimos datos.</p>}<table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr>{['Modelo / configuración','Security absoluta','Calidad','Tokens/s','Resultados','Arena'].map(h=><th key={h} style={{padding:16,textAlign:'left'}}>{h}</th>)}</tr></thead><tbody>{data?.models.map((m,i)=><tr key={i}><td style={{padding:16}}>{m.name}<br/><small>{m.configuration}</small></td><td>{value(m.security,'%')}</td><td>{value(m.quality,' / 5')}</td><td>{value(m.speed)}</td><td>{m.runs}</td><td>{m.eligible?value(m.score):'Cobertura incompleta'}</td></tr>)}</tbody></table>{data&&!data.models.length&&<p>No hay modelos publicados todavía.</p>}<p>{data?`Última actualización: ${new Date(data.updatedAt).toLocaleTimeString()}`:'Cargando resultados…'}</p></main>;
+}

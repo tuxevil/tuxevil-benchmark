@@ -1,10 +1,11 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { httpUrlSchema, modelProviderSchema, type ModelProvider } from "@/lib/contracts";
 import { validateProviderEndpoint } from "@/lib/endpoints";
 import { discoverProviderModels } from "@/lib/providers/model-discovery";
 import { benchmarkStore } from "@/lib/benchmark-store";
 
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   await benchmarkStore.hydrate();
   const settings = benchmarkStore.getSettings();
 
@@ -46,4 +47,8 @@ export async function GET(request: NextRequest) {
     const message = error instanceof Error ? error.message : "Unknown connection error.";
     return NextResponse.json({ error: `Could not reach ${provider}: ${message}` }, { status: 502 });
   }
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
 }

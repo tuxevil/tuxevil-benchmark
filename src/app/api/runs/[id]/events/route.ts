@@ -1,9 +1,10 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { benchmarkStore } from "@/lib/benchmark-store";
 import { subscribeRunEvents } from "@/lib/run-events";
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handleGET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await benchmarkStore.hydrate();
   const { id } = await params;
   const run = benchmarkStore.getRun(id);
@@ -97,4 +98,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       "x-accel-buffering": "no",
     },
   });
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
 }

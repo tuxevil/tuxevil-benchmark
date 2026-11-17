@@ -1,8 +1,9 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { benchmarkStore } from "@/lib/benchmark-store";
 import { evaluatorUpsertSchema } from "@/lib/contracts";
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   await benchmarkStore.hydrate();
   let body: unknown;
   try {
@@ -25,4 +26,8 @@ export async function POST(request: Request) {
       { status: 503 },
     );
   }
+}
+
+export async function POST(...args: Parameters<typeof handlePOST>) {
+ const denied=await requireAdmin("POST"); if(denied)return denied; return handlePOST(...args);
 }

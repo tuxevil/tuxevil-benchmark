@@ -1,8 +1,9 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { experimentVariantInputSchema } from "@/lib/experiment-records";
 import { createExperimentVariant, getExperiment } from "@/lib/experiment-store";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handleGET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const experiment = await getExperiment(id);
   return experiment
@@ -10,7 +11,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     : NextResponse.json({ error: "Experiment not found." }, { status: 404 });
 }
 
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handlePOST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   let body: unknown;
   try {
@@ -37,4 +38,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const status = message === "Experiment not found." ? 404 : 400;
     return NextResponse.json({ error: message }, { status });
   }
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
+}
+
+export async function POST(...args: Parameters<typeof handlePOST>) {
+ const denied=await requireAdmin("POST"); if(denied)return denied; return handlePOST(...args);
 }

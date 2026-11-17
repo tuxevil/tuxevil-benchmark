@@ -1,7 +1,8 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { compareExperimentVariants } from "@/lib/experiment-observation-store";
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handleGET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const url = new URL(request.url);
   const variantId = url.searchParams.get("variantId");
@@ -19,4 +20,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const message = error instanceof Error ? error.message : "Could not compare experiment variants.";
     return NextResponse.json({ error: message }, { status: message.includes("not found") ? 404 : 400 });
   }
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
 }

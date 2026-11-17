@@ -1,12 +1,13 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { executionTargetInputSchema } from "@/lib/execution-targets";
 import { createExecutionTarget, listExecutionTargets } from "@/lib/execution-target-store";
 
-export async function GET() {
+async function handleGET() {
   return NextResponse.json({ targets: await listExecutionTargets() });
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   let body: unknown;
   try {
     body = await request.json();
@@ -28,4 +29,12 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Could not create execution target.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
+}
+
+export async function POST(...args: Parameters<typeof handlePOST>) {
+ const denied=await requireAdmin("POST"); if(denied)return denied; return handlePOST(...args);
 }

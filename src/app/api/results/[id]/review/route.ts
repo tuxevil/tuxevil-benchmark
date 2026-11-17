@@ -1,8 +1,9 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { benchmarkStore } from "@/lib/benchmark-store";
 import { humanReviewSchema } from "@/lib/contracts";
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handlePATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await benchmarkStore.hydrate();
   const { id } = await params;
   const match = benchmarkStore.findResult(id);
@@ -22,4 +23,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const run = await benchmarkStore.updateHumanReview(match.id, id, parsed.data.status, parsed.data.notes);
   return NextResponse.json({ run });
+}
+
+export async function PATCH(...args: Parameters<typeof handlePATCH>) {
+ const denied=await requireAdmin("PATCH"); if(denied)return denied; return handlePATCH(...args);
 }

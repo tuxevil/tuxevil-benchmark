@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { enqueueBenchmark } from "@/lib/benchmark-queue";
 import { benchmarkStore } from "@/lib/benchmark-store";
@@ -17,7 +18,7 @@ import {
  * as soon as runs are queued (not after inferencing/evaluating them).
  * The normal benchmark queue is single-flight by default.
  */
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   let body: unknown;
   try {
     body = await request.json();
@@ -90,4 +91,8 @@ export async function POST(request: Request) {
     { ...quickProfileSummary(), modelName, queuedRunIds },
     { status: 202 },
   );
+}
+
+export async function POST(...args: Parameters<typeof handlePOST>) {
+ const denied=await requireAdmin("POST"); if(denied)return denied; return handlePOST(...args);
 }

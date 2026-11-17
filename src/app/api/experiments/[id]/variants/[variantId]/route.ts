@@ -1,8 +1,9 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { experimentVariantBindingSchema } from "@/lib/experiment-records";
 import { getExperiment, updateExperimentVariantBinding } from "@/lib/experiment-store";
 
-export async function GET(
+async function handleGET(
   _request: Request,
   { params }: { params: Promise<{ id: string; variantId: string }> },
 ) {
@@ -15,7 +16,7 @@ export async function GET(
     : NextResponse.json({ error: "Variant not found in experiment." }, { status: 404 });
 }
 
-export async function PATCH(
+async function handlePATCH(
   request: Request,
   { params }: { params: Promise<{ id: string; variantId: string }> },
 ) {
@@ -46,4 +47,12 @@ export async function PATCH(
       { status: message.includes("not found") ? 404 : 400 },
     );
   }
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
+}
+
+export async function PATCH(...args: Parameters<typeof handlePATCH>) {
+ const denied=await requireAdmin("PATCH"); if(denied)return denied; return handlePATCH(...args);
 }

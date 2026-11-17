@@ -355,3 +355,31 @@ puede restaurar. No elimines esas relaciones manualmente para saltar la protecci
 Las plantillas de `deploy/systemd/` permiten un despliegue persistente. Ajusta usuario,
 rutas y archivos privados de entorno a tu instalación; compila la versión elegida,
 aplica migraciones y habilita las unidades con el administrador del sistema.
+
+## Vista pública y administración
+
+`/live` es una vista pública de solo lectura, actualizada cada tres segundos.
+Solo publica los modelos enumerados en `BENCHMARK_PUBLIC_MODELS`; la lista vacía
+no publica resultados. `BENCHMARK_PUBLIC_MODEL_ALIASES` permite reemplazar nombres
+internos por nombres de presentación. No publica prompts, respuestas ni endpoints.
+
+El resto de páginas y APIs exige `BENCHMARK_ADMIN_USER` y
+`BENCHMARK_ADMIN_PASSWORD` mediante HTTP Basic. Si faltan, el acceso privado
+se rechaza. Usa HTTPS, una contraseña larga y un proxy con limitación de intentos;
+no expongas directamente el puerto de aplicación en Internet. Los controles de
+escritura también rechazan orígenes cruzados. Para el live, captura únicamente
+la ventana `/live`; el panel privado conserva los datos necesarios para operar.
+La instalación remota, DNS, TLS y conectividad privada con inferencia deben
+configurarse antes de abrir el servidor de producción al público.
+
+### Producción con contenedores
+
+Construye con `docker build -f deploy/Dockerfile -t tuxevil-benchmark:live .`.
+Proporciona las variables privadas en tiempo de ejecución, nunca en la imagen.
+Web y worker necesitan la misma base de datos, Redis y clave de cifrado para
+leer la configuración migrada. Publica únicamente HTTPS a través del proxy;
+PostgreSQL, Redis y el colector deben quedar en redes privadas o loopback.
+El proceso worker se inicia con `node node_modules/tsx/dist/cli.mjs src/worker.ts`.
+La raíz redirige visitantes anónimos a `/live`; las rutas administrativas
+solicitan autenticación. Conserva el despliegue anterior hasta validar el nuevo
+para disponer de una reversión del enrutamiento.

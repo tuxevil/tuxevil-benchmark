@@ -1,8 +1,9 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { experimentExecutionInputSchema } from "@/lib/experiment-executions";
 import { startExperimentExecution } from "@/lib/experiment-runner";
 
-export async function POST(
+async function handlePOST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -30,4 +31,8 @@ export async function POST(
     const status = message === "Experiment not found." ? 404 : 409;
     return NextResponse.json({ error: message }, { status });
   }
+}
+
+export async function POST(...args: Parameters<typeof handlePOST>) {
+ const denied=await requireAdmin("POST"); if(denied)return denied; return handlePOST(...args);
 }

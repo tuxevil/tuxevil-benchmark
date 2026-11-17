@@ -1,7 +1,8 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { benchmarkStore } from "@/lib/benchmark-store";
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string; resultId: string }> }) {
+async function handleGET(request: Request, { params }: { params: Promise<{ id: string; resultId: string }> }) {
   await benchmarkStore.hydrate();
   const { id, resultId } = await params;
   const run = benchmarkStore.getStoredRun(id);
@@ -15,7 +16,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   return NextResponse.json({ runId: run.id, result, evaluationHistory });
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string; resultId: string }> }) {
+async function handleDELETE(_request: Request, { params }: { params: Promise<{ id: string; resultId: string }> }) {
   await benchmarkStore.hydrate();
   const { id, resultId } = await params;
   const run = benchmarkStore.getStoredRun(id);
@@ -25,4 +26,12 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!removed) return NextResponse.json({ error: "Result not found." }, { status: 404 });
   await benchmarkStore.flush(id);
   return new NextResponse(null, { status: 204 });
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
+}
+
+export async function DELETE(...args: Parameters<typeof handleDELETE>) {
+ const denied=await requireAdmin("DELETE"); if(denied)return denied; return handleDELETE(...args);
 }

@@ -1,7 +1,8 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { reconcileExperimentExecution } from "@/lib/experiment-runner";
 
-export async function GET(
+async function handleGET(
   _request: Request,
   { params }: { params: Promise<{ id: string; executionId: string }> },
 ) {
@@ -15,4 +16,8 @@ export async function GET(
       { status: message.includes("not found") ? 404 : 400 },
     );
   }
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
 }

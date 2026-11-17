@@ -1,8 +1,9 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { benchmarkStore } from "@/lib/benchmark-store";
 import { reevaluateSchema } from "@/lib/contracts";
 
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handlePOST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await benchmarkStore.hydrate();
   const { id } = await params;
 
@@ -27,4 +28,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const status = /not found/i.test(message) ? 404 : /evaluator/i.test(message) ? 400 : 502;
     return NextResponse.json({ error: message }, { status });
   }
+}
+
+export async function POST(...args: Parameters<typeof handlePOST>) {
+ const denied=await requireAdmin("POST"); if(denied)return denied; return handlePOST(...args);
 }
