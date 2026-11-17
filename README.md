@@ -397,3 +397,8 @@ El archivo referencia configuración privada del host y volúmenes externos ya
 existentes; no es una receta para una instalación vacía. No ejecutes dos instancias
 de PostgreSQL contra el mismo volumen. El dominio y sus reglas HTTPS pertenecen
 al servicio web definido en Compose, sin un override de enrutamiento externo.
+
+Las especificaciones del rig son públicas: CPU, RAM y GPU conservan las etiquetas
+de la landing original. Se pueden ajustar con `SNAPSHOT_CPU`, `SNAPSHOT_RAM`,
+`SNAPSHOT_GPU` y `SNAPSHOT_PROVIDER`. No se publican direcciones internas,
+usuarios, cuentas ni credenciales junto a esos componentes.

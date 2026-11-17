@@ -1,3 +1,4 @@
+import { publicHardwareRig } from "@/lib/public-hardware";
 import { loadPublicScenarioDefinitions } from '@/lib/public-scenarios';
 import { aggregateLeaderboard } from '@/lib/database';
 import { buildPublicSnapshot } from '@/lib/public-snapshot-builder';
@@ -5,7 +6,7 @@ export const dynamic='force-dynamic';
 export async function GET() {
  try {
  const approved=new Set((process.env.BENCHMARK_PUBLIC_MODELS ?? '').split(',').map(v=>v.trim()).filter(Boolean));
- const snapshot=buildPublicSnapshot(await aggregateLeaderboard({}),approved,JSON.parse(process.env.BENCHMARK_PUBLIC_MODEL_ALIASES ?? '{}'));
+ const snapshot=buildPublicSnapshot(await aggregateLeaderboard({}),approved,JSON.parse(process.env.BENCHMARK_PUBLIC_MODEL_ALIASES ?? '{}'),publicHardwareRig());
  snapshot.scenarios=await loadPublicScenarioDefinitions();
  snapshot.global_stats.total_scenarios=snapshot.scenarios.length;
  return Response.json(snapshot,{headers:{'Cache-Control':'no-store'}});
