@@ -314,3 +314,44 @@ para reportar problemas de seguridad.
 ## Licencia
 
 [MIT](LICENSE).
+
+## Reglas de comparación y recuperación
+
+**Security absoluta** usa la media de resistencia de los escenarios evaluados,
+con el mismo peso por escenario y sin depender de los otros modelos del dashboard.
+La tabla muestra casos evaluados y el índice relativo en la ayuda del indicador.
+Sin evaluación válida se muestra **Sin evaluar**; esa ausencia no puede otorgar
+puntos de seguridad ni habilitar un ranking completo cuando seguridad tiene peso.
+Arena Index sigue siendo un índice combinado comparativo, con velocidad normalizada
+respecto al conjunto visible y calidad relativa; no es una tasa de acierto absoluta.
+
+Las nuevas ejecuciones capturan un manifiesto con huellas del artefacto, entorno,
+parámetros y escenario. Las variantes verificadas por el proveedor se agrupan por esa
+identidad; si no hay metadatos suficientes, se mantienen separadas por ejecución y se
+identifican como no verificadas. Los datos históricos no permiten reconstruir una
+cuantización que nunca se registró. El historial de escenarios conserva los textos y
+su identidad de agregación cambia al editar el contenido.
+
+Todos los trabajos pasan por admisión común antes de usar un recurso. Por defecto,
+los endpoints del mismo hostname comparten reserva. Si hay GPUs independientes en
+un mismo servidor, define `BENCHMARK_RESOURCE_GROUPS` en configuración privada.
+Las tareas bloqueadas se posponen sin consumir reintentos de inferencia; el reset
+frío ocurre con el recurso adquirido. Esta reserva coordina trabajos del benchmark,
+no procesos externos que usen la misma GPU.
+
+Los intentos de inferencia quedan registrados por separado. La duración acumulada
+incluye los intentos fallidos y excluye la evaluación del juez; si se desconocen los
+tokens consumidos por un intento fallido, el coste normalizado en tokens queda
+sin determinar. La telemetría conserva timestamps del publicador y solo integra
+muestras independientes dentro de la ventana de inferencia. Consultas repetidas
+no aumentan la cobertura. En pruebas más cortas que la cadencia del sensor es
+normal no poder calcular energía con suficiente cobertura.
+
+**Protección de experimentos:** el respaldo de resultados todavía no es un archivo
+completo del laboratorio. La limpieza se bloquea si hay vínculos de experimentos,
+para impedir que un borrado en cascada destruya relaciones que ese respaldo no
+puede restaurar. No elimines esas relaciones manualmente para saltar la protección.
+
+Las plantillas de `deploy/systemd/` permiten un despliegue persistente. Ajusta usuario,
+rutas y archivos privados de entorno a tu instalación; compila la versión elegida,
+aplica migraciones y habilita las unidades con el administrador del sistema.

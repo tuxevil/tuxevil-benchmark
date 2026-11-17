@@ -1,3 +1,8 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { acquireRunAdmission, ResourceBusyError } from "../src/lib/execution-admission";
+import { createBackup, clearResults } from "../src/lib/result-backups";
 import { afterAll, describe, expect, it } from "vitest";
 import postgres from "postgres";
 import Redis from "ioredis";
@@ -12,6 +17,44 @@ let sql: ReturnType<typeof postgres> | undefined;
 let redis: Redis | undefined;
 
 serviceSuite("local infrastructure", () => {
+  it("serializes ordinary runs across connections and releases the physical resource", async()=>{
+    const run={id:crypto.randomUUID(),providerUrl:'http://localhost:18080'} as TestRun;
+    const release=await acquireRunAdmission(run);
+    try { await expect(acquireRunAdmission({...run,id:crypto.randomUUID(),providerUrl:'http://localhost:18081'})).rejects.toBeInstanceOf(ResourceBusyError); }
+    finally { await release(); }
+    const next=await acquireRunAdmission(run);await next();
+  },30000);
+
+  it("blocks destructive cleanup of linked experiment results in PostgreSQL",async()=>{
+    sql ??= postgres(databaseUrl!);
+    const [scenario,run,result,artifact,environment,experiment,variant,execution,mapping]=Array.from({length:9},()=>crypto.randomUUID());
+    const directory=await mkdtemp(join(tmpdir(),'benchmark-backup-pg-'));
+    const previous=process.env.RESULT_BACKUP_DIR;process.env.RESULT_BACKUP_DIR=directory;
+    try {
+      await sql`INSERT INTO scenarios(id,name,system_prompt,user_messages) VALUES(${scenario},'test','test',${sql.json([])})`;
+      await sql`INSERT INTO test_runs(id,status,system_prompt,ollama_url,user_messages,selected_models,parameters) VALUES(${run},'COMPLETED','test','http://localhost',${sql.json([])},${sql.json(['model'])},${sql.json({})})`;
+      await sql`INSERT INTO model_results(id,test_run_id,model_name,status,eval_status) VALUES(${result},${run},'model','COMPLETED','SKIPPED')`;
+      await sql`INSERT INTO model_artifacts(id,fingerprint,display_name,payload_json) VALUES(${artifact},${artifact},'test',${sql.json({})})`;
+      await sql`INSERT INTO execution_environments(id,fingerprint,label,payload_json) VALUES(${environment},${environment},'test',${sql.json({})})`;
+      await sql`INSERT INTO experiments(id,name,factor_under_test,status,validity_status,sampling_snapshot,notes) VALUES(${experiment},'test','OTHER','DRAFT','UNCHECKED',${sql.json({})},'')`;
+      await sql`INSERT INTO experiment_variants(id,experiment_id,name,role,model_artifact_id,execution_environment_id,inference_parameters) VALUES(${variant},${experiment},'test','BASELINE',${artifact},${environment},${sql.json({})})`;
+      await sql`INSERT INTO experiment_executions(id,experiment_id,status,scenario_ids) VALUES(${execution},${experiment},'COMPLETED',${sql.json([scenario])})`;
+      await sql`INSERT INTO experiment_execution_runs(id,execution_id,variant_id,scenario_id,test_run_id) VALUES(${mapping},${execution},${variant},${scenario},${run})`;
+      const backup=await createBackup('experiment guard');
+      await expect(clearResults(backup.id)).rejects.toThrow('vinculados a experimentos');
+      expect((await sql`SELECT id FROM experiment_execution_runs WHERE id=${mapping}`)).toHaveLength(1);
+      expect((await sql`SELECT id FROM model_results WHERE id=${result}`)).toHaveLength(1);
+    } finally {
+      await sql`DELETE FROM experiments WHERE id=${experiment}`;
+      await sql`DELETE FROM test_runs WHERE id=${run}`;
+      await sql`DELETE FROM scenarios WHERE id=${scenario}`;
+      await sql`DELETE FROM model_artifacts WHERE id=${artifact}`;
+      await sql`DELETE FROM execution_environments WHERE id=${environment}`;
+      if(previous===undefined)delete process.env.RESULT_BACKUP_DIR;else process.env.RESULT_BACKUP_DIR=previous;
+      await rm(directory,{recursive:true,force:true});
+    }
+  },30000);
+
   it("connects to PostgreSQL and Redis after migrations", async () => {
     sql = postgres(databaseUrl!);
     redis = new Redis(redisUrl!);

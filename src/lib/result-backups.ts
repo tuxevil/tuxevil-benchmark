@@ -1,3 +1,4 @@
+import { requireQuiescentWorkers } from "./backup-activity";
 import { randomUUID, createHash } from 'node:crypto';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -56,6 +57,7 @@ export async function listBackups() {
   return backups.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
 }
 export async function createBackup(name: string) {
+  await requireQuiescentWorkers();
   return transaction(async query => {
     const data = await snapshot(query); requireIdle(data);
     const backup: Backup = { version: 2, id: randomUUID(), createdAt: new Date().toISOString(), name: name.trim().slice(0,120) || 'Respaldo de resultados', digest: digest(data), data };
@@ -66,15 +68,25 @@ export async function createBackup(name: string) {
   });
 }
 export async function clearResults(id: string) {
+  await requireQuiescentWorkers();
   const backup = await loadBackup(id);
   return transaction(async query => {
     const current = await snapshot(query); requireIdle(current);
+    const exists = process.env.DATABASE_URL
+      ? await query("SELECT to_regclass('experiment_execution_runs') AS name")
+      : await query("SELECT name FROM sqlite_master WHERE type='table' AND name='experiment_execution_runs'");
+    if (exists[0]?.name) {
+      if (process.env.DATABASE_URL) await query("LOCK TABLE experiment_execution_runs IN SHARE ROW EXCLUSIVE MODE");
+      const linked = await query('SELECT COUNT(*) AS count FROM experiment_execution_runs');
+      if (Number(linked[0]?.count) > 0) throw new Error('Hay resultados vinculados a experimentos. La limpieza está bloqueada porque este respaldo no incluye el laboratorio completo.');
+    }
     if (digest(backup.version === 1 ? Object.fromEntries(Object.entries(current).filter(([key]) => key !== 'result_resource_measurements')) as Data : current) !== backup.digest) throw new Error('Los resultados cambiaron. Crea un nuevo respaldo antes de limpiar.');
     for (const table of [...tables].reverse()) await query(`DELETE FROM ${table}`);
     return { deleted: current.model_results.length };
   });
 }
 export async function restoreBackup(id: string, models: string[]) {
+  await requireQuiescentWorkers();
   const backup = await loadBackup(id);
   if (!models.length || models.some(m => !backup.data.model_results.some(r => r.model_name === m))) throw new Error('Selecciona modelos válidos.');
   return transaction(async query => {

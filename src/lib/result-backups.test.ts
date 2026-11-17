@@ -32,3 +32,13 @@ it('backs up, prevents stale cleanup, restores selected models and preserves tur
  getSqliteDb().prepare("UPDATE test_runs SET status='RUNNING'").run();
  await expect(createBackup('active')).rejects.toThrow('pendientes');
 });
+it('blocks cleaning linked experiment results and preserves both sides of the relation', async()=>{
+ const db=getSqliteDb();
+ db.prepare("UPDATE test_runs SET status='COMPLETED'").run();
+ db.exec('CREATE TABLE experiment_execution_runs(id TEXT PRIMARY KEY, test_run_id TEXT REFERENCES test_runs(id) ON DELETE CASCADE)');
+ db.prepare("INSERT INTO experiment_execution_runs VALUES ('link','run')").run();
+ const backup=await createBackup('experiment safety');
+ await expect(clearResults(backup.id)).rejects.toThrow('vinculados a experimentos');
+ expect(db.prepare('SELECT count(*) AS n FROM experiment_execution_runs').get()).toEqual({n:1});
+ expect(db.prepare('SELECT count(*) AS n FROM model_results').get()).toEqual({n:2});
+});

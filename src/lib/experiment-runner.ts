@@ -1,3 +1,4 @@
+import { resourceSummary } from "@/lib/resource-telemetry";
 import { loadResourceMeasurements } from "@/lib/resource-measurement-store";
 import type { BenchmarkParameters, ModelResult, TestRun } from "@/lib/contracts";
 import { benchmarkParametersSchema, reasoningEffortSchema } from "@/lib/contracts";
@@ -303,19 +304,12 @@ async function cancelUnenqueuedExecutionRuns(executionId: string) {
 async function enqueueMappedRun(
   execution: ExperimentExecutionWithRuns["execution"],
   mapping: ExperimentExecutionWithRuns["runs"][number],
-  experiment: Awaited<ReturnType<typeof getExperiment>>,
 ) {
   const claimed = await claimExperimentExecutionRunForEnqueue(mapping.id);
   if (!claimed) return false;
 
   try {
-    if (execution.executionMode === "PERFORMANCE" && execution.includeColdSample) {
-      const variant = experiment?.variants.find((item) => item.id === mapping.variantId);
-      if (!variant?.executionTargetId || !variant.executionModelName) {
-        throw new Error("Performance run lost its execution target/model binding.");
-      }
-      await resetOllamaForColdSample(variant.executionTargetId, variant.executionModelName);
-    }
+
 
     await enqueueBenchmark(mapping.testRunId);
     return true;
@@ -363,7 +357,7 @@ async function importRunObservations(
         outputTokens: result.outputTokens,
         tokPerSec: result.tokPerSec,
         totalDurationMs: result.totalDurationMs,
-        resources: resources[result.id] ?? null,
+        resources: resources[result.id] ? resourceSummary(resources[result.id]) : null,
       },
       metadata: {
         executionId: execution.id,
@@ -503,10 +497,10 @@ export async function startExperimentExecution(
 
     if (execution.executionMode === "PERFORMANCE") {
       const first = plannedMappings[0];
-      if (first) await enqueueMappedRun(execution, first, experiment);
+      if (first) await enqueueMappedRun(execution, first);
     } else {
       for (const mapping of plannedMappings) {
-        await enqueueMappedRun(execution, mapping, experiment);
+        await enqueueMappedRun(execution, mapping);
       }
     }
 
@@ -573,7 +567,7 @@ export async function reconcileExperimentExecution(
         const experiment = await getExperiment(experimentId);
         if (!experiment) throw new Error("Experiment not found.");
         try {
-          await enqueueMappedRun(stored.execution, next, experiment);
+          await enqueueMappedRun(stored.execution, next);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Could not enqueue next performance run.";
           await cancelUnenqueuedExecutionRuns(executionId);
@@ -641,5 +635,18 @@ export async function reconcileExperimentExecutionsForTestRun(testRunId: string)
   const contexts = await findExperimentExecutionsForTestRun(testRunId);
   for (const context of contexts) {
     await reconcileExperimentExecution(context.experimentId, context.executionId);
+  }
+}
+
+/** Cold reset must happen while the common worker admission owns the physical resource. */
+export async function preparePerformanceRun(testRunId: string) {
+  for (const owner of await findExperimentExecutionsForTestRun(testRunId)) {
+    const stored = await getExperimentExecution(owner.executionId);
+    if (!stored || stored.execution.executionMode !== 'PERFORMANCE' || !stored.execution.includeColdSample) continue;
+    const mapping = stored.runs.find(r => r.testRunId === testRunId);
+    const experiment = await getExperiment(owner.experimentId);
+    const variant = experiment?.variants.find(v => v.id === mapping?.variantId);
+    if (!variant?.executionTargetId || !variant.executionModelName) throw new Error('Performance run lost its execution binding.');
+    await resetOllamaForColdSample(variant.executionTargetId, variant.executionModelName);
   }
 }

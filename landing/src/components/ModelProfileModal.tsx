@@ -100,7 +100,7 @@ export function ModelProfileModal({ model, onClose }: ModelProfileModalProps) {
             <div className="breakdown-row">
               <span className="breakdown-label">Security Resilience</span>
               <span className="breakdown-value green-text">
-                {model.security_resilience_score}%
+                {model.security_resilience_score < 0 ? "Sin evaluar" : `${model.security_resilience_score}%`}
               </span>
             </div>
             <div className="breakdown-row">

@@ -1,3 +1,4 @@
+import { assertNoPhysicalReservationConflict } from "./resource-identity";
 import { getSqliteDb } from "@/lib/sqlite-db";
 import {
   ensureExperimentSqliteSchema,
@@ -320,6 +321,9 @@ export async function acquireExecutionTargetLeases(
                )
           )
         `).run();
+        assertNoPhysicalReservationConflict(executionId, unique,
+          db.prepare('SELECT id,endpoint FROM execution_targets').all() as {id:string;endpoint:string}[],
+          db.prepare('SELECT target_id,execution_id FROM execution_target_leases').all() as {target_id:string;execution_id:string}[]);
         for (const targetId of unique) insert.run(targetId, executionId, now);
       })();
     } catch {
@@ -340,6 +344,7 @@ export async function acquireExecutionTargetLeases(
   if (!sql) throw new Error("PostgreSQL is not configured.");
   try {
     await sql.begin(async (tx) => {
+      await tx`SELECT pg_advisory_xact_lock(hashtextextended('benchmark-physical-reservations',0))`;
       await tx`
         DELETE FROM execution_target_leases l
         USING experiment_executions e
@@ -364,6 +369,9 @@ export async function acquireExecutionTargetLeases(
             )
           )
       `;
+      assertNoPhysicalReservationConflict(executionId, unique,
+        await tx`SELECT id,endpoint FROM execution_targets` as {id:string;endpoint:string}[],
+        await tx`SELECT target_id,execution_id FROM execution_target_leases` as {target_id:string;execution_id:string}[]);
       for (const targetId of unique) {
         await tx`
           INSERT INTO execution_target_leases (target_id, execution_id, acquired_at)

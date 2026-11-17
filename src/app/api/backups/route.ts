@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     const id = new URL(request.url).searchParams.get('id');
     if (!id) return NextResponse.json({ backups: await listBackups() });
     const backup = await loadBackup(id);
-    return NextResponse.json({ backup: summary(backup), runs: backup.data.test_runs, results: backup.data.model_results, turns: backup.data.model_result_turns, evaluations: backup.data.evaluations, history: backup.data.evaluation_history });
+    return NextResponse.json({ backup: summary(backup), runs: backup.data.test_runs.map(row => ({id:row.id,status:row.status,category:row.category,attack_type:row.attack_type,selected_models:row.selected_models,created_at:row.created_at})), results: backup.data.model_results, turns: backup.data.model_result_turns, evaluations: backup.data.evaluations, history: backup.data.evaluation_history });
   } catch (error) { return NextResponse.json({ error: (error as Error).message }, { status: 400 }); }
 }
 const actionSchema = z.discriminatedUnion('action', [

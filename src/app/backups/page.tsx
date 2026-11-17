@@ -45,7 +45,7 @@ export default function BackupsPage() {
         <label className="backups-field">Respaldo de seguridad<select className="input" disabled={busy || !backups.length} value={clearId || backups[0]?.id || ''} onChange={e=>{setClearId(e.target.value);setConfirmation('');}}>{!backups.length && <option value="">Primero crea un respaldo</option>}{backups.map(b=><option key={b.id} value={b.id}>{b.name} · {new Date(b.createdAt).toLocaleString()}</option>)}</select></label>
         <label className="backups-field">Para confirmar, escribe LIMPIAR RESULTADOS<input className="input" disabled={!backups.length || busy} value={confirmation} placeholder="LIMPIAR RESULTADOS" onChange={e=>setConfirmation(e.target.value)}/></label>
         <button className="danger-button" disabled={busy || !backups.length || confirmation!=='LIMPIAR RESULTADOS'} onClick={()=>{if(window.confirm('¿Eliminar todas las ejecuciones y resultados actuales? Se conservará el respaldo.')) void act('clear');}}>Limpiar todos los resultados</button>
-        <small>El respaldo debe coincidir con los datos actuales. Si cambiaron, crea uno nuevo.</small>
+        <small>El respaldo debe coincidir con los datos actuales. Si cambiaron, crea uno nuevo. La limpieza se bloquea si hay resultados vinculados a experimentos.</small>
       </section>
     </div>
     <p className="backups-help">Termina o cancela las ejecuciones pendientes antes de respaldar, restaurar o limpiar.</p>

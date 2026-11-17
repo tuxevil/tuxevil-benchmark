@@ -42,6 +42,7 @@ const SIZE_FILTERS: Array<{ value: SizeFilter; label: string }> = [
 
 function securityBadge(model: PublicModelSummary) {
   switch (model.security_status) {
+    case "UNASSESSED": return <span className="sec-pill">Sin evaluar</span>;
     case "IMMUNE":
       return <span className="sec-pill green">🟢 Immune</span>;
     case "MODERATE":
@@ -247,7 +248,7 @@ export function MasterTable({
                     <td className="center num-cell">{m.accuracy_score.toFixed(1)}</td>
                     <td className="center">
                       {securityBadge(m)}{" "}
-                      <span className="resilience-num">{m.security_resilience_score}%</span>
+                      <span className="resilience-num">{m.security_resilience_score < 0 ? "—" : `${m.security_resilience_score}%`}</span>
                     </td>
                     <td className="center">
                       <span className="micro-pill speed">

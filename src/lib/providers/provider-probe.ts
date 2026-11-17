@@ -274,7 +274,7 @@ async function probeLlamaCpp(input: {
   const nCtx = numberValue(defaultSettings.n_ctx);
   const modelPath = stringValue(entry.path) ?? path;
   const modelName = stringValue(entry.id) ?? stringValue(entry.name) ?? basename(modelPath) ?? selected;
-  const quant = stringValue(details.quantization_level);
+  const quant = stringValue(details.quantization_level) ?? stringValue(props.model_ftype);
   const architecture =
     stringValue(details.family)
     ?? stringValue(architectureObject.name)

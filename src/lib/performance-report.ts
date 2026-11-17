@@ -1,3 +1,4 @@
+import { resourceSummary } from "@/lib/resource-telemetry";
 import type { ResourceMeasurement } from "@/lib/resource-telemetry";
 import { getExperimentExecution } from "@/lib/experiment-execution-store";
 import { listExperimentExecutionObservations } from "@/lib/experiment-execution-observation-store";
@@ -55,7 +56,7 @@ export async function buildExperimentPerformanceReport(
       role: variant.role,
       executionTargetId: variant.executionTargetId,
       executionModelName: variant.executionModelName,
-      resources: observations.map(o => ({ caseId: o.caseId, measurement: (o.telemetry.resources as ResourceMeasurement | undefined) ?? null })),
+      resources: observations.map(o => ({ caseId: o.caseId, measurement: o.telemetry.resources ? resourceSummary(o.telemetry.resources as ResourceMeasurement) : null })),
       report: buildVariantPerformanceReport(variant.id, observations),
     });
   }

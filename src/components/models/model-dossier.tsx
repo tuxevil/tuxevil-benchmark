@@ -1,4 +1,5 @@
 "use client";
+import { resultIdentity } from "@/lib/run-identity";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -26,7 +27,7 @@ export function ModelDossier({ modelName, provider, modelSummary, runs, hideBack
 
   for (const r of runs) {
     for (const res of r.results) {
-      if (res.modelName === modelName && (!provider || r.provider === provider)) {
+      if (res.modelName === modelName && (!provider || r.provider === provider) && (!modelSummary?.identityKey || resultIdentity(r, res) === modelSummary.identityKey)) {
         modelResults.push({ run: r, result: res });
       }
     }
@@ -49,7 +50,7 @@ export function ModelDossier({ modelName, provider, modelSummary, runs, hideBack
   const grammar = modelSummary?.avgGrammar ?? stars;
   const compliance = modelSummary?.avgCompliance ?? stars;
   const accuracy = modelSummary?.avgAccuracy ?? stars;
-  const securityResilience = modelSummary?.securityResilienceScore ?? 100;
+  const securityResilience = modelSummary?.securityResilienceScore ?? null;
 
   const renderStars = (rating: number | null) => {
     if (rating === null) return "N/A";
@@ -130,8 +131,8 @@ export function ModelDossier({ modelName, provider, modelSummary, runs, hideBack
             </span>
           </div>
           <div className="summary-card">
-            <span className="lbl">Security Resilience</span>
-            <span className="val green">{securityResilience}%</span>
+            <span className="lbl">Security absoluta</span>
+            <span className="val">{securityResilience === null ? "Sin evaluar" : `${securityResilience}%`}</span>
           </div>
         </div>
       </div>

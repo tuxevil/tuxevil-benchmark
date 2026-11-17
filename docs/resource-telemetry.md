@@ -40,6 +40,11 @@ un host Linux cuando no hay MQTT.
 La energía se estima integrando potencia por trapecios. El bridge publica el último
 valor fresco del sensor; el muestreo MQTT original puede ser de 10 segundos, de modo
 que pruebas breves tienen menor resolución temporal que la consulta HTTP de 1 segundo.
+Se conservan los timestamps originales y se deduplican las lecturas del sensor.
+GPU y RAM tienen cobertura independiente; consultar un dato repetido no aumenta cobertura.
+Solo se integran pares de lecturas dentro de la ventana, sin extrapolar extremos
+ni huecos mayores que dos intervalos declarados (máximo 25 segundos).
+Se guarda la serie original junto al resultado para auditar el cálculo.
 No se suman lecturas de GPU y APU como si fueran potencia del sistema completo.
 Se informa cobertura y la energía queda nula si la cobertura válida es menor al 90%.
 Las métricas ausentes nunca se sustituyen por cero.

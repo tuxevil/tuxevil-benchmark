@@ -93,7 +93,7 @@ export function BenchmarkDashboard() {
   const [historyModel, setHistoryModel] = useState("");
   const [historyVulnerableOnly, setHistoryVulnerableOnly] = useState(false);
   const [selectedRunForComparison, setSelectedRunForComparison] = useState<TestRun | null>(null);
-  const [selectedModelForProfile, setSelectedModelForProfile] = useState<{ name: string; provider?: string } | null>(null);
+  const [selectedModelForProfile, setSelectedModelForProfile] = useState<{ name: string; provider?: string; identityKey?: string } | null>(null);
   const [modelProfileRuns, setModelProfileRuns] = useState<TestRun[]>([]);
   const [isLoadingProfileRuns, setIsLoadingProfileRuns] = useState(false);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
@@ -187,7 +187,7 @@ export function BenchmarkDashboard() {
         setLeaderboardData(payload);
         setSelectedRadarModels((prev) =>
           prev.length === 0 && payload.models.length > 0
-            ? payload.models.slice(0, 3).map((m) => m.modelName)
+            ? payload.models.slice(0, 3).map((m) => m.identityKey ?? m.modelName)
             : prev
         );
       })
@@ -532,7 +532,7 @@ export function BenchmarkDashboard() {
   };
 
   const leaderboardModels = leaderboardData?.models ?? [];
-  const radarModels = leaderboardModels.filter((m) => selectedRadarModels.includes(m.modelName));
+  const radarModels = leaderboardModels.filter((m) => selectedRadarModels.includes(m.identityKey ?? m.modelName));
 
   return (
     <div className="app-shell-layout">
@@ -573,8 +573,8 @@ export function BenchmarkDashboard() {
                   prev.includes(modelName) ? prev.filter((m) => m !== modelName) : [...prev, modelName]
                 )
               }
-               onSelectModelProfile={(modelName, provider) => {
-                 setSelectedModelForProfile({ name: modelName, provider });
+               onSelectModelProfile={(modelName, provider, identityKey) => {
+                 setSelectedModelForProfile({ name: modelName, provider, identityKey });
                 setModelProfileRuns([]);
                 setIsLoadingProfileRuns(true);
               }}
@@ -735,6 +735,7 @@ export function BenchmarkDashboard() {
                      provider={selectedModelForProfile.provider}
                      modelSummary={leaderboardModels.find((m) =>
                        m.modelName === selectedModelForProfile.name &&
+                       (!selectedModelForProfile.identityKey || m.identityKey === selectedModelForProfile.identityKey) &&
                        (!selectedModelForProfile.provider || m.provider === selectedModelForProfile.provider)
                      ) ?? null}
                     runs={modelProfileRuns}

@@ -1,3 +1,6 @@
+import { acquireRunAdmission, ResourceBusyError } from "@/lib/execution-admission";
+import { recordInferenceAttempt, type InferenceAttempt } from "@/lib/inference-attempts";
+import { captureRunManifest } from "@/lib/capture-run-manifest";
 import { startResourceMeasurement } from "@/lib/resource-telemetry";
 import { saveResourceMeasurement } from "@/lib/resource-measurement-store";
 import { evaluateModelResponse, resolveEvaluationMode } from "@/lib/frontier-evaluator";
@@ -47,6 +50,7 @@ async function drainQueue() {
     activeJobs += 1;
     void job.execute()
       .catch((error) => {
+        if (error instanceof ResourceBusyError) { setTimeout(() => { pendingJobs.push(job); void drainQueue(); },1000); return; }
         const message = error instanceof Error ? error.message : "Benchmark worker failed.";
         const run = benchmarkStore.getStoredRun(job.runId);
         if (run && !["COMPLETED", "FAILED", "CANCELLED"].includes(run.status)) {
@@ -64,7 +68,7 @@ async function drainQueue() {
   }
 }
 
-async function executeBenchmark(runId: string) {
+async function executeBenchmarkAdmitted(runId: string) {
   await benchmarkStore.hydrate();
   let run = benchmarkStore.getStoredRun(runId);
   if (!run) {
@@ -134,11 +138,13 @@ async function executeModel(runId: string, resultId: string) {
     errorMessage: null,
   });
 
+  const attempts: InferenceAttempt[] = [];
+  let capturedManifest: import("./run-identity").RunManifest | undefined;
   let stopResources: (() => Promise<import("@/lib/resource-telemetry").ResourceMeasurement>) | undefined;
   async function finishResources() {
     if (!stopResources) return;
     const stop = stopResources; stopResources = undefined;
-    try { await saveResourceMeasurement(resultId, await stop()); } catch (error) { console.warn("Resource telemetry unavailable", error); }
+    try { await saveResourceMeasurement(resultId, { ...await stop(), attempts, inferenceDurationMs: attempts.reduce((sum,a)=>sum+a.durationMs,0), manifest: capturedManifest }); } catch (error) { console.warn("Resource telemetry unavailable", error); }
   }
 
   const turnTelemetry = [] as Array<{
@@ -187,9 +193,13 @@ async function executeModel(runId: string, resultId: string) {
               : null;
       }
 
-      if (!stopResources) stopResources = await startResourceMeasurement(endpoint);
+      if (!stopResources) {
+        capturedManifest = await captureRunManifest(activeRun, result, endpoint, apiKey);
+        benchmarkStore.updateResult(runId, resultId, { manifest: capturedManifest });
+        stopResources = await startResourceMeasurement(endpoint);
+      }
       const response = await retryTransient(
-        () =>
+        () => recordInferenceAttempt(attempts, () =>
           provider === "ollama"
             ? streamOllamaChat({
                 endpoint,
@@ -224,7 +234,7 @@ async function executeModel(runId: string, resultId: string) {
                     benchmarkStore.updateStreamingResponse(runId, resultId, partialResponse);
                   }
                 },
-              }),
+              }), () => { partialResponse = ""; benchmarkStore.updateStreamingResponse(runId, resultId, ""); }),
         activeRun.cancelController.signal,
       );
 
@@ -299,6 +309,7 @@ async function executeModel(runId: string, resultId: string) {
     const totals = aggregateTelemetry(turnTelemetry);
     benchmarkStore.updateResult(runId, resultId, {
       ...totals,
+      totalDurationMs: attempts.reduce((sum,a)=>sum+a.durationMs,0),
       finishReason: lastTurn?.finishReason ?? null,
       truncated: lastTurn?.truncated ?? false,
     });
@@ -370,6 +381,7 @@ async function executeModel(runId: string, resultId: string) {
       errorMessage: error instanceof Error ? error.message : "Unknown inference error.",
     });
   } finally {
+    if (attempts.length) benchmarkStore.updateResult(runId, resultId, {totalDurationMs: attempts.reduce((sum,a)=>sum+a.durationMs,0)});
     await finishResources();
   }
 }
@@ -404,6 +416,24 @@ function sumNullable(values: Array<number | null>) {
   return values.reduce<number>((total, value) => total + (value ?? 0), 0);
 }
 
+async function executeBenchmark(runId: string) {
+  await benchmarkStore.hydrate();
+  let run = benchmarkStore.getStoredRun(runId);
+  if (!run) { await benchmarkStore.refreshRun(runId); run = benchmarkStore.getStoredRun(runId); }
+  if (!run || ['COMPLETED','CANCELLED','FAILED'].includes(run.status)) return;
+  const release = await acquireRunAdmission(run);
+  try {
+    const { preparePerformanceRun } = await import('@/lib/experiment-runner');
+    await preparePerformanceRun(runId);
+    await executeBenchmarkAdmitted(runId);
+  } catch (error) {
+    benchmarkStore.updateRun(runId,{status:'FAILED',finishedAt:new Date().toISOString(),errorMessage:error instanceof Error?error.message:'Execution failed'});
+    await benchmarkStore.flush(runId);
+    const { reconcileExperimentExecutionsForTestRun } = await import("@/lib/experiment-runner");
+    await reconcileExperimentExecutionsForTestRun(runId);
+    throw error;
+  } finally { await release(); }
+}
 export { executeBenchmark };
 
 async function runWithConcurrency<T>(items: T[], concurrency: number, operation: (item: T) => Promise<void>) {

@@ -104,9 +104,13 @@ export function buildPerformanceProfile(
   const output = selected.map((observation) => finite(observation.telemetry.outputTokens));
 
   const durationComplete = attempts > 0 && duration.every((value) => value !== null);
-  const outputComplete = attempts > 0 && output.every((value) => value !== null);
+  const attemptTokensComplete = selected.every(observation => {
+    const resources = observation.telemetry.resources as {attempts?: {status:string}[]} | null | undefined;
+    return !resources?.attempts?.some(attempt => attempt.status === 'FAILED');
+  });
+  const outputComplete = attemptTokensComplete && attempts > 0 && output.every((value) => value !== null);
   const totalTokensComplete =
-    attempts > 0
+    attemptTokensComplete && attempts > 0
     && input.every((value) => value !== null)
     && output.every((value) => value !== null);
 

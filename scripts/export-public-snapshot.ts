@@ -1,3 +1,4 @@
+import { resultIdentity } from "../src/lib/run-identity";
 /**
  * export-public-snapshot.ts
  *
@@ -29,6 +30,8 @@ import { loadEnvConfig } from "@next/env";
 import { isPostgres, loadPersistedState, scenarioKeyFor } from "@/lib/database";
 import { getSqliteDb } from "@/lib/sqlite-db";
 import {
+  absoluteSecurityScore,
+  securityOutcome,
   computeDiscriminationWeights,
   dimensionScoreFor,
   qualityDifficultyFor,
@@ -104,6 +107,8 @@ function providerForBaseUrl(baseUrl: string | null | undefined): string | undefi
 }
 
 type ModelBucket = {
+  identity: string;
+  configurationLabel: string;
   modelName: string;
   totalRuns: number;
   failedEvals: number;
@@ -278,9 +283,12 @@ function buildSnapshot(
     for (const res of run.results) {
       if (res.status !== "COMPLETED") continue;
 
-      let bucket = byModel.get(res.modelName);
+      const modelKey = resultIdentity(run, res);
+      let bucket = byModel.get(modelKey);
       if (!bucket) {
         bucket = {
+          identity: modelKey,
+          configurationLabel: res.manifest?.quantization ?? "Unverified quantization",
           modelName: res.modelName,
           totalRuns: 0,
           failedEvals: 0,
@@ -294,7 +302,7 @@ function buildSnapshot(
             PURPLE_TEAM: emptyCategoryBucket(),
           },
         };
-        byModel.set(res.modelName, bucket);
+        byModel.set(modelKey, bucket);
       }
 
       if (res.evalStatus === "FAILED") {
@@ -319,17 +327,17 @@ function buildSnapshot(
         }
         if (ev.scoreStars != null) {
           cb.stars.push(ev.scoreStars);
-          scenarioStatFor(scenarioKey, res.modelName).stars.push(ev.scoreStars);
+          scenarioStatFor(scenarioKey, modelKey).stars.push(ev.scoreStars);
         }
         if (ev.grammarRating != null) cb.grammar.push(ev.grammarRating);
         if (ev.complianceRating != null) cb.compliance.push(ev.complianceRating);
         if (ev.accuracyRating != null) cb.accuracy.push(ev.accuracyRating);
       }
-      if (ev?.securityScore != null || run.category === "SECURITY") {
+      if (securityOutcome(ev, res.evalStatus) !== null) {
         cb.attacks += 1;
-        const stat = scenarioStatFor(scenarioKey, res.modelName);
+        const stat = scenarioStatFor(scenarioKey, modelKey);
         stat.attacks += 1;
-        if (ev?.injectionSuccessful || ev?.systemLeakageDetected) {
+        if (securityOutcome(ev, res.evalStatus) === false) {
           cb.failures += 1;
           stat.failures += 1;
         }
@@ -342,7 +350,7 @@ function buildSnapshot(
   );
   
   
-  const securityWeights = computeDiscriminationWeights(scenarioRows, "security");
+
 
   const qualityWeights = computeDiscriminationWeights(scenarioRows, "quality");
 
@@ -359,29 +367,22 @@ function buildSnapshot(
     const redResilience = redAttacks > 0 ? Math.round(100 - (redFailures / redAttacks) * 100) : -1;
     const blueStars = average(b.buckets.BLUE_TEAM.stars);
     const purpleStars = average(b.buckets.PURPLE_TEAM.stars);
-    const secAttacks =
-      b.buckets.GENERAL.attacks + b.buckets.RED_TEAM.attacks + b.buckets.BLUE_TEAM.attacks + b.buckets.PURPLE_TEAM.attacks;
-    const secFailures =
-      b.buckets.GENERAL.failures + b.buckets.RED_TEAM.failures + b.buckets.BLUE_TEAM.failures + b.buckets.PURPLE_TEAM.failures;
+
+
 
     const grammar = average(allOf(b, "grammar")) ?? avgStars;
     const compliance = average(allOf(b, "compliance")) ?? avgStars;
     const accuracy = average(allOf(b, "accuracy")) ?? avgStars;
     const avgTok = average(b.tokPerSecList);
     const avgTtft = average(b.ttftMsList);
-    const securityResilience = secAttacks > 0 ? Number((100 - (secFailures / secAttacks) * 100).toFixed(1)) : 100;
+
     const avgStarsAll = average(allOf(b, "stars"));
 
     // Scenario-level weighted scores (same algorithm as the internal leaderboard).
-    const modelScenarioRows = scenarioRows.filter((row) => row.modelName === b.modelName);
-    const securityDimension = dimensionScoreFor(securityWeights, modelScenarioRows, "security");
+    const modelScenarioRows = scenarioRows.filter((row) => row.modelName === b.identity);
+
     const qualityDimension = dimensionScoreFor(qualityWeights, modelScenarioRows, "quality");
-    const weightedSecurityResilience =
-      securityDimension.score !== null
-        ? securityDimension.score
-        : secAttacks > 0
-          ? securityResilience
-          : 100;
+    const weightedSecurityResilience = absoluteSecurityScore(modelScenarioRows) ?? -1;
 
     const qualityScore =
       qualityDimension.score !== null
@@ -389,7 +390,7 @@ function buildSnapshot(
         : avgStarsAll !== null
           ? (avgStarsAll / 5) * 100
           : 0;
-    const securityScore = weightedSecurityResilience;
+    const securityScore = Math.max(0, weightedSecurityResilience);
     const speedScore = avgTok !== null ? (avgTok / maxAvgSpeed) * 100 : 0;
     const totalWeight = ARENA_WEIGHTS.quality + ARENA_WEIGHTS.security + ARENA_WEIGHTS.speed;
     const arenaScore = Math.max(
@@ -412,8 +413,9 @@ function buildSnapshot(
     ).filter((cat) => b.buckets[cat].stars.length > 0);
 
     return {
-      id: stableId(b.modelName),
+      id: stableId(b.identity),
       model_name: b.modelName,
+      configuration_label: b.configurationLabel,
       parameter_size: parameterSizeLabel(b.modelName),
       size_category: sizeCategoryFor(parameterSizeValue(b.modelName)),
       evaluator_model: evaluatorModel,
@@ -424,7 +426,7 @@ function buildSnapshot(
       compliance_score: Number(compliance.toFixed(1)),
       accuracy_score: Number(accuracy.toFixed(1)),
       security_resilience_score: weightedSecurityResilience,
-      security_status: securityStatusFor(securityResilience),
+      security_status: securityStatusFor(weightedSecurityResilience),
       avg_tok_per_sec: avgTok ?? 0,
       avg_ttft_ms: avgTtft ?? 0,
       total_runs: b.totalRuns,
@@ -511,7 +513,7 @@ function buildSnapshot(
 
   const overallLeader = models[0]?.model_name ?? "—";
   const securityLeader =
-    [...models].sort((a, b) => b.security_resilience_score - a.security_resilience_score)[0]?.model_name ?? "—";
+    [...models].filter(m => m.security_resilience_score >= 0).sort((a, b) => b.security_resilience_score - a.security_resilience_score)[0]?.model_name ?? "—";
 
   return {
     generated_at: new Date().toISOString(),

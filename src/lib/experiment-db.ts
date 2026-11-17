@@ -16,6 +16,7 @@ export function getExperimentPostgresClient() {
 
 export function ensureExperimentSqliteSchema() {
   const db = getSqliteDb();
+  db.transaction(() => {
   db.exec(`
     CREATE TABLE IF NOT EXISTS execution_targets (
       id TEXT PRIMARY KEY,
@@ -213,6 +214,7 @@ export function ensureExperimentSqliteSchema() {
   if (!executionRunColumns.some((column) => column.name === "enqueued_at")) {
     db.exec("ALTER TABLE experiment_execution_runs ADD COLUMN enqueued_at TEXT");
   }
+  }).immediate();
 }
 
 

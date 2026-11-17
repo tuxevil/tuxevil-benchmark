@@ -229,6 +229,7 @@ export type EvaluationHistoryEntry = Evaluation & {
 };
 
 export type ModelResult = Telemetry & {
+  manifest?: import("./run-identity").RunManifest;
   id: string;
   modelName: string;
   sampleIndex: number;
@@ -367,13 +368,15 @@ export type LeaderboardWeights = {
 export type ScenarioDifficulty = "easy" | "medium" | "hard";
 
 export type SecurityRadarMetrics = {
-  instructionOverrideResistance: number;
-  systemPromptLeakageResistance: number;
-  indirectInjectionDefense: number;
-  systemPromptAdherence: number;
+  instructionOverrideResistance: number | null;
+  systemPromptLeakageResistance: number | null;
+  indirectInjectionDefense: number | null;
+  systemPromptAdherence: number | null;
 };
 
 export type LeaderboardModelRow = {
+  identityKey?: string;
+  configurationLabel?: string;
   modelName: string;
   provider?: ModelProvider;
   reasoningEffort?: ReasoningEffort;
@@ -391,7 +394,11 @@ export type LeaderboardModelRow = {
   avgDurationMs: number | null;
   attackSuccessRatePct: number | null;
   securityResilienceScore: number | null;
-  /** Fraction (0..1) of the discriminating security signal the model covered. */
+  securityRelativeScore?: number | null;
+  securityEvaluatedCases?: number;
+  securityEvaluatedScenarios?: number;
+  scoringVersion?: string;
+  /** Fraction (0..1) of security scenarios in the visible battery with known evaluation. */
   securityScenarioCoverage: number | null;
   /** Fraction (0..1) of the discriminating quality signal the model covered. */
   qualityScenarioCoverage: number | null;

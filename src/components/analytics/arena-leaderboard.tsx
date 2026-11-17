@@ -20,7 +20,7 @@ interface ArenaLeaderboardProps {
   onWeightChange: (key: keyof LeaderboardWeights, val: number) => void;
   selectedRadarModels: string[];
   onToggleRadarModel: (modelName: string, provider?: string) => void;
-  onSelectModelProfile?: (modelName: string, provider?: string) => void;
+  onSelectModelProfile?: (modelName: string, provider?: string, identityKey?: string) => void;
 }
 
 type SortField =
@@ -84,14 +84,9 @@ export function ArenaLeaderboard({
   };
 
   const getSecurityBadge = (row: LeaderboardModelRow) => {
-    const resilience = row.securityResilienceScore ?? 100;
-    if (resilience >= 85) {
-      return <span className="sec-pill green">🟢 {resilience}% Imm.</span>;
-    }
-    if (resilience >= 60) {
-      return <span className="sec-pill yellow">🟡 {resilience}% Mod.</span>;
-    }
-    return <span className="sec-pill red">🔴 {resilience}% Vuln.</span>;
+    const resilience = row.securityResilienceScore;
+    if (resilience === null) return <span className="sec-pill">Sin evaluar</span>;
+    return <span className={`sec-pill ${resilience >= 85 ? 'green' : resilience >= 60 ? 'yellow' : 'red'}`} title={`Media por escenario evaluado, independiente de otros modelos. ${row.securityEvaluatedCases ?? '?'} casos, ${row.securityEvaluatedScenarios ?? '?'} escenarios. Índice relativo: ${row.securityRelativeScore ?? 'sin señal'}.`}>{resilience}% <small>· {row.securityEvaluatedCases ?? '—'} casos</small></span>;
   };
 
   const getEligibilityBadge = (row: LeaderboardModelRow) => {
@@ -99,7 +94,7 @@ export function ArenaLeaderboard({
     const coverage = row.securityScenarioCoverage ?? row.qualityScenarioCoverage;
     const pct = coverage !== null ? Math.round(coverage * 100) : null;
     return (
-      <span className="sec-pill red" title={`Cobertura de escenarios insuficiente (${pct ?? "?"}%) para un ranking justo`}>
+      <span className="sec-pill red" title={`Falta evaluación de seguridad o cobertura de escenarios (${pct ?? "?"}%) para un ranking justo`}>
         ⚠ Sin rango {pct !== null ? `(${pct}%)` : ""}
       </span>
     );
@@ -297,7 +292,7 @@ export function ArenaLeaderboard({
                   Accuracy
                 </th>
                 <th onClick={() => handleSort("securityResilienceScore")} className="sortable-th text-center">
-                  Security
+                  Security absoluta
                 </th>
                 <th onClick={() => handleSort("avgTokPerSec")} className="sortable-th text-center">
                   Speed
@@ -316,21 +311,21 @@ export function ArenaLeaderboard({
             </thead>
             <tbody>
               {sortedModels.map((m) => {
-                const isChecked = selectedRadarModels.includes(m.modelName);
+                const isChecked = selectedRadarModels.includes(m.identityKey ?? m.modelName);
 
                 return (
-                   <tr key={m.modelName + (m.provider ? `::${m.provider}` : "") + (m.reasoningEffort ? `::${m.reasoningEffort}` : "")} className={isChecked ? "row-selected" : ""}>
+                   <tr title={m.configurationLabel} key={m.identityKey ?? m.modelName + (m.provider ? `::${m.provider}` : "") + (m.reasoningEffort ? `::${m.reasoningEffort}` : "")} className={isChecked ? "row-selected" : ""}>
                      <td style={{ textAlign: "center" }}>
                        <input
                          type="checkbox"
                          checked={isChecked}
-                         onChange={() => onToggleRadarModel(m.modelName, m.provider)}
+                         onChange={() => onToggleRadarModel(m.identityKey ?? m.modelName, m.provider)}
                          title="Link to chart analytics"
                        />
                      </td>
                      <td className="model-cell">
                        <strong className="model-name-text">{m.modelName}</strong>
-                       <span className="param-pill">{m.paramSizeLabel} Params</span>
+                       <span className="param-pill">{m.paramSizeLabel} Params</span>{m.configurationLabel && <small className="muted" style={{display:"block",marginTop:4}}>{m.configurationLabel}</small>}
                        {m.provider && m.provider !== "ollama" && (
                          <span
                            className="badge"
@@ -405,7 +400,7 @@ export function ArenaLeaderboard({
                         <button
                           type="button"
                           className="btn-profile-link"
-                           onClick={() => onSelectModelProfile(m.modelName, m.provider)}
+                           onClick={() => onSelectModelProfile(m.modelName, m.provider, m.identityKey)}
                         >
                           [View Profile]
                         </button>

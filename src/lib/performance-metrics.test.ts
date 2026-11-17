@@ -69,3 +69,12 @@ describe("performance metrics", () => {
     expect(profile.secondsPerSuccessfulTask).toBeNull();
   });
 });
+
+it('includes retry time but does not invent complete token costs for failed attempts',()=>{
+ const row=observation({id:'retried',phase:'WARM',success:true,ttftMs:20,durationMs:3000,tokPerSec:10,inputTokens:10,outputTokens:10});
+ row.telemetry.resources={attempts:[{status:'FAILED'},{status:'COMPLETED'}]};
+ const profile=buildPerformanceProfile([row],'WARM');
+ expect(profile.secondsPerSuccessfulTask).toBe(3);
+ expect(profile.totalTokensPerSuccessfulTask).toBeNull();
+ expect(profile.outputTokensPerSuccessfulTask).toBeNull();
+});

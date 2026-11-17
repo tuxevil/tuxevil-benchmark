@@ -29,7 +29,13 @@ export function getSqliteDb(): Database.Database {
     dbInstance = new Database(dbPath);
     dbInstance.pragma("journal_mode = WAL");
     dbInstance.pragma("foreign_keys = ON");
-    initSqliteTables(dbInstance);
+    try {
+      dbInstance.transaction(() => initSqliteTables(dbInstance!)).immediate();
+    } catch (error) {
+      dbInstance.close();
+      dbInstance = null;
+      throw error;
+    }
   }
   return dbInstance;
 }
@@ -1039,6 +1045,7 @@ export function sqliteLoadState(targetRunId?: string) {
     });
   }
 
+  const manifests = new Map((getSqliteDb().prepare("SELECT model_result_id,json_extract(payload_json,'$.manifest') AS manifest FROM result_resource_measurements WHERE json_extract(payload_json,'$.manifest') IS NOT NULL").all() as {model_result_id:string;manifest:string}[]).map(row => [row.model_result_id, JSON.parse(row.manifest)]));
   const resultsByRun = new Map<string, ModelResult[]>();
   for (const row of resultRows) {
     const rowId = String(row.id);
@@ -1046,6 +1053,7 @@ export function sqliteLoadState(targetRunId?: string) {
     const evaluation = evalsByResult.get(rowId) || null;
       const result: ModelResult = {
         id: rowId,
+        manifest: manifests.get(rowId),
         modelName: String(row.model_name),
         sampleIndex: Number(row.sample_index ?? 0),
         status: row.status as ModelResult["status"],

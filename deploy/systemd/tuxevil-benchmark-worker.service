@@ -1,0 +1,19 @@
+[Unit]
+Description=tuxevil Benchmark worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=benchmark
+WorkingDirectory=/srv/tuxevil-benchmark
+EnvironmentFile=/etc/tuxevil-benchmark/application.env
+EnvironmentFile=-/etc/tuxevil-benchmark/resources.env
+ExecStart=/usr/bin/env node /srv/tuxevil-benchmark/node_modules/tsx/dist/cli.mjs /srv/tuxevil-benchmark/src/worker.ts
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=3600
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -139,3 +139,8 @@ describe("probeProviderSnapshot", () => {
     expect(snapshot.environment.runtimeFlags).not.toContain("0.0.0.0");
   });
 });
+it('reads quantization reported directly by llama.cpp props when model details omit it',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async(input:string|URL|Request)=>new Response(JSON.stringify(String(input).endsWith('/props')?{model_ftype:'Q6_K',default_generation_settings:{model:'same-alias',n_ctx:4096}}:{data:[{id:'same-alias'}]}))));
+ try { const snapshot=await probeProviderSnapshot({provider:'llamacpp',endpoint:'http://localhost:8888',model:'same-alias',label:'test'});expect(snapshot.artifact.quantization).toBe('Q6_K'); }
+ finally {vi.unstubAllGlobals();}
+});

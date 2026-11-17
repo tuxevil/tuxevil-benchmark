@@ -3,6 +3,7 @@
 RAM is host used RAM excluding cache; watts/VRAM are total NVIDIA GPU readings,
 not wall-socket power or model-exclusive usage. Unsupported values remain null.
 """
+import datetime
 import hmac
 import json
 import os
@@ -24,7 +25,7 @@ def sample():
         vram = sum(float(row[1]) * 1024 * 1024 for row in rows)
     except (OSError, subprocess.SubprocessError, ValueError):
         pass
-    return {'source': 'host RAM; NVIDIA GPU power/VRAM', 'scope': 'gpu',
+    return {'sampledAt': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'source': 'host RAM; NVIDIA GPU power/VRAM', 'scope': 'gpu',
             'ramBytes': memory['MemTotal'] - memory.get('MemAvailable', memory['MemFree']),
             'vramBytes': vram, 'watts': watts}
 

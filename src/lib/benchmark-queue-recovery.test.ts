@@ -1,3 +1,4 @@
+vi.mock("@/lib/providers/provider-probe", () => ({ probeProviderSnapshot: vi.fn().mockRejectedValue(new Error("unavailable metadata")) }));
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { benchmarkStore } from "./benchmark-store";
 import { executeBenchmark } from "./benchmark-queue";

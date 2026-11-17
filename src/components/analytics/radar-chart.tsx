@@ -9,13 +9,13 @@ interface SecurityRadarChartProps {
 
 export function SecurityRadarChart({ models }: SecurityRadarChartProps) {
   const [hoveredModel, setHoveredModel] = useState<string | null>(null);
-  const displayModels = models.slice(0, 4);
+  const displayModels = models.filter(m => m.securityResilienceScore !== null && (m.avgGrammar ?? m.avgQualityStars) !== null && (m.avgCompliance ?? m.avgQualityStars) !== null && (m.avgAccuracy ?? m.avgQualityStars) !== null && m.avgTtftMs !== null && m.avgTokPerSec !== null).slice(0, 4);
 
   if (displayModels.length === 0) {
     return (
       <div className="chart-empty-state">
-        <p>No models selected for Radar comparison.</p>
-        <p className="sub">Check boxes [x] in the Master Table to compare.</p>
+        <p>Sin modelos con métricas completas para el radar.</p>
+        <p className="sub">Selecciona modelos evaluados. Las métricas ausentes no se dibujan como puntuaciones perfectas.</p>
       </div>
     );
   }
@@ -34,7 +34,7 @@ export function SecurityRadarChart({ models }: SecurityRadarChartProps) {
     { label: "Grammar", angle: -Math.PI / 2, getVal: (m: LeaderboardModelRow) => ((m.avgGrammar ?? m.avgQualityStars ?? 4) / 5) * 100 },
     { label: "Compliance", angle: -Math.PI / 6, getVal: (m: LeaderboardModelRow) => ((m.avgCompliance ?? m.avgQualityStars ?? 4) / 5) * 100 },
     { label: "Accuracy", angle: Math.PI / 6, getVal: (m: LeaderboardModelRow) => ((m.avgAccuracy ?? m.avgQualityStars ?? 4) / 5) * 100 },
-    { label: "Security", angle: Math.PI / 2, getVal: (m: LeaderboardModelRow) => m.securityResilienceScore ?? 100 },
+    { label: "Security", angle: Math.PI / 2, getVal: (m: LeaderboardModelRow) => m.securityResilienceScore ?? 0 },
     { label: "TTFT (Fast)", angle: (5 * Math.PI) / 6, getVal: (m: LeaderboardModelRow) => Math.max(10, Math.min(100, 100 - (m.avgTtftMs ?? 200) / 4)) },
     { label: "Speed (tok/s)", angle: (-5 * Math.PI) / 6, getVal: (m: LeaderboardModelRow) => Math.min(100, ((m.avgTokPerSec ?? 0) / maxSpeed) * 100) },
   ];
@@ -121,7 +121,7 @@ export function SecurityRadarChart({ models }: SecurityRadarChartProps) {
             })
             .join(" ");
 
-          const modelKey = m.modelName + (m.reasoningEffort ? `::${m.reasoningEffort}` : "");
+          const modelKey = m.identityKey ?? m.modelName + (m.reasoningEffort ? `::${m.reasoningEffort}` : "");
           return (
             <g key={modelKey}>
               <polygon
@@ -142,11 +142,11 @@ export function SecurityRadarChart({ models }: SecurityRadarChartProps) {
       </svg>
 
       {/* Legend */}
-      <div className="radar-legend">
+      <div className="radar-legend" title="El radar omite modelos con métricas ausentes; nunca las sustituye por éxito.">
         {displayModels.map((m, idx) => {
           const color = colors[idx % colors.length];
           const hovered = isHovered(m.modelName);
-          const modelKey = m.modelName + (m.reasoningEffort ? `::${m.reasoningEffort}` : "");
+          const modelKey = m.identityKey ?? m.modelName + (m.reasoningEffort ? `::${m.reasoningEffort}` : "");
           return (
             <div
               key={modelKey}

@@ -1,5 +1,6 @@
 import { loadEnvConfig } from "@next/env";
-import { Worker } from "bullmq";
+import { Worker, DelayedError } from "bullmq";
+import { ResourceBusyError } from "./lib/execution-admission";
 import { executeBenchmark } from "./lib/benchmark-queue";
 import { reconcileOrphanedRuns } from "./lib/reconcile-runs";
 import { redisConnection } from "./lib/redis-connection";
@@ -30,7 +31,13 @@ async function reconcile() {
 
 const worker = new Worker<{ runId: string }>(
   LEGACY_QUEUE_NAME,
-  async (job) => executeBenchmark(job.data.runId),
+  async (job, token) => {
+    try { await executeBenchmark(job.data.runId); }
+    catch (error) {
+      if (error instanceof ResourceBusyError) { await job.moveToDelayed(Date.now()+1000, token); throw new DelayedError(); }
+      throw error;
+    }
+  },
   {
     connection: redisConnection(),
     concurrency: Math.max(1, Number(process.env.BENCHMARK_CONCURRENCY ?? 1)),
