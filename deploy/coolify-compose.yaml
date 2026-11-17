@@ -1,0 +1,89 @@
+# Managed by Coolify as a Git-based Docker Compose application (raw mode).
+# Private env files and existing data volumes remain on the production host.
+services:
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    image: tuxevil-benchmark-managed:live
+    restart: unless-stopped
+    env_file: /srv/tuxevil-benchmark/private/web.env
+    environment:
+      BENCHMARK_PUBLIC_SCENARIOS_FILE: /publication/scenarios.json
+    volumes:
+      - /srv/tuxevil-benchmark/backups:/backups
+      - /srv/tuxevil-benchmark/private/public-scenarios.json:/publication/scenarios.json:ro
+    networks: [private, coolify]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    labels:
+      traefik.enable: 'true'
+      traefik.docker.network: coolify
+      traefik.http.routers.benchmark-managed.rule: Host(`benchmark.tuxevil.com`)
+      traefik.http.routers.benchmark-managed.priority: '2000'
+      traefik.http.routers.benchmark-managed.entrypoints: https
+      traefik.http.routers.benchmark-managed.tls: 'true'
+      traefik.http.routers.benchmark-managed.tls.certresolver: letsencrypt
+      traefik.http.routers.benchmark-managed.service: benchmark-managed
+      traefik.http.routers.benchmark-managed.middlewares: benchmark-managed-security,benchmark-managed-rate
+      traefik.http.services.benchmark-managed.loadbalancer.server.port: '3103'
+      traefik.http.middlewares.benchmark-managed-security.headers.contenttypenosniff: 'true'
+      traefik.http.middlewares.benchmark-managed-security.headers.framedeny: 'true'
+      traefik.http.middlewares.benchmark-managed-security.headers.referrerpolicy: no-referrer
+      traefik.http.middlewares.benchmark-managed-security.headers.customresponseheaders.Cache-Control: no-store
+      traefik.http.middlewares.benchmark-managed-rate.ratelimit.average: '10'
+      traefik.http.middlewares.benchmark-managed-rate.ratelimit.burst: '30'
+  worker:
+    image: tuxevil-benchmark-managed:live
+    pull_policy: never
+    restart: unless-stopped
+    env_file: /srv/tuxevil-benchmark/private/worker.env
+    network_mode: host
+    command: [node, node_modules/tsx/dist/cli.mjs, src/worker.ts]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+  telemetry:
+    image: tuxevil-benchmark-managed:live
+    pull_policy: never
+    restart: unless-stopped
+    env_file: /srv/tuxevil-benchmark/private/.env.telemetry
+    network_mode: host
+    command: [python3, scripts/mqtt-resource-bridge.py]
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: /srv/tuxevil-benchmark/private/database.env
+    ports: ['127.0.0.1:55437:5432']
+    volumes: [database:/var/lib/postgresql/data]
+    networks: [private]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U benchmark -d benchmark']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    env_file: /srv/tuxevil-benchmark/private/redis.env
+    command: [sh, '-c', 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
+    ports: ['127.0.0.1:6381:6379']
+    volumes: [redis:/data]
+    networks: [private]
+    healthcheck:
+      test: [CMD-SHELL, 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+networks:
+  private:
+  coolify:
+    external: true
+volumes:
+  database:
+    external: true
+    name: tuxevil-benchmark_database
+  redis:
+    external: true
+    name: tuxevil-benchmark_redis

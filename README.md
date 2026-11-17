@@ -390,3 +390,10 @@ Las definiciones de escenarios públicos se cargan exclusivamente desde un archi
 aprobado mediante `BENCHMARK_PUBLIC_SCENARIOS_FILE`; los prompts privados de la
 base de datos no se publican automáticamente. Sus estadísticas quedan sin evaluar
 si no se dispone de un cálculo público correspondiente.
+
+La instalación existente en Coolify usa `deploy/coolify-compose.yaml` en modo
+Raw Compose: web, worker, MQTT, PostgreSQL y Redis forman una sola aplicación.
+El archivo referencia configuración privada del host y volúmenes externos ya
+existentes; no es una receta para una instalación vacía. No ejecutes dos instancias
+de PostgreSQL contra el mismo volumen. El dominio y sus reglas HTTPS pertenecen
+al servicio web definido en Compose, sin un override de enrutamiento externo.
