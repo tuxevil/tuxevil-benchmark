@@ -367,7 +367,10 @@ aplica migraciones y habilita las unidades con el administrador del sistema.
 `/live` redirige a `/`; todo el panel privado vive bajo `/admin`.
 Configura `BENCHMARK_PUBLIC_MODELS=ALL` para publicar todos los modelos con
 resultados, incluidos los que se agreguen después. También puedes enumerar
-nombres exactos separados por comas. Una lista vacía no publica resultados. `BENCHMARK_PUBLIC_MODEL_ALIASES` permite reemplazar nombres
+nombres exactos separados por comas. Una lista vacía no publica resultados.
+En Coolify, configura esta variable en la aplicación y redespliega. El Compose
+pasa ese valor al servicio web y le da prioridad sobre el archivo privado.
+`BENCHMARK_PUBLIC_MODEL_ALIASES` permite reemplazar nombres
 internos por nombres de presentación. No publica prompts, respuestas ni endpoints.
 
 El resto de páginas y APIs exige `BENCHMARK_ADMIN_USER` y

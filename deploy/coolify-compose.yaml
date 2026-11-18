@@ -11,6 +11,7 @@ services:
       - path: /srv/tuxevil-benchmark/private/web.env
         required: false
     environment:
+      BENCHMARK_PUBLIC_MODELS: "${BENCHMARK_PUBLIC_MODELS:-}"
       BENCHMARK_PUBLIC_SCENARIOS_FILE: /publication/scenarios.json
     volumes:
       - /srv/tuxevil-benchmark/backups:/backups
