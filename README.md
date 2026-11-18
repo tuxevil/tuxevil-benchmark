@@ -365,8 +365,9 @@ aplica migraciones y habilita las unidades con el administrador del sistema.
 
 `/` sirve la landing pública original con actualización cada tres segundos.
 `/live` redirige a `/`; todo el panel privado vive bajo `/admin`.
-Solo publica los modelos enumerados en `BENCHMARK_PUBLIC_MODELS`; la lista vacía
-no publica resultados. `BENCHMARK_PUBLIC_MODEL_ALIASES` permite reemplazar nombres
+Configura `BENCHMARK_PUBLIC_MODELS=ALL` para publicar todos los modelos con
+resultados, incluidos los que se agreguen después. También puedes enumerar
+nombres exactos separados por comas. Una lista vacía no publica resultados. `BENCHMARK_PUBLIC_MODEL_ALIASES` permite reemplazar nombres
 internos por nombres de presentación. No publica prompts, respuestas ni endpoints.
 
 El resto de páginas y APIs exige `BENCHMARK_ADMIN_USER` y

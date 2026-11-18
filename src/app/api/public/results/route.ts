@@ -1,9 +1,11 @@
+import { approvedPublicModels } from "@/lib/public-model-policy";
+import { publicLabel } from "@/lib/public-snapshot-builder";
 import { aggregateLeaderboard } from '@/lib/database';
 export const dynamic='force-dynamic';
 export async function GET() {
  const data=await aggregateLeaderboard({});
  const aliases: Record<string,string>=JSON.parse(process.env.BENCHMARK_PUBLIC_MODEL_ALIASES ?? '{}');
- const approved=new Set((process.env.BENCHMARK_PUBLIC_MODELS ?? '').split(',').map(v=>v.trim()).filter(Boolean));
- const models=data.models.filter(m=>approved.has(m.modelName)).map(m=>({name:aliases[m.modelName] ?? m.modelName,configuration:m.configurationLabel,security:m.securityResilienceScore,quality:m.avgQualityStars,speed:m.avgTokPerSec,runs:m.totalRuns,eligible:m.rankingEligible,score:m.arenaIndex}));
+ const approved=approvedPublicModels(data.models);
+ const models=data.models.filter(m=>approved.has(m.modelName)).map(m=>({name:publicLabel(aliases[m.modelName] ?? m.modelName, "Approved model"),configuration:publicLabel(m.configurationLabel, "Configuration not recorded"),security:m.securityResilienceScore,quality:m.avgQualityStars,speed:m.avgTokPerSec,runs:m.totalRuns,eligible:m.rankingEligible,score:m.arenaIndex}));
  return Response.json({updatedAt:new Date().toISOString(),models},{headers:{'Cache-Control':'no-store'}});
 }

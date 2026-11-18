@@ -1,3 +1,4 @@
+import { approvedPublicModels } from "@/lib/public-model-policy";
 import { z } from "zod";
 import { aggregateLeaderboard } from "@/lib/database";
 import { buildPublicSnapshot } from "@/lib/public-snapshot-builder";
@@ -51,7 +52,7 @@ export async function answerResultsChat(request: Request, scope: "public" | "pri
     const data = await aggregateLeaderboard();
     const rows = scope === "public"
       ? buildPublicSnapshot(data,
-          new Set((process.env.BENCHMARK_PUBLIC_MODELS ?? "").split(",").map(name => name.trim()).filter(Boolean)),
+          approvedPublicModels(data.models),
           JSON.parse(process.env.BENCHMARK_PUBLIC_MODEL_ALIASES ?? "{}"),
         ).models.map(row => ({
           model: row.model_name, configuration: row.configuration_label, runs: row.total_runs,
