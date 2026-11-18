@@ -407,3 +407,19 @@ Las especificaciones del rig son públicas: CPU, RAM y GPU conservan las etiquet
 de la landing original. Se pueden ajustar con `SNAPSHOT_CPU`, `SNAPSHOT_RAM`,
 `SNAPSHOT_GPU` y `SNAPSHOT_PROVIDER`. No se publican direcciones internas,
 usuarios, cuentas ni credenciales junto a esos componentes.
+
+## Chat de resultados
+
+Abre **Preguntar al benchmark** desde el sitio público o cualquier pantalla
+privada. Puedes consultar el ranking, velocidad, calidad, seguridad y tiempo al
+primer token. El chat público usa las variantes y los alias publicados en el
+leaderboard. El chat privado requiere la misma autenticación que el panel.
+
+El modo integrado responde consultas de métricas sin configurar un proveedor.
+Para habilitar preguntas abiertas y seguimientos, configura en el entorno del
+servicio web `BENCHMARK_CHAT_BASE_URL` (base de una API compatible con OpenAI,
+incluido `/v1` si corresponde), `BENCHMARK_CHAT_MODEL` y, si el proveedor la
+requiere, `BENCHMARK_CHAT_API_KEY`. En este modo se envían al proveedor la pregunta,
+el contexto reciente de la conversación y los resúmenes del leaderboard de esa
+vista. El chat no carga respuestas originales de las pruebas ni archivos de
+diagnóstico. Cada vista tiene un límite de solicitudes por minuto por proceso.

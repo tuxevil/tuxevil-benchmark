@@ -1,3 +1,4 @@
+import { ResultsChat } from "@/components/results-chat";
 import type { Metadata } from "next";
 import { PROJECT_BRAND } from "@/lib/brand";
 import "./globals.css";
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" data-theme="dark" suppressHydrationWarning>
-      <body>{children}</body>
+      <body>{children}<ResultsChat /></body>
     </html>
   );
 }
