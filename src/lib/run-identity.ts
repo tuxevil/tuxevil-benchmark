@@ -1,4 +1,4 @@
-import type { ModelResult, TestRun } from './contracts';
+import type { BenchmarkParameters, ModelResult, TestRun } from './contracts';
 
 export type RunManifest = {
   version: 1;
@@ -59,6 +59,47 @@ export function stableValue(value: unknown): string {
   if (value && typeof value === 'object') return `{${Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>`${JSON.stringify(k)}:${stableValue(v)}`).join(',')}}`;
   return JSON.stringify(value) ?? 'null';
 }
+
+type ComparisonIdentityInput = {
+  modelName: string;
+  provider?: string | null;
+  runtime?: string | null;
+  quantization?: string | null;
+};
+
+function normalizeEngine(value: string | null | undefined): string {
+  const engine = value?.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!engine) return 'unknown';
+  if (engine.replace(/[.\s_-]/g, '') === 'llamacpp') return 'llamacpp';
+  return engine;
+}
+
+function comparisonIdentity(input: ComparisonIdentityInput): string {
+  return stableValue({
+    model: input.modelName.trim(),
+    engine: normalizeEngine(input.runtime || input.provider || 'ollama'),
+    quantization: input.quantization?.trim().replace(/\s+/g, '').toUpperCase() || null,
+  });
+}
+
+export function formatInferenceParameters(parameters: BenchmarkParameters | null | undefined): string {
+  if (!parameters) return 'Parameters not recorded';
+  return [
+    `temp ${parameters.temperature}`,
+    `ctx ${parameters.numCtx}`,
+    `top-p ${parameters.topP}`,
+    `repeat ${parameters.repeatPenalty}`,
+    `max tokens ${parameters.numPredict}`,
+    `seed ${parameters.seed ?? 'auto'}`,
+    `reasoning ${parameters.reasoningEffort ?? 'off'}`,
+  ].join(' · ');
+}
+
 export function resultIdentity(run: TestRun, result: ModelResult): string {
-  return result.manifest?.identity ?? stableValue({legacy:true,model:result.modelName,provider:run.provider ?? 'ollama',parameters:run.parameters,evaluator:run.evaluatorModel ?? null});
+  return comparisonIdentity({
+    modelName: result.modelName,
+    provider: run.provider,
+    runtime: result.manifest?.diagnostics?.environment?.runtime,
+    quantization: result.manifest?.quantization,
+  });
 }

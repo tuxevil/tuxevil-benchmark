@@ -1,5 +1,7 @@
 "use client";
 
+import { formatInferenceParameters } from "@/lib/run-identity";
+
 import { useCallback, useEffect, useState } from "react";
 import type { EvaluatorEntry, EvaluationHistoryEntry, ModelResult, TestRun, TurnResult } from "@/lib/contracts";
 
@@ -280,6 +282,10 @@ export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawe
         <div className="drawer-body">
           {activeTab === "prompts" ? (
             <div className="drawer-section-group">
+              <div className="drawer-box">
+                <span className="box-label">INFERENCE PARAMETERS</span>
+                <p>{formatInferenceParameters(run?.parameters)}</p>
+              </div>
               <div className="drawer-box">
                 <span className="box-label">SYSTEM PROMPT</span>
                 <pre className="code-block">{systemPrompt}</pre>

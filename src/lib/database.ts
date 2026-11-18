@@ -402,7 +402,6 @@ export async function aggregateLeaderboard(options?: {
     configurationLabel: string;
     modelName: string;
     provider: import("@/lib/contracts").ModelProvider;
-    reasoningEffort: import("@/lib/contracts").ReasoningEffort;
     runsCount: number;
     failedEvals: number;
     tokPerSecList: number[];
@@ -448,7 +447,6 @@ export async function aggregateLeaderboard(options?: {
 
   for (const entry of filteredRuns) {
     uniqueRunIds.add(entry.run.id);
-    const runEffort: import("@/lib/contracts").ReasoningEffort = entry.run.parameters?.reasoningEffort ?? "off";
     const runProvider: import("@/lib/contracts").ModelProvider = entry.run.provider ?? "ollama";
     for (const res of entry.run.results) {
       if (res.status !== "COMPLETED") continue;
@@ -460,17 +458,16 @@ export async function aggregateLeaderboard(options?: {
         if (options.paramRange === ">8B" && param.value <= 8) continue;
       }
 
-      // Group by modelName + provider + reasoningEffort
+      // Group by model, engine and quantization
       const modelKey = resultIdentity(entry.run, res);
 
       let bucket = byModel.get(modelKey);
       if (!bucket) {
         bucket = {
           modelKey,
-          configurationLabel: res.manifest?.quantization ?? (res.manifest ? "Identidad no verificada" : "Histórico: cuantización no registrada"),
+          configurationLabel: res.manifest?.quantization ?? (res.manifest ? "Cuantización no verificada" : "Histórico: cuantización no registrada"),
           modelName: res.modelName,
           provider: runProvider,
-          reasoningEffort: runEffort,
           runsCount: 0,
           failedEvals: 0,
           tokPerSecList: [],
@@ -574,7 +571,6 @@ export async function aggregateLeaderboard(options?: {
     configurationLabel: string;
     modelName: string;
     provider: import("@/lib/contracts").ModelProvider;
-    reasoningEffort?: import("@/lib/contracts").ReasoningEffort;
     paramSize: { label: string; value: number };
     totalRuns: number;
     failedEvals: number;
@@ -643,7 +639,6 @@ export async function aggregateLeaderboard(options?: {
       configurationLabel: bucket.configurationLabel,
       modelName: bucket.modelName,
       provider: bucket.provider,
-      reasoningEffort: bucket.reasoningEffort,
       paramSize: extractParamSize(bucket.modelName),
       totalRuns: bucket.runsCount,
       failedEvals: bucket.failedEvals,
@@ -692,7 +687,6 @@ export async function aggregateLeaderboard(options?: {
       configurationLabel: m.configurationLabel,
       modelName: m.modelName,
       provider: m.provider,
-      reasoningEffort: m.reasoningEffort,
       paramSizeLabel: m.paramSize.label,
       paramSizeValue: m.paramSize.value,
       totalRuns: m.totalRuns,

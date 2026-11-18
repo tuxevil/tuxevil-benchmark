@@ -111,6 +111,11 @@ proveedor para `tool_calls` debe comprobarse con una prueba específica.
 
 ## Comparar Q4, Q6 y otras variantes sin mezclar resultados
 
+El leaderboard agrupa las pruebas por modelo, motor y cuantización.
+Puedes consultar los parámetros de inferencia de cada ejecución en el inspector
+de pruebas. Si el servidor no informa la cuantización, los resultados aparecen
+en un grupo de cuantización desconocida.
+
 El nombre del modelo que devuelve un servidor puede ser el mismo aunque cambie
 el archivo cargado. Para una comparación controlada, usa **Churn Lab y Performance
 Lab**, no solamente el nombre que aparece en el leaderboard general.
