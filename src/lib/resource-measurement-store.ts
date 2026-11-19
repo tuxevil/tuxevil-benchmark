@@ -54,3 +54,30 @@ export async function loadRunManifests(): Promise<Record<string, import('./run-i
  }
  return result;
 }
+
+export async function loadVramPeaks(): Promise<Map<string, number>> {
+  type Row = { model_result_id: string; peak: unknown };
+  const sql = getExperimentPostgresClient();
+  let rows: Row[];
+  if (sql) {
+    if (!(await sql`SELECT to_regclass('result_resource_measurements') AS name`)[0].name) return new Map();
+    rows = await sql`
+      SELECT model_result_id, payload_json->'vramPeakBytes' AS peak
+      FROM result_resource_measurements
+      WHERE jsonb_typeof(payload_json->'vramPeakBytes') = 'number'
+    `;
+  } else {
+    const db = getSqliteDb();
+    if (!db.prepare("SELECT name FROM sqlite_master WHERE name='result_resource_measurements'").get()) return new Map();
+    rows = db.prepare(`
+      SELECT model_result_id, json_extract(payload_json, '$.vramPeakBytes') AS peak
+      FROM result_resource_measurements
+      WHERE json_type(payload_json, '$.vramPeakBytes') IN ('integer', 'real')
+    `).all() as Row[];
+  }
+  const peaks = new Map<string, number>();
+  for (const { model_result_id, peak } of rows) {
+    if (typeof peak === "number" && Number.isFinite(peak) && peak >= 0) peaks.set(model_result_id, peak);
+  }
+  return peaks;
+}

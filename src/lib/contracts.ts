@@ -392,6 +392,8 @@ export type LeaderboardModelRow = {
   avgAccuracy: number | null;
   avgOutputTokens: number | null;
   avgDurationMs: number | null;
+  avgVramPeakBytes?: number | null;
+  vramMeasuredCount?: number;
   attackSuccessRatePct: number | null;
   securityResilienceScore: number | null;
   securityRelativeScore?: number | null;

@@ -27,6 +27,7 @@ async function handleGET(request: Request) {
       : "ALL",
     reasoningEffort,
     weights,
+    includeVram: true,
   });
 
   return NextResponse.json(leaderboardData);

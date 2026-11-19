@@ -1,5 +1,5 @@
 import { resultIdentity } from "./run-identity";
-import { loadRunManifests } from "./resource-measurement-store";
+import { loadRunManifests, loadVramPeaks } from "./resource-measurement-store";
 import postgres, { type TransactionSql } from "postgres";
 import { createHash } from "node:crypto";
 import type {
@@ -325,6 +325,7 @@ export async function aggregateLeaderboard(options?: {
   difficulty?: ScenarioDifficulty | "ALL";
   reasoningEffort?: string;
   weights?: Partial<LeaderboardWeights>;
+  includeVram?: boolean;
 }): Promise<LeaderboardData> {
   const state = await loadPersistedState();
   const defaultWeights: LeaderboardWeights = {
@@ -413,6 +414,7 @@ export async function aggregateLeaderboard(options?: {
     accuracyRatingList: number[];
     outputTokensList: number[];
     durationMsList: number[];
+    vramPeaks: number[];
     securityAttacksTotal: number;
     securityFailuresTotal: number;
     // Per attack type tracking
@@ -424,6 +426,7 @@ export async function aggregateLeaderboard(options?: {
     indirectFailures: number;
   };
 
+  const vramPeaks = options?.includeVram ? await loadVramPeaks() : null;
   const byModel = new Map<string, ModelRawBucket>();
   const perScenario = new Map<string, Map<string, ScenarioModelStat>>();
   const allTokPerSec: number[] = [];
@@ -480,6 +483,7 @@ export async function aggregateLeaderboard(options?: {
           accuracyRatingList: [],
           outputTokensList: [],
           durationMsList: [],
+          vramPeaks: [],
           securityAttacksTotal: 0,
           securityFailuresTotal: 0,
           overrideAttacks: 0,
@@ -491,6 +495,9 @@ export async function aggregateLeaderboard(options?: {
         };
         byModel.set(modelKey, bucket);
       }
+
+      const vramPeak = vramPeaks?.get(res.id);
+      if (vramPeak !== undefined) bucket.vramPeaks.push(vramPeak);
 
       if (res.evalStatus === "FAILED") {
         bucket.failedEvals += 1;
@@ -585,6 +592,8 @@ export async function aggregateLeaderboard(options?: {
     avgAccuracy: number | null;
     avgOutputTokens: number | null;
     avgDurationMs: number | null;
+    avgVramPeakBytes: number | null;
+    vramMeasuredCount: number;
     asrPercent: number | null;
     securityResilienceScore: number | null;
     securityRelativeScore: number | null;
@@ -654,6 +663,8 @@ export async function aggregateLeaderboard(options?: {
       avgAccuracy,
       avgOutputTokens,
       avgDurationMs,
+      avgVramPeakBytes: average(bucket.vramPeaks),
+      vramMeasuredCount: bucket.vramPeaks.length,
       asrPercent: asr,
       securityResilienceScore: securityResilience,
       securityRelativeScore: securityDimension.score,
@@ -704,6 +715,8 @@ export async function aggregateLeaderboard(options?: {
       avgAccuracy: m.avgAccuracy,
       avgOutputTokens: m.avgOutputTokens,
       avgDurationMs: m.avgDurationMs,
+      avgVramPeakBytes: m.avgVramPeakBytes,
+      vramMeasuredCount: m.vramMeasuredCount,
       attackSuccessRatePct: m.asrPercent,
       securityResilienceScore: m.securityResilienceScore,
       securityRelativeScore: m.securityRelativeScore,

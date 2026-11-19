@@ -318,6 +318,9 @@ export function ArenaLeaderboard({
                 <th onClick={() => handleSort("avgDurationMs")} className="sortable-th text-center">
                   Latency
                 </th>
+                <th className="text-center" title="Promedio de los picos registrados por prueba para toda la GPU">
+                  VRAM pico prom.
+                </th>
                 <th style={{ textAlign: "center" }}>Actions</th>
               </tr>
             </thead>
@@ -406,6 +409,11 @@ export function ArenaLeaderboard({
                       <span className="micro-pill latency">
                         {m.avgDurationMs != null ? `${(m.avgDurationMs / 1000).toFixed(1)} s` : "—"}
                       </span>
+                    </td>
+                    <td className="text-center">
+                      {m.avgVramPeakBytes == null ? "Sin datos" : `${(m.avgVramPeakBytes / 1024 ** 3).toFixed(2)} GiB`}
+                      <br />
+                      <small>{m.vramMeasuredCount ?? 0}/{m.totalRuns + m.failedEvals} medidas</small>
                     </td>
                     <td style={{ textAlign: "center" }}>
                       {onSelectModelProfile ? (
