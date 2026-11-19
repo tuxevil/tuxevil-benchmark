@@ -1,9 +1,10 @@
 import { formatBytes } from "@/lib/format-bytes";
-import type { ModelProvider } from "@/lib/contracts";
+import { reasoningEffortSchema, type ReasoningEffort, type ModelProvider } from "@/lib/contracts";
 
 export type DiscoveredModel = {
   name: string;
   size: string;
+  reasoningEfforts?: ReasoningEffort[];
 };
 
 export type DiscoveredRunningModel = {
@@ -28,15 +29,26 @@ type OllamaPsResponse = {
 };
 
 type OpenAIModelsResponse = {
-  data?: Array<{ id?: string; name?: string; size?: number; object?: string }>;
-  models?: Array<{ id?: string; name?: string; size?: number }>;
+  data?: Array<{ id?: string; name?: string; size?: number; object?: string; reasoning_effort_levels?: unknown }>;
+  models?: Array<{ id?: string; name?: string; size?: number; reasoning_effort_levels?: unknown }>;
 };
 
 type LlamaCppPropsResponse = {
+  chat_template_caps?: { reasoning_effort_levels?: unknown };
   default_generation_settings?: {
     model?: string;
   };
 };
+
+function reportedReasoningEfforts(value: unknown): ReasoningEffort[] {
+  const levels: ReasoningEffort[] = [];
+  if (!Array.isArray(value)) return levels;
+  for (const entry of value) {
+    const parsed = reasoningEffortSchema.safeParse(entry === "none" ? "off" : entry);
+    if (parsed.success && !levels.includes(parsed.data)) levels.push(parsed.data);
+  }
+  return levels;
+}
 
 export async function discoverProviderModels({
   provider,
@@ -103,7 +115,7 @@ export async function discoverProviderModels({
 
   const candidateUrls: string[] = [];
   if (provider === "llamacpp") {
-    candidateUrls.push(`${baseUrl}/props`);
+    candidateUrls.push(`${baseUrl.replace(/\/v1$/, "")}/props`);
     candidateUrls.push(`${baseUrl}/slots`);
   }
   if (baseUrl.endsWith("/v1")) {
@@ -140,7 +152,11 @@ export async function discoverProviderModels({
         const modelName = rawModel.includes("/") ? rawModel.split("/").pop()! : rawModel;
         if (modelName) {
           return {
-            models: [{ name: modelName, size: "Loaded in Memory" }],
+            models: [{
+              name: modelName,
+              size: "Loaded in Memory",
+              reasoningEfforts: reportedReasoningEfforts((json as LlamaCppPropsResponse).chat_template_caps?.reasoning_effort_levels),
+            }],
             runningModels: [{ name: modelName, vramFormatted: "Loaded in Memory" }],
             activeModel: modelName,
             activeVram: "Loaded in Memory",
@@ -159,6 +175,7 @@ export async function discoverProviderModels({
             return {
               name,
               size: item.size ? formatBytes(item.size) : "Loaded in Memory",
+              reasoningEfforts: reportedReasoningEfforts(item.reasoning_effort_levels),
             };
           })
           .filter((item) => Boolean(item.name));
@@ -184,6 +201,7 @@ export async function discoverProviderModels({
             return {
               name,
               size: item.size ? formatBytes(item.size) : "Loaded in Memory",
+              reasoningEfforts: reportedReasoningEfforts(item.reasoning_effort_levels),
             };
           })
           .filter((item) => Boolean(item.name));

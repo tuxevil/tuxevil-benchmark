@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { BenchmarkParameters, Scenario } from "@/lib/contracts";
-import { httpUrlSchema, modelProviderSchema } from "@/lib/contracts";
+import { benchmarkParametersSchema, httpUrlSchema, modelProviderSchema, reasoningEffortSchema } from "@/lib/contracts";
 import { SECURITY_TEMPLATES } from "@/lib/security-templates";
 
 /**
@@ -144,6 +144,9 @@ export const IA_SOLAR_QUICK_REQUEST_SCHEMA = z.object({
   modelName: z.string().trim().min(1).max(255),
   provider: modelProviderSchema,
   providerUrl: httpUrlSchema,
+  reasoningEffort: reasoningEffortSchema.default("off"),
+  samplesPerModel: z.number().int().min(1).max(5).optional(),
+  inference: benchmarkParametersSchema.pick({ temperature: true, numCtx: true, numPredict: true }).partial().optional(),
 }).strict();
 
 export function quickProfileSummary() {

@@ -31,7 +31,7 @@ async function handlePOST(request: Request) {
     );
   }
 
-  const { modelName, provider, providerUrl } = parsed.data;
+  const { modelName, provider, providerUrl, reasoningEffort, inference, samplesPerModel } = parsed.data;
   const endpointError = validateProviderEndpoint(providerUrl, provider);
   if (endpointError) return NextResponse.json({ error: endpointError }, { status: 400 });
 
@@ -56,8 +56,8 @@ async function handlePOST(request: Request) {
       systemPrompt: test.systemPrompt,
       userMessages: [...test.userMessages],
       models: [modelName],
-      samplesPerModel: IA_SOLAR_CHATBOT_PLUS_SAMPLES,
-      parameters: { ...IA_SOLAR_CHATBOT_PLUS_PARAMETERS },
+      samplesPerModel: samplesPerModel ?? IA_SOLAR_CHATBOT_PLUS_SAMPLES,
+      parameters: { ...IA_SOLAR_CHATBOT_PLUS_PARAMETERS, ...inference, reasoningEffort },
       provider,
       providerUrl,
       ollamaUrl: providerUrl,
