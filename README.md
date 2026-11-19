@@ -111,7 +111,7 @@ proveedor para `tool_calls` debe comprobarse con una prueba específica.
 
 ## Comparar Q4, Q6 y otras variantes sin mezclar resultados
 
-El leaderboard agrupa las pruebas por modelo, motor y cuantización.
+El leaderboard agrupa las pruebas por modelo, motor, cuantización y modo CoT.
 Puedes consultar los parámetros de inferencia de cada ejecución en el inspector
 de pruebas. Si el servidor no informa la cuantización, los resultados aparecen
 en un grupo de cuantización desconocida.

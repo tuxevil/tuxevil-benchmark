@@ -1,18 +1,22 @@
 import type { PublicModelDetails } from "./public-model-details";
 import { createHash } from 'node:crypto';
-import type { LeaderboardData } from './contracts';
+import type { LeaderboardData, LeaderboardModelRow } from './contracts';
 import { securityStatusFor, sizeCategoryFor, type PublicSnapshot } from './public-snapshot';
 
 export function publicLabel(value: string | undefined, fallback: string): string {
  if(!value || value.length>180 || /@|\blocalhost\b|\b[a-z0-9-]+\.(?:local|internal)\b|(?:^|[\s\[])(?:[a-f\d]{0,4}:){2,}[a-f\d:]{0,4}(?:\]|\s|$)|(?:api[_-]?key|password|token|secret)\s*[:=]|https?:\/\/|(?:\d{1,3}\.){3}\d{1,3}|(?:^|\s)\/(?:root|srv|home|etc)\//i.test(value))return fallback;
  return value;
 }
+export function publicConfigurationLabel(row: LeaderboardModelRow): string {
+ const quantization = publicLabel(row.configurationLabel, "Configuration not recorded");
+ return row.reasoningEffort ? `${quantization} · CoT: ${row.reasoningEffort}` : quantization;
+}
 /** Public data is constructed field by field; never serialize internal runs or settings. */
 export function buildPublicSnapshot(data: LeaderboardData, approved: Set<string>, aliases: Record<string,string> = {}, hardware?: PublicSnapshot["hardware_rig"], details: Record<string,PublicModelDetails> = {}): PublicSnapshot {
  const models=data.models.filter(m=>approved.has(m.modelName)).map(m=>({
  id:createHash('sha256').update(m.identityKey ?? m.modelName).digest('hex').slice(0,24),
  model_name:publicLabel(aliases[m.modelName] ?? m.modelName,'Approved model'),
- configuration_label:publicLabel(m.configurationLabel,'Configuration not recorded'),
+ configuration_label:publicConfigurationLabel(m),
  parameter_size:m.paramSizeLabel,size_category:sizeCategoryFor(m.paramSizeValue),evaluator_model:'Private evaluator',
  arena_score:m.arenaIndex,avg_stars:m.avgQualityStars ?? -1,grammar_score:m.avgGrammar ?? -1,
  compliance_score:m.avgCompliance ?? -1,accuracy_score:m.avgAccuracy ?? -1,

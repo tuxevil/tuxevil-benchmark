@@ -60,7 +60,9 @@ export async function answerResultsChat(request: Request, scope: "public" | "pri
           quality: row.avg_stars, securityPercent: row.security_resilience_score, ttftMs: row.avg_ttft_ms,
         }))
       : data.models.map(row => ({
-          model: row.modelName, configuration: row.configurationLabel, engine: row.provider,
+          model: row.modelName,
+          configuration: `${row.configurationLabel ?? "Cuantización sin registrar"} · CoT: ${row.reasoningEffort ?? "off"}`,
+          engine: row.provider,
           runs: row.totalRuns, score: row.arenaIndex, ranked: row.rankingEligible,
           tokensPerSecond: row.avgTokPerSec, quality: row.avgQualityStars,
           securityPercent: row.securityResilienceScore, ttftMs: row.avgTtftMs,

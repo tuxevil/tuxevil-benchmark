@@ -65,6 +65,7 @@ type ComparisonIdentityInput = {
   provider?: string | null;
   runtime?: string | null;
   quantization?: string | null;
+  reasoningEffort?: BenchmarkParameters["reasoningEffort"];
 };
 
 function normalizeEngine(value: string | null | undefined): string {
@@ -77,6 +78,7 @@ function normalizeEngine(value: string | null | undefined): string {
 function comparisonIdentity(input: ComparisonIdentityInput): string {
   return stableValue({
     model: input.modelName.trim(),
+    reasoningEffort: input.reasoningEffort ?? "off",
     engine: normalizeEngine(input.runtime || input.provider || 'ollama'),
     quantization: input.quantization?.trim().replace(/\s+/g, '').toUpperCase() || null,
   });
@@ -101,5 +103,6 @@ export function resultIdentity(run: TestRun, result: ModelResult): string {
     provider: run.provider,
     runtime: result.manifest?.diagnostics?.environment?.runtime,
     quantization: result.manifest?.quantization,
+    reasoningEffort: run.parameters?.reasoningEffort,
   });
 }

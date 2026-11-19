@@ -400,6 +400,7 @@ export async function aggregateLeaderboard(options?: {
   type ModelRawBucket = {
     modelKey: string;
     configurationLabel: string;
+    reasoningEffort: NonNullable<TestRun["parameters"]["reasoningEffort"]>;
     modelName: string;
     provider: import("@/lib/contracts").ModelProvider;
     runsCount: number;
@@ -458,13 +459,14 @@ export async function aggregateLeaderboard(options?: {
         if (options.paramRange === ">8B" && param.value <= 8) continue;
       }
 
-      // Group by model, engine and quantization
+      // Group by model, engine, quantization and reasoning mode
       const modelKey = resultIdentity(entry.run, res);
 
       let bucket = byModel.get(modelKey);
       if (!bucket) {
         bucket = {
           modelKey,
+          reasoningEffort: entry.run.parameters?.reasoningEffort ?? "off",
           configurationLabel: res.manifest?.quantization ?? (res.manifest ? "Cuantización no verificada" : "Histórico: cuantización no registrada"),
           modelName: res.modelName,
           provider: runProvider,
@@ -569,6 +571,7 @@ export async function aggregateLeaderboard(options?: {
   const modelAverages: Array<{
     identityKey: string;
     configurationLabel: string;
+    reasoningEffort: NonNullable<TestRun["parameters"]["reasoningEffort"]>;
     modelName: string;
     provider: import("@/lib/contracts").ModelProvider;
     paramSize: { label: string; value: number };
@@ -637,6 +640,7 @@ export async function aggregateLeaderboard(options?: {
     modelAverages.push({
       identityKey: bucket.modelKey,
       configurationLabel: bucket.configurationLabel,
+      reasoningEffort: bucket.reasoningEffort,
       modelName: bucket.modelName,
       provider: bucket.provider,
       paramSize: extractParamSize(bucket.modelName),
@@ -685,6 +689,7 @@ export async function aggregateLeaderboard(options?: {
     return {
       identityKey: m.identityKey,
       configurationLabel: m.configurationLabel,
+      reasoningEffort: m.reasoningEffort,
       modelName: m.modelName,
       provider: m.provider,
       paramSizeLabel: m.paramSize.label,

@@ -356,7 +356,7 @@ export function ArenaLeaderboard({
                            {m.provider === "strata" ? "Strata" : m.provider === "freetoken" ? "⚡ FreeToken" : "🦙 llama.cpp"}
                          </span>
                        )}
-                       {m.reasoningEffort && m.reasoningEffort !== "off" && (
+                       {m.reasoningEffort && (
                          <span
                            className="badge info"
                            style={{
