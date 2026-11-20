@@ -180,9 +180,9 @@ export async function updateExperimentExecutionStatus(
     ensureExperimentSqliteSchema();
     getSqliteDb().prepare(`
       UPDATE experiment_executions
-      SET status = ?, error_message = ?, updated_at = ?, finished_at = ?
+      SET status = ?, error_message = ?, updated_at = ?, finished_at = CASE WHEN ? THEN COALESCE(finished_at, ?) ELSE NULL END
       WHERE id = ?
-    `).run(status, errorMessage, now, terminal ? now : null, id);
+    `).run(status, errorMessage, now, terminal ? 1 : 0, now, id);
   } else {
     const sql = getExperimentPostgresClient();
     if (!sql) throw new Error("PostgreSQL is not configured.");
@@ -190,7 +190,7 @@ export async function updateExperimentExecutionStatus(
       UPDATE experiment_executions
       SET status = ${status}, error_message = ${errorMessage},
           updated_at = CURRENT_TIMESTAMP,
-          finished_at = ${terminal ? new Date() : null}
+          finished_at = CASE WHEN ${terminal} THEN COALESCE(finished_at, CURRENT_TIMESTAMP) ELSE NULL END
       WHERE id = ${id}
     `;
   }

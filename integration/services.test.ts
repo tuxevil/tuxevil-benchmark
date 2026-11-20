@@ -119,7 +119,13 @@ serviceSuite("local infrastructure", () => {
       executionStore.acquireExecutionTargetLeases(secondExecutionId, [targetId]),
     ).rejects.toThrow(/already leased/);
 
-    await sql`UPDATE experiment_executions SET status = 'COMPLETED' WHERE id = ${firstExecutionId}`;
+    const targetStore = await import("../src/lib/execution-target-store");
+    await expect(targetStore.updateExecutionTarget(targetId, { endpoint: "http://127.0.0.1:18090" }))
+      .rejects.toThrow(/leased execution target/);
+    const originalFinish = "2025-01-01T00:00:00.000Z";
+    await sql`UPDATE experiment_executions SET status = 'COMPLETED', finished_at = ${originalFinish} WHERE id = ${firstExecutionId}`;
+    expect((await executionStore.updateExperimentExecutionStatus(firstExecutionId, "COMPLETED")).finishedAt)
+      .toBe(originalFinish);
     await executionStore.acquireExecutionTargetLeases(secondExecutionId, [targetId]);
 
     const leases = await sql`SELECT target_id, execution_id FROM execution_target_leases WHERE target_id = ${targetId}`;
