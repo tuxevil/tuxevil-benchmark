@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { getSqliteDb } from "@/lib/sqlite-db";
 import {
   ensureExperimentSqliteSchema,
@@ -35,9 +36,46 @@ function validateEndpoint(endpoint: string, provider: string) {
 }
 
 export async function createExecutionTarget(input: ExecutionTargetInput): Promise<ExecutionTarget> {
+  return insertExecutionTarget(input, crypto.randomUUID());
+}
+
+export async function importExecutionTarget(
+  input: ExecutionTargetInput,
+  { requireSettingsCredentials = false } = {},
+): Promise<ExecutionTarget> {
   const parsed = executionTargetInputSchema.parse(input);
   validateEndpoint(parsed.endpoint, parsed.provider);
-  const id = crypto.randomUUID();
+  const normalize = (endpoint: string) => new URL(endpoint).href.replace(/\/+$/, "");
+  const endpoint = normalize(parsed.endpoint);
+  const digest = createHash("sha256").update(JSON.stringify(["settings-target", parsed.provider, endpoint])).digest("hex");
+  const id = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-8${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+  const matching = (await listExecutionTargets()).filter(
+    (target) => target.provider === parsed.provider && normalize(target.endpoint) === endpoint,
+  );
+  const owned = matching.find((target) => target.id === id);
+  const key = parsed.apiKey.trim();
+  if (owned) {
+    const current = await getExecutionTargetConnection(id);
+    if (current && (current.apiKey ?? "") === key) return owned;
+    return (await updateExecutionTarget(id, { apiKey: key })) ?? insertExecutionTarget(parsed, id);
+  }
+
+  for (const target of matching) {
+    if (!requireSettingsCredentials || ((await getExecutionTargetConnection(target.id))?.apiKey ?? "") === key) {
+      return target;
+    }
+  }
+
+  const target = await insertExecutionTarget(parsed, id);
+  if (target.provider === parsed.provider && normalize(target.endpoint) === endpoint) return target;
+
+  // An imported target may have been edited to point to a different connection.
+  return createExecutionTarget(parsed);
+}
+
+async function insertExecutionTarget(input: ExecutionTargetInput, id: string): Promise<ExecutionTarget> {
+  const parsed = executionTargetInputSchema.parse(input);
+  validateEndpoint(parsed.endpoint, parsed.provider);
   const now = new Date().toISOString();
   const encrypted = parsed.apiKey.trim() ? encryptSecret(parsed.apiKey.trim()) : null;
 
@@ -47,6 +85,7 @@ export async function createExecutionTarget(input: ExecutionTargetInput): Promis
       INSERT INTO execution_targets (
         id, label, provider, endpoint, api_key_encrypted, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (id) DO NOTHING
     `).run(id, parsed.label, parsed.provider, parsed.endpoint, encrypted, now, now);
     return (await getExecutionTarget(id))!;
   }
@@ -60,9 +99,10 @@ export async function createExecutionTarget(input: ExecutionTargetInput): Promis
       ${id}, ${parsed.label}, ${parsed.provider}, ${parsed.endpoint}, ${encrypted},
       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
+    ON CONFLICT (id) DO NOTHING
     RETURNING *
   `;
-  return restoreTarget(rows[0] as Row);
+  return rows.length ? restoreTarget(rows[0] as Row) : (await getExecutionTarget(id))!;
 }
 
 export async function listExecutionTargets(): Promise<ExecutionTarget[]> {
@@ -148,24 +188,42 @@ export async function updateExecutionTarget(id: string, input: ExecutionTargetUp
 
   if (!experimentUsesPostgres()) {
     ensureExperimentSqliteSchema();
-    getSqliteDb().prepare(`
+    const db = getSqliteDb();
+    const result = db.prepare(`
       UPDATE execution_targets
       SET label = ?, provider = ?, endpoint = ?, api_key_encrypted = ?, updated_at = ?
       WHERE id = ?
-    `).run(label, provider, endpoint, encrypted, now, id);
+        AND ((provider = ? AND endpoint = ?) OR NOT EXISTS (
+          SELECT 1 FROM execution_target_leases WHERE target_id = execution_targets.id
+        ))
+    `).run(label, provider, endpoint, encrypted, now, id, provider, endpoint);
+    if (result.changes === 0 && db.prepare("SELECT 1 FROM execution_targets WHERE id = ?").get(id)) {
+      throw new Error("Cannot change a leased execution target's provider or endpoint.");
+    }
     return getExecutionTarget(id);
   }
 
   const sql = getExperimentPostgresClient();
   if (!sql) return null;
-  const rows = await sql`
-    UPDATE execution_targets
-    SET label = ${label}, provider = ${provider}, endpoint = ${endpoint},
-        api_key_encrypted = ${encrypted}, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ${id}
-    RETURNING *
-  `;
-  return rows[0] ? restoreTarget(rows[0] as Row) : null;
+  return sql.begin(async (tx) => {
+    // Lease acquisition uses the same lock to serialize physical endpoint changes.
+    await tx`SELECT pg_advisory_xact_lock(hashtextextended('benchmark-physical-reservations',0))`;
+    const rows = await tx`
+      UPDATE execution_targets
+      SET label = ${label}, provider = ${provider}, endpoint = ${endpoint},
+          api_key_encrypted = ${encrypted}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${id}
+        AND ((provider = ${provider} AND endpoint = ${endpoint}) OR NOT EXISTS (
+          SELECT 1 FROM execution_target_leases WHERE target_id = execution_targets.id
+        ))
+      RETURNING *
+    `;
+    if (rows[0]) return restoreTarget(rows[0] as Row);
+    if ((await tx`SELECT 1 FROM execution_targets WHERE id = ${id}`).length) {
+      throw new Error("Cannot change a leased execution target's provider or endpoint.");
+    }
+    return null;
+  });
 }
 
 export async function deleteExecutionTarget(id: string): Promise<boolean> {

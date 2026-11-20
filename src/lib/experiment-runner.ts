@@ -454,6 +454,7 @@ async function resolveRun(testRunId: string): Promise<TestRun | null> {
 export async function startExperimentExecution(
   experimentId: string,
   input: ExperimentExecutionInput,
+  { allowBaselineOnly = false } = {},
 ): Promise<ExperimentExecutionView> {
   const parsed = experimentExecutionInputSchema.parse(input);
   await benchmarkStore.hydrate();
@@ -491,7 +492,7 @@ export async function startExperimentExecution(
   const runnableVariants = experiment.variants.filter((variant) =>
     ["BASELINE", "BASELINE_REPEAT", "VARIANT", "CONTROL"].includes(variant.role),
   );
-  if (!runnableVariants.some((variant) => variant.role === "VARIANT" || variant.role === "CONTROL")) {
+  if (!allowBaselineOnly && !runnableVariants.some((variant) => variant.role === "VARIANT" || variant.role === "CONTROL")) {
     throw new Error("Experiment needs at least one variant or control.");
   }
 
@@ -512,23 +513,25 @@ export async function startExperimentExecution(
     }
   }
 
-  const preflights = await Promise.all(runnableVariants.map(preflightVariant));
-  if (parsed.executionMode === "PERFORMANCE" && parsed.includeColdSample) {
-    const unsupported = preflights.filter((item) => item.provider !== "ollama");
-    if (unsupported.length > 0) {
-      throw new Error("Verified cold samples currently require Ollama for every performance variant.");
-    }
-  }
   const evaluator = parsed.useEvaluator ? benchmarkStore.getEvaluatorConfig() : undefined;
   if (parsed.useEvaluator && !evaluator) {
     throw new Error("Execution requested evaluator scoring, but no active evaluator with credentials is configured.");
   }
 
   const defaults = benchmarkStore.getSettings().parameters;
-  const variantPlans = preflights.map((preflight) => ({ preflight, parameters: buildParameters(defaults, preflight) }));
   const execution = await createExperimentExecutionRecord(experimentId, parsed);
   try {
-    await acquireExecutionTargetLeases(execution.id, preflights.map((item) => item.targetId));
+    await acquireExecutionTargetLeases(execution.id, runnableVariants.flatMap((variant) =>
+      variant.executionTargetId ? [variant.executionTargetId] : [],
+    ));
+    const preflights = await Promise.all(runnableVariants.map(preflightVariant));
+    if (parsed.executionMode === "PERFORMANCE" && parsed.includeColdSample) {
+      const unsupported = preflights.filter((item) => item.provider !== "ollama");
+      if (unsupported.length > 0) {
+        throw new Error("Verified cold samples currently require Ollama for every performance variant.");
+      }
+    }
+    const variantPlans = preflights.map((preflight) => ({ preflight, parameters: buildParameters(defaults, preflight) }));
 
     const plannedMappings: ExperimentExecutionWithRuns["runs"] = [];
     let sequenceOrder = 0;

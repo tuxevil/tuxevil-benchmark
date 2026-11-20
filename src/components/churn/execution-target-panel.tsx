@@ -40,8 +40,10 @@ const DEFAULT_ENDPOINTS: Record<Provider, string> = {
 
 export function ExecutionTargetPanel({
   onRegistryChange,
+  onTargetsChange,
 }: {
   onRegistryChange: () => unknown;
+  onTargetsChange: () => void;
 }) {
   const [targets, setTargets] = useState<ExecutionTarget[]>([]);
   const [form, setForm] = useState({
@@ -53,6 +55,7 @@ export function ExecutionTargetPanel({
   const [modelOverrides, setModelOverrides] = useState<Record<string, string>>({});
   const [probingId, setProbingId] = useState<string | null>(null);
   const [probeResults, setProbeResults] = useState<Record<string, ProbeResult>>({});
+  const [readingSettings, setReadingSettings] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,7 +64,8 @@ export function ExecutionTargetPanel({
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Could not load execution targets.");
     setTargets(data.targets ?? []);
-  }, []);
+    onTargetsChange();
+  }, [onTargetsChange]);
 
   useEffect(() => {
     let ignore = false;
@@ -96,6 +100,27 @@ export function ExecutionTargetPanel({
     setNotice(`Target registered: ${data.target.label}`);
     setForm((current) => ({ ...current, label: "", apiKey: "" }));
     await loadTargets();
+  };
+
+  const readFromSettings = async () => {
+    setReadingSettings(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/experiments/targets/from-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: form.provider }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not read the connection from Settings.");
+      await loadTargets();
+      setNotice(`Target ready: ${data.target.label}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not read the connection from Settings.");
+    } finally {
+      setReadingSettings(false);
+    }
   };
 
   const probeTarget = async (target: ExecutionTarget) => {
@@ -149,7 +174,12 @@ export function ExecutionTargetPanel({
           <p className="card-kicker">Connectivity · private</p>
           <h2>Execution Targets & Auto Probe</h2>
         </div>
-        <span className="churn-count">{targets.length} targets</span>
+        <div>
+          <button className="quiet-button" type="button" onClick={() => void readFromSettings()} disabled={readingSettings}>
+            {readingSettings ? "Leyendo Settings…" : "Leer de Settings"}
+          </button>
+          <span className="churn-count">{targets.length} targets</span>
+        </div>
       </div>
 
       <p className="churn-hint">

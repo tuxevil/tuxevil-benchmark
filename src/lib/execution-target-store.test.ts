@@ -62,6 +62,36 @@ describe("execution target persistence", () => {
     expect("apiKey" in listed[0]).toBe(false);
   });
 
+  it("imports encrypted credentials once and preserves matching manual targets", async () => {
+    const input = {
+      label: "llama.cpp (Settings)",
+      provider: "llamacpp" as const,
+      endpoint: "http://127.0.0.1:18081",
+      apiKey: "settings-token",
+    };
+    const [first, second] = await Promise.all([
+      store.importExecutionTarget(input),
+      store.importExecutionTarget({ ...input, endpoint: input.endpoint + "/" }),
+    ]);
+    expect(first.id).toBe(second.id);
+    expect(first).not.toHaveProperty("apiKey");
+    expect((await store.getExecutionTargetConnection(first.id))?.apiKey).toBe("settings-token");
+
+    const rotated = await store.importExecutionTarget({ ...input, apiKey: "rotated-token" });
+    expect(rotated.id).toBe(first.id);
+    expect((await store.getExecutionTargetConnection(first.id))?.apiKey).toBe("rotated-token");
+    await store.importExecutionTarget({ ...input, apiKey: "" });
+    expect((await store.getExecutionTargetConnection(first.id))?.apiKey).toBeNull();
+
+    const manual = await store.createExecutionTarget({ ...input, label: "Gemma manual", endpoint: "http://127.0.0.1:18082", apiKey: "manual-token" });
+    const reused = await store.importExecutionTarget({ ...input, endpoint: manual.endpoint });
+    expect(reused).toEqual(manual);
+    const assistant = await store.importExecutionTarget({ ...input, endpoint: manual.endpoint }, { requireSettingsCredentials: true });
+    expect(assistant.id).not.toBe(manual.id);
+    expect((await store.getExecutionTargetConnection(assistant.id))?.apiKey).toBe("settings-token");
+    expect((await store.getExecutionTargetConnection(manual.id))?.apiKey).toBe("manual-token");
+  });
+
   it("supports credential clearing without changing scientific metadata", async () => {
     const target = await store.createExecutionTarget({
       label: "ollama",

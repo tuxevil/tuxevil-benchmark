@@ -92,13 +92,26 @@ describe("performance target isolation", () => {
       executions.acquireExecutionTargetLeases(second.id, [target.id]),
     ).rejects.toThrow(/already leased/);
 
+    await expect(targets.updateExecutionTarget(target.id, { endpoint: "http://127.0.0.1:18090" }))
+      .rejects.toThrow(/leased execution target/);
+    await expect(targets.updateExecutionTarget(target.id, { provider: "ollama" }))
+      .rejects.toThrow(/leased execution target/);
+    expect(await targets.updateExecutionTarget(target.id, { label: "renamed" }))
+      .toMatchObject({ label: "renamed", endpoint: target.endpoint });
+
     // Simulate a crash after terminal status was persisted but before explicit lease release.
     await executions.updateExperimentExecutionStatus(first.id, "COMPLETED");
+    const { getSqliteDb } = await import("@/lib/sqlite-db");
+    const originalFinish = "2025-01-01T00:00:00.000Z";
+    getSqliteDb().prepare("UPDATE experiment_executions SET finished_at = ? WHERE id = ?").run(originalFinish, first.id);
+    expect((await executions.updateExperimentExecutionStatus(first.id, "COMPLETED")).finishedAt).toBe(originalFinish);
     await executions.acquireExecutionTargetLeases(second.id, [target.id]);
     expect((await executions.listExecutionTargetLeases())[0].executionId).toBe(second.id);
 
     await executions.releaseExecutionTargetLeases(second.id);
     expect(await executions.listExecutionTargetLeases()).toHaveLength(0);
+    expect(await targets.updateExecutionTarget(target.id, { endpoint: "http://127.0.0.1:18090" }))
+      .toMatchObject({ endpoint: "http://127.0.0.1:18090" });
   });
 
   it("does not reclaim a failed execution lease while a mapped TestRun is still active", async () => {

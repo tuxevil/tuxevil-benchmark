@@ -769,3 +769,16 @@ New observations store telemetry and metadata as JSONB objects. Existing
 observations stored as JSON strings remain readable through the application,
 with their original IDs and timestamps. Direct SQL over historical rows can
 check `jsonb_typeof(metadata)` before reading fields.
+
+## V3.0 assisted GSM8K pilot
+
+In Churn Lab, **Probar un modelo** uses the active evaluator to turn a request
+into a small GSM8K plan. The request text goes to that evaluator. Connection
+credentials stay on the server. The panel previews the active llama.cpp model,
+case count, Thinking modes and inference budget before any model run starts.
+
+The pilot uses one to three fixed GSM8K cases, temperature 0, seed 42 and up
+to 384 output tokens per answer. The deterministic grader scores each case.
+The panel can request cancellation through the existing run API and opens
+the persisted experiment for inspection. Experimental controls for additional
+suites, models and hardware comparisons are available in the existing workbench.

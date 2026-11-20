@@ -79,11 +79,13 @@ function delay(ms: number) {
 export function ExperimentRunnerPanel({
   experimentId,
   variants,
+  targetRevision,
   onBindingsSaved,
   onComparisons,
 }: {
   experimentId: string;
   variants: Variant[];
+  targetRevision: number;
   onBindingsSaved: () => Promise<void> | void;
   onComparisons: (comparisons: Comparison[]) => void;
 }) {
@@ -132,7 +134,7 @@ export function ExperimentRunnerPanel({
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [targetRevision]);
 
   const variantNameById = useMemo(
     () => new Map(variants.map((variant) => [variant.id, variant.name])),
