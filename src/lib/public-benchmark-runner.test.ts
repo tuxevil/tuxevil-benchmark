@@ -108,6 +108,9 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
       done: true,
       done_reason: body.model === "truncated" ? "length" : "stop",
       eval_count: 8,
+      eval_duration: 400_000_000,
+      prompt_eval_count: 10,
+      prompt_eval_duration: 100_000_000,
     }) + "\n");
   });
 
@@ -168,7 +171,14 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
     ]);
     const baselineRun = started.runs.find((run) => run.variantId === variants[0].id)!;
     const stored = await loadPersistedState(baselineRun.testRunId);
-    expect(stored?.runs[0].run.results[0].responseText).toBe("9 x 2\n#### 18");
+    const baselineResult = stored?.runs[0].run.results[0];
+    expect(baselineResult?.responseText).toBe("9 x 2\n#### 18");
+    const { loadResultDiagnosticEvents } = await import("@/lib/result-diagnostic-store");
+    const events = await loadResultDiagnosticEvents(baselineResult!.id);
+    expect(events.find((item) => item.event === "turn_completed")?.payload).toMatchObject({
+      prefillRate: { tokensPerSecond: 100, source: "engine_duration" },
+      decodeRate: { tokensPerSecond: 20, source: "engine_duration" },
+    });
     const wrongRun = started.runs.find((run) => run.variantId === variants[1].id)!;
     const wrongStored = await loadPersistedState(wrongRun.testRunId);
     expect(wrongStored?.runs[0].run.results[0].turns[0].toolCalls).toEqual(unexpectedCalls);

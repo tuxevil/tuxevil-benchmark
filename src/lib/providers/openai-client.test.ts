@@ -143,7 +143,7 @@ describe("streamOpenAICompatibleChat", () => {
         new Response(
           [
             'data: {"choices":[{"delta":{"content":"llama output"}}]}',
-            'data: {"timings":{"prompt_n":10,"predicted_n":30,"predicted_ms":500,"predicted_per_second":60.0}}',
+            'data: {"timings":{"prompt_n":10,"prompt_ms":100,"predicted_n":30,"predicted_ms":500,"predicted_per_second":60.0}}',
             "data: [DONE]",
           ].join("\n\n"),
           { status: 200 },
@@ -171,6 +171,8 @@ describe("streamOpenAICompatibleChat", () => {
     expect(result.inputTokens).toBe(10);
     expect(result.outputTokens).toBe(30);
     expect(result.tokPerSec).toBe(60);
+    expect(result.prefillRate).toEqual({ tokensPerSecond: 100, source: "engine_duration" });
+    expect(result.decodeRate).toEqual({ tokensPerSecond: 60, source: "engine_reported" });
     expect(result.evalDurationMs).toBe(500);
   });
 
@@ -1036,6 +1038,8 @@ it.each([
     });
     expect(result.responseText).toBe(output);
     expect(result.reasoningTokens).toBe(tokens ?? null);
+    expect(result.prefillRate).toBeNull();
+    expect(result.decodeRate?.source).toBe("client_elapsed");
     if (visible) expect(result.firstVisibleTokenMs).toBeGreaterThan(result.ttftMs!);
     else expect(result.firstVisibleTokenMs).toBeNull();
   } finally {
