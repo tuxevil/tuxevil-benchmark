@@ -65,6 +65,14 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
       response.end(JSON.stringify({ message, done: true, done_reason: "stop" }));
       return;
     }
+    if (body.messages[0].role === "user" && body.messages[0].content.includes("dinosaurs went extinct")) {
+      const correct = '"Eight theories\n* one\n* two\n* three\n* four\n* five\n* six\n* seven\n* eight"';
+      response.end(JSON.stringify({
+        message: { content: body.model === "correct" ? correct : `**${correct}**` },
+        done: true, done_reason: body.model === "truncated" ? "length" : "stop",
+      }));
+      return;
+    }
     if (body.messages[0].content === PUBLIC_BENCHMARKS[3].systemPrompt) {
       response.end(JSON.stringify({
         message: { content: body.model === "correct" ? "276000" : "276,000" },
@@ -210,6 +218,26 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
     const spanishBaseline = spanishRun.runs.find((run) => run.variantId === variants[0].id)!;
     const spanishStored = await loadPersistedState(spanishBaseline.testRunId);
     expect(spanishStored?.runs[0].run.results[0].responseText).toBe("276000");
+
+    const ifevalCase = PUBLIC_BENCHMARKS[4].cases.find((item) => item.sourceCaseId === "1325")!;
+    const ifeval = await startExperimentExecution(experiment.id, {
+      scenarioIds: [ifevalCase.scenarioId], successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(experiment.id, ifeval.execution.id);
+      expect(report.publicBenchmarkResults).toHaveLength(4);
+      const entries = variants.map((variant) => report.publicBenchmarkResults!.find((item) => item.variantId === variant.id)!);
+      expect(entries.map((item) => item.accuracy)).toEqual([1, 0, null, null]);
+      expect(entries[1].ifeval).toEqual({
+        prompts: 1, instructions: 2, promptStrict: 0, promptLoose: 1, instructionStrict: 0.5, instructionLoose: 1,
+      });
+      expect(entries[2].ifeval).toEqual({
+        prompts: 0, instructions: 0, promptStrict: null, promptLoose: null, instructionStrict: null, instructionLoose: null,
+      });
+    }, { timeout: 5_000 });
+    const wirePrompt = chatRequests.find((item) => item.messages[0].content.includes("dinosaurs went extinct"));
+    const ifevalScenario = benchmarkStore.getScenario(ifevalCase.scenarioId);
+    expect(wirePrompt?.messages).toEqual([{ role: "user", content: ifevalScenario?.userMessages[0] }]);
   } finally {
     server.close();
     vi.unstubAllEnvs();

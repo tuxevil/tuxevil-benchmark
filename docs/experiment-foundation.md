@@ -425,3 +425,28 @@ checks the source digest and uses the official Python branch with the
 provider name-normalization flag enabled. It does not execute the calls
 in its input. Vitest compares the runtime grader against all 39 oracle
 vectors and separately checks native argument format.
+
+## IFEval tuxevil-lite
+
+In Churn Lab select **IFEval tuxevil-lite** and use deterministic scoring.
+The four pinned English prompts use the original user text and the Runner
+adds no system message. Their checks cover comma avoidance, enclosing quotes
+and the number of bullet points, including a two-instruction case. The
+adapter reports both strict and loose metrics at prompt and instruction
+level. The main accuracy and paired comparisons use prompt strict accuracy.
+The report shows graded denominators and excludes technical failures.
+This subset score applies to the pilot cases and the chosen chat template.
+
+Prompts and rule semantics come from Google Research's IFEval by Zhou et al.
+The data and ported checks carry the accompanying Apache-2.0 license.
+The registry records both data and evaluator revisions. See
+`src/lib/benchmark-data/ifeval.LICENSE`.
+
+To regenerate the oracle, put the four original Python modules listed in
+`scripts/verify-ifeval-parity.py` in an `instruction_following_eval` package
+directory. Use evaluator revision `c878a53ec1764bcb91a6178dc5c315202a3b5fa2`.
+Install `absl-py`, `langdetect`, `nltk` and `immutabledict` in an isolated
+venv, then run `python scripts/verify-ifeval-parity.py /path/to/package-parent`.
+The script checks the source digests and emits the strict and loose verdicts.
+Compare its output with `src/lib/benchmark-data/ifeval-oracle.json`. The
+selected rules need no NLTK data downloads.

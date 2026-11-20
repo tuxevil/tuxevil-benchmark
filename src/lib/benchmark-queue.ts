@@ -275,7 +275,7 @@ async function executeModel(runId: string, resultId: string) {
   const fixture = findNativeToolFixture(run.scenarioId);
   const tools = fixture ? [fixture.tool] : findBfclV3Case(run.scenarioId)?.tools;
   const conversation: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-    { role: "system", content: run.systemPrompt },
+    ...(run.systemPrompt ? [{ role: "system" as const, content: run.systemPrompt }] : []),
   ];
 
   try {

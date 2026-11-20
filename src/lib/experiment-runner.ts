@@ -1,3 +1,4 @@
+import { findIfevalCase, summarizeIfeval } from "@/lib/ifeval-pilot";
 import { findBfclV3Case } from "@/lib/bfcl-v3-pilot";
 import { resourceSummary } from "@/lib/resource-telemetry";
 import { loadResourceMeasurements } from "@/lib/resource-measurement-store";
@@ -79,6 +80,7 @@ type PublicBenchmarkResult = {
   accuracy: number | null;
   wilson95: ReturnType<typeof wilsonInterval> | null;
   outcomes: Record<string, number>;
+  ifeval?: ReturnType<typeof summarizeIfeval>;
 };
 
 function stableRecord(value: Record<string, unknown>) {
@@ -448,7 +450,7 @@ export async function startExperimentExecution(
     throw new Error("Public benchmarks require a dedicated standard execution with deterministic scoring and no judge.");
   }
   if (parsed.successPolicy === "DETERMINISTIC") {
-    const ungraded = scenarios.filter((scenario) => scenario && !scenario.grader && !findBfclV3Case(scenario.id));
+    const ungraded = scenarios.filter((scenario) => scenario && !scenario.grader && !findBfclV3Case(scenario.id) && !findIfevalCase(scenario.id));
     if (ungraded.length > 0) {
       throw new Error(
         `Deterministic success policy requires a grader on every selected scenario. Missing: ${ungraded.map((scenario) => scenario?.name ?? "unknown").join(", ")}.`,
@@ -625,6 +627,7 @@ export async function reconcileExperimentExecution(
   const comparisons: ExperimentComparison[] = [];
   const publicBenchmarkResults: PublicBenchmarkResult[] = [];
   const isPublicRun = stored.execution.scenarioIds.every(publicBenchmarkCase);
+  const isIfevalRun = stored.execution.scenarioIds.some(findIfevalCase);
   if (allTerminal) {
     const experiment = await getExperiment(experimentId);
     if (!experiment) throw new Error("Experiment not found.");
@@ -647,6 +650,9 @@ export async function reconcileExperimentExecution(
         publicBenchmarkResults.push({
           variantId, observations, plannedSamples, gradedSamples, outcomes,
           accuracy: gradedSamples ? correct / gradedSamples : null,
+          ...(isIfevalRun && {
+            ifeval: summarizeIfeval(observations.map((item) => item.metadata.deterministicGrade)),
+          }),
           wilson95: gradedSamples && stored.execution.samplesPerModel === 1
             ? wilsonInterval(correct, gradedSamples)
             : null,

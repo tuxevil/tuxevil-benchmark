@@ -1,3 +1,4 @@
+import { findIfevalCase, gradeIfeval } from "@/lib/ifeval-pilot";
 import { findBfclV3Case, gradeBfclV3 } from "@/lib/bfcl-v3-pilot";
 import { checkFixtureCall, findNativeToolFixture } from "@/lib/native-tool-fixtures";
 import type { DeterministicGrader, ModelResult } from "@/lib/contracts";
@@ -53,6 +54,11 @@ export function gradePublicBenchmarkResult(
         details: { call, unnecessaryCalls, finalAnswerCorrect: final?.responseText.trim() === fixture.expected },
       },
     };
+  }
+  const ifeval = toolFixture && findIfevalCase(toolFixture.scenarioId);
+  if (ifeval) {
+    const grade = gradeIfeval(ifeval, result.responseText ?? "");
+    return { outcome: grade.passed ? "PASS" : "WRONG_ANSWER", grade };
   }
   if (!result.responseText?.trim()) return { outcome: "NO_FINAL_ANSWER", grade: null };
   if (!grader) return { outcome: "GRADER_ERROR", grade: null };
