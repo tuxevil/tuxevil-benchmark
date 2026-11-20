@@ -1,6 +1,7 @@
 import { BFCL_V3_CASES, BFCL_V3_SUITE, BFCL_V3_SYSTEM_PROMPT, BFCL_V3_VERSION } from "@/lib/bfcl-v3-pilot";
 import { createHash } from "node:crypto";
 import fixtures from "@/lib/benchmark-data/gsm8k-lite.json";
+import mgsmFixtures from "@/lib/benchmark-data/mgsm-es-lite.json";
 import type { DeterministicGrader, Scenario } from "@/lib/contracts";
 import { extractGsm8kAnswer } from "@/lib/deterministic-grader";
 
@@ -29,33 +30,66 @@ function caseHash(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
-const cases = fixtures.map((fixture) => {
-  const sourceCaseId = fixture.sourceCaseId;
-  const caseVersion = 1;
-  const hash = caseHash([gsm8k.id, gsm8k.version, sourceCaseId, caseVersion]);
-  const scenarioId = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
-  const expected = extractGsm8kAnswer(fixture.answer);
-  if (expected === null) throw new Error(`Invalid GSM8K reference: ${sourceCaseId}`);
-  const grader: DeterministicGrader = { ...gsm8k.grader, expected };
+const mgsmEs = {
+  id: "mgsm-es-tuxevil-lite",
+  version: "1.0.0",
+  language: "es",
+  modality: "chat",
+  officiallyComparable: false,
+  dataset: {
+    project: "Multilingual Grade School Math Benchmark",
+    revision: "452a21ad3dae5668c06ceeac21ff073e1e40f9be",
+    url: "https://github.com/google-research/url-nlp/blob/452a21ad3dae5668c06ceeac21ff073e1e40f9be/mgsm/mgsm_es.tsv",
+    sha256: "5bd27ebdf00140cec845c5298dc17715f5cd57d8edda6df1976db40bf3f0750a",
+    split: "test",
+    license: "CC-BY-4.0",
+    caseCount: 250,
+  },
+  grader: { type: "EXACT_TEXT", version: 1 },
+  systemPrompt: "Resuelve el problema. Responde solo con el número entero final, sin explicación, unidades ni separadores de miles.",
+} as const;
 
+function textBenchmarkCase(
+  suite: { id: string; version: string; systemPrompt: string },
+  label: string,
+  sourceCaseId: string,
+  question: string,
+  sourceAnswer: string,
+  grader: DeterministicGrader,
+) {
+  const caseVersion = 1;
+  const hash = caseHash([suite.id, suite.version, sourceCaseId, caseVersion]);
+  const scenarioId = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
   return {
     sourceCaseId,
     caseVersion,
-    contentSha256: caseHash([gsm8k.systemPrompt, fixture.question, fixture.answer]),
+    // Keep the original content hash convention for previously registered cases.
+    contentSha256: caseHash([suite.systemPrompt, question, sourceAnswer]),
     scenarioId,
     scenario: {
       id: scenarioId,
-      name: `GSM8K · tuxevil-lite · ${sourceCaseId}`,
+      name: `${label} · tuxevil-lite · ${sourceCaseId}`,
       category: "GENERAL",
       attackType: null,
-      suiteKey: gsm8k.id,
-      suiteVersion: gsm8k.version,
-      systemPrompt: gsm8k.systemPrompt,
-      userMessages: [fixture.question],
+      suiteKey: suite.id,
+      suiteVersion: suite.version,
+      systemPrompt: suite.systemPrompt,
+      userMessages: [question],
       grader,
     } satisfies Omit<Scenario, "createdAt" | "updatedAt">,
   };
+}
+
+const cases = fixtures.map((fixture) => {
+  const expected = extractGsm8kAnswer(fixture.answer);
+  if (expected === null) throw new Error(`Invalid GSM8K reference: ${fixture.sourceCaseId}`);
+  return textBenchmarkCase(gsm8k, "GSM8K", fixture.sourceCaseId, fixture.question, fixture.answer, { ...gsm8k.grader, expected });
 });
+
+const mgsmCases = mgsmFixtures.map(({ sourceCaseId, question, sourceAnswer }) => textBenchmarkCase(
+  mgsmEs, "MGSM ES", sourceCaseId, question, sourceAnswer,
+  { ...mgsmEs.grader, expected: sourceAnswer.replaceAll(",", ""), caseSensitive: true, collapseWhitespace: false },
+));
 
 const nativeToolScenarios = NATIVE_TOOL_FIXTURES.map((fixture) => ({
   id: fixture.scenarioId,
@@ -120,9 +154,20 @@ export const PUBLIC_BENCHMARKS = [{
   cases: BFCL_V3_CASES.map(({ scenarioId, sourceCaseId, category, contentSha256 }) => ({
     scenarioId, sourceCaseId, category, caseVersion: 1, contentSha256,
   })),
+}, {
+  ...mgsmEs,
+  caseIdsSha256: caseHash(mgsmCases.map(({ sourceCaseId }) => sourceCaseId)),
+  cases: mgsmCases.map(({ scenarioId, sourceCaseId, caseVersion, contentSha256 }) => ({
+    scenarioId, sourceCaseId, caseVersion, contentSha256,
+  })),
 }] as const;
 
-export const PUBLIC_BENCHMARK_SCENARIOS = [...cases.map(({ scenario }) => scenario), ...nativeToolScenarios, ...BFCL_V3_CASES.map(({ scenario }) => scenario)];
+export const PUBLIC_BENCHMARK_SCENARIOS = [
+  ...cases.map(({ scenario }) => scenario),
+  ...nativeToolScenarios,
+  ...BFCL_V3_CASES.map(({ scenario }) => scenario),
+  ...mgsmCases.map(({ scenario }) => scenario),
+];
 
 export function isPublicBenchmarkSuite(key?: string | null) {
   return PUBLIC_BENCHMARKS.some((suite) => suite.id === key);
