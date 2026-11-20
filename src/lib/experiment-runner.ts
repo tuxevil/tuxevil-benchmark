@@ -1,3 +1,4 @@
+import { findIfstructCase, gradeIfstruct } from "@/lib/ifstruct-pilot";
 import { findIfevalCase, summarizeIfeval } from "@/lib/ifeval-pilot";
 import { findBfclV3Case } from "@/lib/bfcl-v3-pilot";
 import { resourceSummary } from "@/lib/resource-telemetry";
@@ -351,24 +352,37 @@ async function importRunObservations(
 ) {
   const scenario = benchmarkStore.getScenario(mapping.scenarioId);
   const publicCase = publicBenchmarkCase(mapping.scenarioId);
+  const ifstruct = findIfstructCase(mapping.scenarioId);
+  const existingGrades = ifstruct
+    ? await listExperimentExecutionObservations(execution.id, mapping.variantId)
+    : [];
+  const storedResultIds = new Set(existingGrades
+    .filter((item) => item.metadata.testRunId === run.id)
+    .map((item) => item.metadata.resultId));
   const resources = await loadResourceMeasurements(run.id);
-  const observations = run.results.flatMap((result) => {
+  const observations = [];
+  for (const result of run.results) {
     const sample = performanceSampleIdentity(execution, mapping.scenarioId, result.sampleIndex);
-    if (!sample.measured) return [];
+    if (!sample.measured || storedResultIds.has(result.id)) continue;
 
     const lastTurn = result.turns.at(-1);
     const finishReason = lastTurn?.finishReason ?? result.finishReason ?? null;
+    const truncated = result.truncated || lastTurn?.truncated;
+    const externalGrade = ifstruct && result.status === "COMPLETED" && !truncated
+      && finishReason !== "length" && result.responseText?.trim()
+      ? await gradeIfstruct(ifstruct.fixture, result.responseText)
+      : undefined;
     const benchmarkGrade = publicCase ? gradePublicBenchmarkResult({
       ...result,
       finishReason,
-      truncated: result.truncated || lastTurn?.truncated,
-    }, scenario?.grader, { scenarioId: mapping.scenarioId, turns: result.turns }) : null;
+      truncated,
+    }, scenario?.grader, { scenarioId: mapping.scenarioId, turns: result.turns }, externalGrade) : null;
     const deterministicGrade = benchmarkGrade
       ? benchmarkGrade.grade
       : scenario?.grader && result.responseText !== null
         ? gradeDeterministicResponse(result.responseText, scenario.grader)
         : null;
-    return [{
+    observations.push({
       caseId: sample.caseId,
       comparisonKind: deterministicGrade?.comparisonKind ?? ("EXACT" as const),
       canonicalValue: deterministicGrade?.canonicalValue ?? canonicalValue(result),
@@ -410,8 +424,8 @@ async function importRunObservations(
         }),
         errorMessage: result.errorMessage,
       },
-    }];
-  });
+    });
+  }
   if (observations.length > 0) {
     await upsertExperimentExecutionObservations(execution.id, mapping.variantId, observations);
   }
@@ -450,7 +464,7 @@ export async function startExperimentExecution(
     throw new Error("Public benchmarks require a dedicated standard execution with deterministic scoring and no judge.");
   }
   if (parsed.successPolicy === "DETERMINISTIC") {
-    const ungraded = scenarios.filter((scenario) => scenario && !scenario.grader && !findBfclV3Case(scenario.id) && !findIfevalCase(scenario.id));
+    const ungraded = scenarios.filter((scenario) => scenario && !scenario.grader && !findBfclV3Case(scenario.id) && !findIfevalCase(scenario.id) && !findIfstructCase(scenario.id));
     if (ungraded.length > 0) {
       throw new Error(
         `Deterministic success policy requires a grader on every selected scenario. Missing: ${ungraded.map((scenario) => scenario?.name ?? "unknown").join(", ")}.`,

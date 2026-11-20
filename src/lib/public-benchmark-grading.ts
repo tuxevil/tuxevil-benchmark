@@ -10,7 +10,8 @@ type Outcome = "PASS" | "WRONG_ANSWER" | "N/A" | "TRUNCATED" | "NO_FINAL_ANSWER"
 export function gradePublicBenchmarkResult(
   result: Pick<ModelResult, "status" | "responseText" | "errorMessage" | "truncated" | "finishReason">,
   grader: DeterministicGrader | null | undefined,
-  toolFixture?: { scenarioId: string; turns: ModelResult["turns"] },
+  scenarioContext?: { scenarioId: string; turns: ModelResult["turns"] },
+  externalGrade?: DeterministicGrade | null,
 ): { outcome: Outcome; grade: DeterministicGrade | null } {
   if (result.status === "CANCELLED" || result.status === "PENDING") {
     return { outcome: "N/A", grade: null };
@@ -27,17 +28,17 @@ export function gradePublicBenchmarkResult(
     if (/\btimeout\b|\btimed? out\b/i.test(message)) return { outcome: "TIMEOUT", grade: null };
     return { outcome: "PROVIDER_ERROR", grade: null };
   }
-  const bfcl = toolFixture && findBfclV3Case(toolFixture.scenarioId);
-  if (bfcl && toolFixture) {
-    const first = toolFixture.turns[0];
+  const bfcl = scenarioContext && findBfclV3Case(scenarioContext.scenarioId);
+  if (bfcl && scenarioContext) {
+    const first = scenarioContext.turns[0];
     if (!first) return { outcome: "PROVIDER_ERROR", grade: null };
     if (first.truncated) return { outcome: "TRUNCATED", grade: null };
     const grade = gradeBfclV3(bfcl, first.toolCalls);
     return { outcome: grade.passed ? "PASS" : "WRONG_ANSWER", grade };
   }
-  const fixture = toolFixture && findNativeToolFixture(toolFixture.scenarioId);
-  if (fixture && toolFixture) {
-    const [first, final] = toolFixture.turns;
+  const fixture = scenarioContext && findNativeToolFixture(scenarioContext.scenarioId);
+  if (fixture && scenarioContext) {
+    const [first, final] = scenarioContext.turns;
     if (!first) return { outcome: "PROVIDER_ERROR", grade: null };
     if (first.truncated || final?.truncated) return { outcome: "TRUNCATED", grade: null };
     const call = checkFixtureCall(fixture, first.toolCalls);
@@ -55,12 +56,16 @@ export function gradePublicBenchmarkResult(
       },
     };
   }
-  const ifeval = toolFixture && findIfevalCase(toolFixture.scenarioId);
+  const ifeval = scenarioContext && findIfevalCase(scenarioContext.scenarioId);
   if (ifeval) {
     const grade = gradeIfeval(ifeval, result.responseText ?? "");
     return { outcome: grade.passed ? "PASS" : "WRONG_ANSWER", grade };
   }
   if (!result.responseText?.trim()) return { outcome: "NO_FINAL_ANSWER", grade: null };
+  if (externalGrade !== undefined) {
+    if (!externalGrade) return { outcome: "GRADER_ERROR", grade: null };
+    return { outcome: externalGrade.passed ? "PASS" : "WRONG_ANSWER", grade: externalGrade };
+  }
   if (!grader) return { outcome: "GRADER_ERROR", grade: null };
 
   try {

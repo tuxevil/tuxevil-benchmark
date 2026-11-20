@@ -434,7 +434,12 @@ test("lists public benchmark provenance and protects opt-in scenarios", async ({
 
   const catalog = await request.get("/api/experiments/benchmarks");
   expect(catalog.ok()).toBeTruthy();
-  const { benchmarks: [suite, nativeTools, bfcl, mgsm, ifeval] } = await catalog.json();
+  const { benchmarks: [suite, nativeTools, bfcl, mgsm, ifeval, ifstruct] } = await catalog.json();
+  expect(ifstruct).toMatchObject({
+    id: "ifstruct-tuxevil-lite", officiallyComparable: false,
+    grader: { type: "IFSTRUCT_UPSTREAM" }, dataset: { caseCount: 2000 },
+  });
+  expect(ifstruct.cases.map((entry: { outputFormat: string }) => entry.outputFormat)).toEqual(["json", "json", "yaml", "yaml"]);
   expect(ifeval).toMatchObject({
     id: "ifeval-tuxevil-lite", officiallyComparable: false, systemPrompt: "",
     dataset: { license: "Apache-2.0", caseCount: 541 },

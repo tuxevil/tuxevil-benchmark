@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { expect, it, vi } from "vitest";
+import { IFSTRUCT_CASES } from "@/lib/ifstruct-pilot";
 import { BFCL_V3_CASES } from "@/lib/bfcl-v3-pilot";
 import bfclOracle from "@/lib/benchmark-data/bfcl-v3-oracle.json";
 import { NATIVE_TOOL_FIXTURES } from "@/lib/native-tool-fixtures";
@@ -63,6 +64,18 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
           }],
         };
       response.end(JSON.stringify({ message, done: true, done_reason: "stop" }));
+      return;
+    }
+    if (body.messages[0].role === "user" && body.messages[0].content === IFSTRUCT_CASES[0].fixture.prompt) {
+      const listing = {
+        listing_price_usd: body.model === "correct" ? 270000 : "270000",
+        property_type: "condo", year_built: 2010, square_feet: 900, bedrooms: 2,
+        bathrooms: 1, stories: 2, has_pool: true, is_new_construction: false,
+      };
+      response.end(JSON.stringify({
+        message: { content: JSON.stringify([listing]) },
+        done: true, done_reason: body.model === "truncated" ? "length" : "stop",
+      }));
       return;
     }
     if (body.messages[0].role === "user" && body.messages[0].content.includes("dinosaurs went extinct")) {
@@ -238,6 +251,23 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
     const wirePrompt = chatRequests.find((item) => item.messages[0].content.includes("dinosaurs went extinct"));
     const ifevalScenario = benchmarkStore.getScenario(ifevalCase.scenarioId);
     expect(wirePrompt?.messages).toEqual([{ role: "user", content: ifevalScenario?.userMessages[0] }]);
+
+    const structured = await startExperimentExecution(experiment.id, {
+      scenarioIds: [IFSTRUCT_CASES[0].scenarioId], successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(experiment.id, structured.execution.id);
+      expect(report.publicBenchmarkResults).toHaveLength(4);
+      const items = variants.map((variant) =>
+        report.publicBenchmarkResults!.find((item) => item.variantId === variant.id)!.observations[0]);
+      expect(items.map((item) => item.metadata.outcome)).toEqual(["PASS", "WRONG_ANSWER", "TRUNCATED", "PROVIDER_ERROR"]);
+      expect(items[1].metadata.deterministicGrade).toMatchObject({
+        reason: "IFSTRUCT_CONSTRAINTS_FAILED",
+        details: { json_valid: true, schema_valid: false },
+      });
+    }, { timeout: 5_000 });
+    const structuredRequest = chatRequests.find((item) => item.messages[0].content === IFSTRUCT_CASES[0].fixture.prompt);
+    expect(structuredRequest?.messages).toEqual([{ role: "user", content: IFSTRUCT_CASES[0].fixture.prompt }]);
   } finally {
     server.close();
     vi.unstubAllEnvs();

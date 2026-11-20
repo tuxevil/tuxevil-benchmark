@@ -1,0 +1,449 @@
+[
+  {
+    "seed": 5,
+    "entity_type": "test__real_estate_listing",
+    "prompt": "Generate exactly 1 downtown property listing through Central America.\nFill in field values as they might be found in a real estate website facts panel.\nThis is downtown property through Central America.\nPrice, square footage, lot size, and room counts should be consistent with each other and with the stated property style and region.\n\nOutput valid JSON. Output the list directly at the top level without a wrapper key.\nOnly include the requested fields, even if other details would be natural.\nOutput the raw JSON directly without code block fencing.\n\nRequested fields:\n| constraints | path | notes | type |\n| --- | --- | --- | --- |\n| between 50000 and 10000000 | `listing_price_usd` |  | integer |\n| one of: single_family, condo, townhouse, duplex, multi_family, land, mobile_home | `property_type` |  | string |\n| between 1880 and 2026 | `year_built` |  | integer |\n| between 200 and 20000 | `square_feet` |  | integer |\n| between 0 and 20 | `bedrooms` |  | integer |\n| between 0 and 20 | `bathrooms` |  | integer |\n| between 1 and 60 | `stories` | Number of stories for the property or, for condo/high-rise listings, the building story count when that is the salient real-estate detail | integer |\n|  | `has_pool` |  | boolean |\n|  | `is_new_construction` |  | boolean |",
+    "json_schema": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "listing_price_usd": {
+            "type": "integer",
+            "minimum": 50000,
+            "maximum": 10000000
+          },
+          "property_type": {
+            "type": "string",
+            "enum": [
+              "single_family",
+              "condo",
+              "townhouse",
+              "duplex",
+              "multi_family",
+              "land",
+              "mobile_home"
+            ]
+          },
+          "year_built": {
+            "type": "integer",
+            "minimum": 1880,
+            "maximum": 2026
+          },
+          "square_feet": {
+            "type": "integer",
+            "minimum": 200,
+            "maximum": 20000
+          },
+          "bedrooms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20
+          },
+          "bathrooms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20
+          },
+          "stories": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60,
+            "description": "Number of stories for the property or, for condo/high-rise listings, the building story count when that is the salient real-estate detail"
+          },
+          "has_pool": {
+            "type": "boolean"
+          },
+          "is_new_construction": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "listing_price_usd",
+          "property_type",
+          "year_built",
+          "square_feet",
+          "bedrooms",
+          "bathrooms",
+          "stories",
+          "has_pool",
+          "is_new_construction"
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "top_level_count": 1,
+    "top_level_key": "real_estate_listing",
+    "require_wrapper_key": false,
+    "require_code_block": false,
+    "require_no_commentary": false,
+    "output_format": "json"
+  },
+  {
+    "seed": 12,
+    "entity_type": "test__event_ticket_booking",
+    "prompt": "Okay so I need you to make me a single event ticket booking record, the scenario is a popular sold-out event that got booked with resale protection — so the values should hang together like a real venue access summary sheet, face value plus fees equalling the total and seating that actually makes sense for that kind of event.\n\nFormat-wise... hmm. Part of me wants to do YAML since it's easier to eyeball, but no, let's keep it JSON, that's what I actually need here.\n\nNow the shape. I keep going back and forth on this — do I just want a plain array with the booking object sitting inside it, or do I wrap it? I think a bare array is cleaner... but actually no, I want it wrapped. So the root is one object, and it has a key `event_ticket_booking` whose value is the array. And how many items in that array — I was sort of imagining maybe letting it do 2 or 3 so I could compare, but no, exactly 1 item. Just the one.\n\nFields, let me list them out as I think of them, the exact keys:\n- `event_name`, a string — just the event name, not the venue or the city.\n- `ticket_count`, this one I want as an integer. I was tempted to call it `num_tickets` but no, `ticket_count`. Bounds between 1 and 8.\n- `face_value_total_usd` — a number, between 20 and 10000.\n- `fees_total_usd`, a number. Range... I almost said min 5 but no, between 0 and 1500.\n- `total_paid_usd`, also a number, between 20 and 12000.\n- `days_until_event`, integer, between 0 and 365.\n- `section_label`, a string — just the section or zone identifier, leave out the word 'Section', so like '102', 'Floor', 'GA Pit'.\n- `delivery_method`, a string from a fixed set. Let me think on the set — I want 'mobile_ticket', 'print_at_home', 'will_call', and... I was gonna toss in 'email_ticket' but no, the fourth is 'physical_mail'. So those four only.\n- `purchase_channel`, also a string from a set: 'primary_box_office', 'ticketing_platform', 'resale_market', 'venue_site'.\n- `mobile_transfer_enabled` — I keep wanting to make this a yes/no string but it should be a boolean.\n\nWas thinking about adding a `resale_protection` flag field since that's the scenario, but no — don't add anything, keep exactly that field set, no extras anywhere, none of them at any nesting level, and don't drop any either.\n\nQuick second pass on a couple things I waffled on: `days_until_event` definitely stays an integer (not a plain number), and that's 0 to 365 — not 1, zero is fine. And `total_paid_usd` top end is 12000, not 10000, that one's higher than the face value range on purpose.\n\nSo bottom line: raw JSON, root object with the `event_ticket_booking` key holding an array of exactly one booking, and please no markdown fences and no commentary or extra text around it — just the JSON itself.",
+    "json_schema": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "event_name": {
+            "type": "string",
+            "description": "Event name only, not including venue or city"
+          },
+          "ticket_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8
+          },
+          "face_value_total_usd": {
+            "type": "number",
+            "minimum": 20,
+            "maximum": 10000
+          },
+          "fees_total_usd": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1500
+          },
+          "total_paid_usd": {
+            "type": "number",
+            "minimum": 20,
+            "maximum": 12000
+          },
+          "days_until_event": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 365
+          },
+          "section_label": {
+            "type": "string",
+            "description": "Section or zone identifier only, excluding the word 'Section' (e.g., '102', 'Floor', 'GA Pit')"
+          },
+          "delivery_method": {
+            "type": "string",
+            "enum": [
+              "mobile_ticket",
+              "print_at_home",
+              "will_call",
+              "physical_mail"
+            ]
+          },
+          "purchase_channel": {
+            "type": "string",
+            "enum": [
+              "primary_box_office",
+              "ticketing_platform",
+              "resale_market",
+              "venue_site"
+            ]
+          },
+          "mobile_transfer_enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "event_name",
+          "ticket_count",
+          "face_value_total_usd",
+          "fees_total_usd",
+          "total_paid_usd",
+          "days_until_event",
+          "section_label",
+          "delivery_method",
+          "purchase_channel",
+          "mobile_transfer_enabled"
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "top_level_count": 1,
+    "top_level_key": "event_ticket_booking",
+    "require_wrapper_key": true,
+    "require_code_block": false,
+    "require_no_commentary": true,
+    "output_format": "json"
+  },
+  {
+    "seed": 27,
+    "entity_type": "test__recipe",
+    "prompt": "hey, i'm putting together a little meal-planning note and i want some mediterranean dessert recipes from you. like full recipes, written the way you'd actually jot them down in a planning note, with realistic timings and serving sizes and ingredient counts that all line up sensibly.\n\nlet me think about how many recipes i want. i was leaning toward 3 to give myself options... but that's more than i'll actually make, so let's keep it tight, between 1 and 2 recipes.\n\nnow the fields per recipe. each one needs a name, a prep_time_minutes, a cook_time_minutes, servings, difficulty, calories_per_serving, then the ingredients list and the instructions list. oh, i was about to ask for a tags field too so i could sort by occasion, but no, leave that out, i don't want any extra keys floating around that aren't in the spec.\n\ntypes and bounds: name is a string. prep_time_minutes is an integer 5 to 120. cook_time_minutes an integer 0 to 180. servings an integer 1 to 48. difficulty is a string and it has to be one of 'easy', 'medium', 'hard'. calories_per_serving an integer between 50 and 1500.\n\ningredients is a list of ingredient objects, 1-20 of them. each ingredient has a name (string, just the base ingredient name, no prep notes), a quantity which is a number between 0.25 and 5000, a unit which is a string from this set: 'mg', 'g', 'kg', 'oz', 'lb', 'ml', 'l', 'cl', 'dl', 'tsp', 'tbsp', 'fl_oz', 'cup', 'pt', 'qt', 'gal', 'drop', 'dash', 'pinch', 'smidgen', 'handful', 'splash', 'piece', 'whole', 'unit', 'part', 'small', 'clove', 'leaf', 'slice', 'stick', 'sheet', 'sprig', 'stalk', 'stem', 'head', 'bulb', 'pod', 'ear', 'kernel', 'strip', 'cube', 'wedge', 'fillet', 'can', 'jar', 'bottle', 'carton', 'box', 'bag', 'packet', 'sachet', 'tube', 'roll', 'block', 'bar', 'pack', 'package', 'bunch', 'bowl', 'loaf', 'sleeve', 'scoop', 'mm', 'cm', 'm', 'inch', 'to_taste', 'as_needed' — and an is_optional boolean.\n\ninstructions: i first figured maybe 6 steps would cover a simple dessert, but for these i'd rather have it spelled out, so make instructions exactly 8 instruction objects. each instruction object has step_number (integer, at least 1), instruction (string), duration_minutes (integer 0 to 180), and temperature_celsius (integer 0 to 260).\n\nfor the format — part of me wants json since it's easy to read, but my planning tool reads yaml, so go with yaml. and put it directly as a bare array at the top level, no wrapper key around it. wrap the whole thing in a code block and don't write anything outside it, just the data.\n\nhere's the schema it needs to match:\n\n```\n{\n  \"type\": \"array\",\n  \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"name\": { \"type\": \"string\" },\n      \"prep_time_minutes\": { \"type\": \"integer\", \"minimum\": 5, \"maximum\": 120 },\n      \"cook_time_minutes\": { \"type\": \"integer\", \"minimum\": 0, \"maximum\": 180 },\n      \"servings\": { \"type\": \"integer\", \"minimum\": 1, \"maximum\": 48 },\n      \"difficulty\": { \"type\": \"string\", \"enum\": [\"easy\", \"medium\", \"hard\"] },\n      \"calories_per_serving\": { \"type\": \"integer\", \"minimum\": 50, \"maximum\": 1500 },\n      \"ingredients\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"name\": { \"type\": \"string\", \"description\": \"Base ingredient name, not including preparation notes\" },\n            \"quantity\": { \"type\": \"number\", \"minimum\": 0.25, \"maximum\": 5000 },\n            \"unit\": {\n              \"type\": \"string\",\n              \"enum\": [\"mg\", \"g\", \"kg\", \"oz\", \"lb\", \"ml\", \"l\", \"cl\", \"dl\", \"tsp\", \"tbsp\", \"fl_oz\", \"cup\", \"pt\", \"qt\", \"gal\", \"drop\", \"dash\", \"pinch\", \"smidgen\", \"handful\", \"splash\", \"piece\", \"whole\", \"unit\", \"part\", \"small\", \"clove\", \"leaf\", \"slice\", \"stick\", \"sheet\", \"sprig\", \"stalk\", \"stem\", \"head\", \"bulb\", \"pod\", \"ear\", \"kernel\", \"strip\", \"cube\", \"wedge\", \"fillet\", \"can\", \"jar\", \"bottle\", \"carton\", \"box\", \"bag\", \"packet\", \"sachet\", \"tube\", \"roll\", \"block\", \"bar\", \"pack\", \"package\", \"bunch\", \"bowl\", \"loaf\", \"sleeve\", \"scoop\", \"mm\", \"cm\", \"m\", \"inch\", \"to_taste\", \"as_needed\"]\n            },\n            \"is_optional\": { \"type\": \"boolean\" }\n          },\n          \"required\": [\"name\", \"quantity\", \"unit\", \"is_optional\"]\n        },\n        \"minItems\": 1,\n        \"maxItems\": 20\n      },\n      \"instructions\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"step_number\": { \"type\": \"integer\", \"minimum\": 1 },\n            \"instruction\": { \"type\": \"string\" },\n            \"duration_minutes\": { \"type\": \"integer\", \"minimum\": 0, \"maximum\": 180 },\n            \"temperature_celsius\": { \"type\": \"integer\", \"minimum\": 0, \"maximum\": 260 }\n          },\n          \"required\": [\"step_number\", \"instruction\", \"duration_minutes\", \"temperature_celsius\"]\n        },\n        \"minItems\": 8,\n        \"maxItems\": 8\n      }\n    },\n    \"required\": [\"name\", \"prep_time_minutes\", \"cook_time_minutes\", \"servings\", \"difficulty\", \"calories_per_serving\", \"ingredients\", \"instructions\"]\n  },\n  \"minItems\": 1,\n  \"maxItems\": 2\n}\n```\n\nstick to exactly these fields, nothing unlisted, and yaml only in the code block please.",
+    "json_schema": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "prep_time_minutes": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 120
+          },
+          "cook_time_minutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 180
+          },
+          "servings": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 48
+          },
+          "difficulty": {
+            "type": "string",
+            "enum": [
+              "easy",
+              "medium",
+              "hard"
+            ]
+          },
+          "calories_per_serving": {
+            "type": "integer",
+            "minimum": 50,
+            "maximum": 1500
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Base ingredient name, not including preparation notes"
+                },
+                "quantity": {
+                  "type": "number",
+                  "minimum": 0.25,
+                  "maximum": 5000
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "mg",
+                    "g",
+                    "kg",
+                    "oz",
+                    "lb",
+                    "ml",
+                    "l",
+                    "cl",
+                    "dl",
+                    "tsp",
+                    "tbsp",
+                    "fl_oz",
+                    "cup",
+                    "pt",
+                    "qt",
+                    "gal",
+                    "drop",
+                    "dash",
+                    "pinch",
+                    "smidgen",
+                    "handful",
+                    "splash",
+                    "piece",
+                    "whole",
+                    "unit",
+                    "part",
+                    "small",
+                    "clove",
+                    "leaf",
+                    "slice",
+                    "stick",
+                    "sheet",
+                    "sprig",
+                    "stalk",
+                    "stem",
+                    "head",
+                    "bulb",
+                    "pod",
+                    "ear",
+                    "kernel",
+                    "strip",
+                    "cube",
+                    "wedge",
+                    "fillet",
+                    "can",
+                    "jar",
+                    "bottle",
+                    "carton",
+                    "box",
+                    "bag",
+                    "packet",
+                    "sachet",
+                    "tube",
+                    "roll",
+                    "block",
+                    "bar",
+                    "pack",
+                    "package",
+                    "bunch",
+                    "bowl",
+                    "loaf",
+                    "sleeve",
+                    "scoop",
+                    "mm",
+                    "cm",
+                    "m",
+                    "inch",
+                    "to_taste",
+                    "as_needed"
+                  ]
+                },
+                "is_optional": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "quantity",
+                "unit",
+                "is_optional"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 20
+          },
+          "instructions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "step_number": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "instruction": {
+                  "type": "string"
+                },
+                "duration_minutes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 180
+                },
+                "temperature_celsius": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 260
+                }
+              },
+              "required": [
+                "step_number",
+                "instruction",
+                "duration_minutes",
+                "temperature_celsius"
+              ]
+            },
+            "minItems": 8,
+            "maxItems": 8
+          }
+        },
+        "required": [
+          "name",
+          "prep_time_minutes",
+          "cook_time_minutes",
+          "servings",
+          "difficulty",
+          "calories_per_serving",
+          "ingredients",
+          "instructions"
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 2
+    },
+    "top_level_count": [
+      1,
+      2
+    ],
+    "top_level_key": "recipe",
+    "require_wrapper_key": false,
+    "require_code_block": true,
+    "require_no_commentary": true,
+    "output_format": "yaml"
+  },
+  {
+    "seed": 29,
+    "entity_type": "test__invoice",
+    "prompt": "need a mock invoice. event services, partial upfront already paid. so the numbers gotta actually reconcile - line totals, tax, discount, final balance plausible for that context. just 1 invoice. exactly 1, not a list of 5.\n\nfields i want: vendor name, the total, subtotal, tax, discount, due days, line item count, billing type, and a flag for bank transfer. thats it, no extras.\n\nformat - half tempted to just do JSON but no, give me YAML. and structure wise... could just hand me a bare array of the one item. nah, wrap it. root object, key `invoice`, value is the array, array has exactly one item inside.\n\ntypes now. `vendor_name` string obviously. `invoice_total_usd` - number, between 50 and 25000. `subtotal_usd` number, was gonna say min 50 but make it 40 to 23000. `tax_total_usd` number 0 to 3000. `discount_total_usd` number, 0 to... 5000 feels tight, go 10000. `due_in_days` - i keep wanting to call it `payment_due_days` but stick with `due_in_days`, and that one's an integer (no fractional days), 0 to 120. `line_item_count` integer too, 1 to 12.\n\n`billing_type` is the enum. allowed set - services, goods, subscription. thought about adding 'rental' but no. keep 'mixed' in there too. so: 'services', 'goods', 'subscription', 'mixed'.\n\nlast one `paid_by_bank_transfer_allowed`. leaned toward making it a string yes/no but boolean is cleaner, boolean.\n\noh and `invoice_total_usd` - making sure that's a number not integer, yes number.\n\noutput in a ```yaml fenced block, nothing outside it, no commentary.\n\n```yaml\ninvoice:\n  - vendor_name: <string>            # Vendor, contractor, or company issuing the invoice\n    invoice_total_usd: <number, 50 to 25000>\n    subtotal_usd: <number, 40 to 23000>\n    tax_total_usd: <number, 0 to 3000>\n    discount_total_usd: <number, 0 to 10000>\n    due_in_days: <integer, 0 to 120>  # days from invoice issue date until payment is due\n    line_item_count: <integer, 1 to 12>\n    billing_type: <one of: services, goods, subscription, mixed>\n    paid_by_bank_transfer_allowed: <boolean>\n```",
+    "json_schema": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "vendor_name": {
+            "type": "string",
+            "description": "Vendor, contractor, or company issuing the invoice"
+          },
+          "invoice_total_usd": {
+            "type": "number",
+            "minimum": 50,
+            "maximum": 25000
+          },
+          "subtotal_usd": {
+            "type": "number",
+            "minimum": 40,
+            "maximum": 23000
+          },
+          "tax_total_usd": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3000
+          },
+          "discount_total_usd": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "due_in_days": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 120,
+            "description": "Number of days from invoice issue date until payment is due"
+          },
+          "line_item_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12
+          },
+          "billing_type": {
+            "type": "string",
+            "enum": [
+              "services",
+              "goods",
+              "subscription",
+              "mixed"
+            ]
+          },
+          "paid_by_bank_transfer_allowed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "vendor_name",
+          "invoice_total_usd",
+          "subtotal_usd",
+          "tax_total_usd",
+          "discount_total_usd",
+          "due_in_days",
+          "line_item_count",
+          "billing_type",
+          "paid_by_bank_transfer_allowed"
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "top_level_count": 1,
+    "top_level_key": "invoice",
+    "require_wrapper_key": true,
+    "require_code_block": true,
+    "require_no_commentary": true,
+    "output_format": "yaml"
+  }
+]

@@ -450,3 +450,27 @@ venv, then run `python scripts/verify-ifeval-parity.py /path/to/package-parent`.
 The script checks the source digests and emits the strict and loose verdicts.
 Compare its output with `src/lib/benchmark-data/ifeval-oracle.json`. The
 selected rules need no NLTK data downloads.
+
+## IFStruct tuxevil-lite
+
+Select **IFStruct tuxevil-lite** in Churn Lab. The four fixed IFStruct v1.0
+cases include JSON and YAML, wrapped and unwrapped output, and constraints
+on code fences, commentary, schema fields and item counts. The Runner
+sends the original user prompt without a system message and uses
+unconstrained generation. The report includes the original validator's
+pass result and schema diagnostics for each case.
+
+The inputs and byte-for-byte validator are from [Liquid AI IFStruct](
+https://github.com/Liquid4All/ifstruct/tree/73e03a6d3a8508357ba430675a106d4887abedf3).
+The revision, source digests, case IDs and label `officiallyComparable: false`
+are recorded in the catalog. The bundled Apache-2.0 license is in
+`scripts/ifstruct/LICENSE`. This pilot does not represent the full 2,000-case
+test split.
+
+On Linux, install `scripts/ifstruct/requirements.txt` in a Python venv and
+set `IFSTRUCT_PYTHON` to its Python executable. The Coolify image creates the
+venv automatically. The validator reads model output as data over stdin,
+with a 128 KiB input cap, CPU and memory limits, a wall timeout and a minimal
+environment. Process failures or limits are recorded as `GRADER_ERROR`.
+No model-generated code is executed. Responses are stored for local
+regrading, and persisted grades are reused when the Runner polls.
