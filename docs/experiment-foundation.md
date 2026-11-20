@@ -667,3 +667,66 @@ docker compose --project-directory . -f deploy/coolify-compose.yaml \
 With the override enabled, select **ToolSandbox wifi_off tuxevil-lite**
 in Churn Lab. The grading socket is needed for this suite. A failed
 grader request is recorded as `GRADER_ERROR`.
+
+## Local capacity benchmark
+
+`benchmark:capacity` measures 1, 2 and 4 simultaneous client sessions
+on a dedicated Ollama or llama.cpp server. It reuses the streaming
+providers, GSM8K grader and resource collector. Performance Lab retains
+its serial execution protocol.
+
+Use a fixed runtime slot count and context per slot. Save the configuration
+as `capacity.json`, then write the report to a local file.
+
+```json
+{
+  "provider": "ollama",
+  "endpoint": "http://127.0.0.1:11434",
+  "model": "qwen3:0.6b",
+  "rounds": 1,
+  "timeoutMs": 30000,
+  "parameters": {
+    "temperature": 0.1,
+    "numCtx": 4096,
+    "topP": 0.9,
+    "repeatPenalty": 1,
+    "numPredict": 128,
+    "seed": 42,
+    "reasoningEffort": "off"
+  }
+}
+```
+
+```bash
+umask 077
+npm run --silent benchmark:capacity -- capacity.json > capacity-report.json
+```
+
+Provide the verified GGUF SHA-256 as `artifactSha256` when the server
+does not report an artifact hash. The report records the supplied file
+hash and runtime-reported hash separately. API credentials may be passed
+through `BENCHMARK_CAPACITY_API_KEY`. The report excludes the endpoint
+and credentials and retains individual responses for local review.
+SIGINT or SIGTERM cancels the run and stops further waves.
+
+Each round sends four requests at each concurrency level, in waves sized
+to that level. Case hashes, seeds and sampling settings match across
+levels. The order of levels rotates across rounds to reduce order effects.
+There is one unscored warm-up. Runtime caching and scheduling are part
+of this protocol. Client requests in flight and runtime-reported slot
+count are recorded separately.
+
+Rates divide replies, correct answers or reported output tokens by the
+sum of wall time across that level's waves. Latency distributions include
+failed attempts. Accuracy uses completed and scored responses. Truncations
+and technical failures have separate counts, and token throughput is
+unavailable when any output token count is missing. Four requests per
+level are a transport pilot. Use repeated rounds and inspect sample counts
+before drawing capacity or latency conclusions.
+
+The existing `BENCHMARK_RESOURCE_TARGETS` collector samples once per wave,
+so concurrent requests do not each claim the same host or GPU reading.
+RAM and VRAM retain the collector's scope. Watt-hours integrate observed
+power samples only when coverage is sufficient for every wave on the same
+source and scope. When that condition fails, energy and energy per correct
+answer remain `null`.
