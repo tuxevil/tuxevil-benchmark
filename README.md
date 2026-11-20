@@ -415,6 +415,25 @@ de la landing original. Se pueden ajustar con `SNAPSHOT_CPU`, `SNAPSHOT_RAM`,
 `SNAPSHOT_GPU` y `SNAPSHOT_PROVIDER`. No se publican direcciones internas,
 usuarios, cuentas ni credenciales junto a esos componentes.
 
+#### Prueba local de la imagen de producción
+
+Ejecuta esta prueba desde un checkout del candidato con Docker Compose v2 y
+BuildKit disponibles.
+
+```sh
+docker build -f deploy/Dockerfile -t tuxevil-benchmark:runtime-smoke .
+BENCHMARK_SMOKE_IMAGE=tuxevil-benchmark:runtime-smoke bash scripts/smoke-deployment.sh
+```
+
+La prueba crea un proyecto Compose efímero, instala el esquema en PostgreSQL
+y conecta el worker a Redis. Usa una red interna sin puertos publicados y un
+proveedor Ollama simulado con respuestas fijas. Comprueba que el caso público
+GSM8K conserva la respuesta original y su procedencia y que PostgreSQL guarda
+por separado acierto, respuesta incorrecta y error del proveedor. Al terminar
+retira los contenedores y sus volúmenes de prueba. Para validar el despliegue en
+Coolify staging quedan las comprobaciones de HTTPS, el proveedor de inferencia
+real y la reversión del enrutamiento.
+
 ## Chat de resultados
 
 Abre **Preguntar al benchmark** desde el sitio público o cualquier pantalla
