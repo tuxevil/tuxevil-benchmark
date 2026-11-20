@@ -21,14 +21,9 @@ trap cleanup EXIT
 execution_id=$("${compose[@]}" exec -T fixture node /smoke.mjs check)
 outcomes=$("${compose[@]}" exec -T postgres psql -U smoke -d smoke -At -v ON_ERROR_STOP=1 \
   -v execution_id="$execution_id" <<'SQL'
-WITH observations AS (
-  SELECT CASE WHEN jsonb_typeof(metadata) = 'string'
-    THEN (metadata #>> '{}')::jsonb ELSE metadata END AS detail
-  FROM experiment_execution_observations
-  WHERE execution_id = :'execution_id'::uuid
-)
-SELECT string_agg(detail->>'outcome', ',' ORDER BY detail->>'outcome')
-FROM observations;
+SELECT string_agg(metadata->>'outcome', ',' ORDER BY metadata->>'outcome')
+FROM experiment_execution_observations
+WHERE execution_id = :'execution_id'::uuid;
 SQL
 )
 if [[ "$outcomes" != "PASS,PROVIDER_ERROR,WRONG_ANSWER" ]]; then
