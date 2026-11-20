@@ -1,4 +1,4 @@
-import { BFCL_MULTITURN_CASES, BFCL_MULTITURN_SYSTEM } from "@/lib/bfcl-v3-multiturn";
+import { BFCL_MISS_FUNC_CASES, BFCL_MULTITURN_CASES, BFCL_MULTITURN_SYSTEM, BFCL_TOOL_RESTORATION_PROMPT } from "@/lib/bfcl-v3-multiturn";
 import { STATEFUL_CASE, STATEFUL_SYSTEM } from "@/lib/stateful-tool-sandbox";
 import { createServer } from "node:http";
 import { once } from "node:events";
@@ -59,21 +59,27 @@ it("runs public cases through provider transports and persists scored and techni
       const current = messages.findLastIndex((message) => message.role === "user");
       const userTurn = messages.filter((message) => message.role === "user").length;
       const outputs = messages.slice(current).filter((message) => message.role === "tool");
-      const fixture = BFCL_MULTITURN_CASES[openAICompatible ? 0 : 1];
+      const hasCd = (body.tools as ChatTool[]).some((tool) => tool.function.name === "cd");
+      const missFunc = !hasCd || messages.some(({ content }) => content === BFCL_TOOL_RESTORATION_PROMPT);
+      const fixture = missFunc ? BFCL_MISS_FUNC_CASES[0] : BFCL_MULTITURN_CASES[openAICompatible ? 0 : 1];
       const expected = fixture.groundTruth[userTurn - 1];
       const countWords = BFCL_MULTITURN_CASES[1].groundTruth[3][0];
       const calls = outputs.length === 0 ? expected : [];
-      const recovery = userTurn === 2 && body.model === "correct";
-      const toolCalls = recovery && outputs.length === 0 ? [{ name: "echo", arguments: {} }]
+      const recovery = !missFunc && userTurn === 2 && body.model === "correct";
+      const guessedTool = missFunc && userTurn === 1 && body.model === "incorrect" && outputs.length === 0;
+      const toolCalls = guessedTool ? fixture.groundTruth[1].slice(0, 1)
+        : recovery && outputs.length === 0 ? [{ name: "echo", arguments: {} }]
         : recovery && outputs.length === 1 ? expected
-          : userTurn === 3 && body.model === "incorrect" && outputs.length === 0 ? [countWords] : calls;
+          : !missFunc && userTurn === 3 && body.model === "incorrect" && outputs.length === 0 ? [countWords] : calls;
+      const answer = missFunc && userTurn === 1 ? "The directory navigation tool is unavailable."
+        : !missFunc && userTurn === 3 && !openAICompatible ? "Which file?" : "Done.";
       if (openAICompatible) {
         const delta = toolCalls.length ? {
           tool_calls: toolCalls.map((call, index) => ({
             index, id: `call_${userTurn}_${outputs.length}_${index}`, type: "function",
             function: { name: call.name, arguments: JSON.stringify(call.arguments) },
           })),
-        } : { content: "Done." };
+        } : { content: answer };
         const finishReason = toolCalls.length ? "tool_calls" : "stop";
         response.writeHead(200, { "Content-Type": "text/event-stream" });
         for (const event of [
@@ -86,7 +92,7 @@ it("runs public cases through provider transports and persists scored and techni
       const message = toolCalls.length ? {
         tool_calls: toolCalls.map((call, index) => ({ id: `ollama_${index}`, function: call })),
       }
-        : { content: userTurn === 3 ? "Which file?" : "Done." };
+        : { content: answer };
       response.end(JSON.stringify({ message, done: true, done_reason: body.model === "truncated" ? "length" : "stop" }));
       return;
     }
@@ -473,6 +479,45 @@ it("runs public cases through provider transports and persists scored and techni
       { role: "tool", tool_call_id: "call_1_0_1", content: "null" },
       { role: "tool", tool_call_id: "call_3_0_0", content: '{"count":2,"type":"words"}' },
     ]));
+
+    const [missFunc] = BFCL_MISS_FUNC_CASES;
+    const missingFunctionRun = await startExperimentExecution(experiment.id, {
+      scenarioIds: [missFunc.scenarioId], successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(experiment.id, missingFunctionRun.execution.id);
+      expect(report.publicBenchmarkResults).toHaveLength(4);
+      const items = variants.map((variant) =>
+        report.publicBenchmarkResults!.find((item) => item.variantId === variant.id)!.observations[0]);
+      expect(items.map((item) => item.metadata.outcome)).toEqual(["PASS", "WRONG_ANSWER", "TRUNCATED", "PROVIDER_ERROR"]);
+      expect(items[1].metadata.deterministicGrade).toMatchObject({
+        details: { failedActions: 1, unnecessaryCalls: 1 },
+      });
+    }, { timeout: 8_000 });
+    const guessedRun = missingFunctionRun.runs.find((item) => item.variantId === variants[1].id)!;
+    const guessedStored = await loadPersistedState(guessedRun.testRunId);
+    expect(guessedStored?.runs[0].run.results[0].turns[1].requestBody?.messages).toEqual(expect.arrayContaining([
+      { role: "tool", tool_name: "cd", tool_call_id: "ollama_0", content: '{"error":"UNKNOWN_TOOL"}' },
+    ]));
+
+    const missingOpenAIRun = await startExperimentExecution(openAIExperiment.id, {
+      scenarioIds: [missFunc.scenarioId], successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(openAIExperiment.id, missingOpenAIRun.execution.id);
+      expect(report.publicBenchmarkResults?.map(({ observations }) => observations[0].metadata.outcome)).toEqual(["PASS", "PASS"]);
+    }, { timeout: 6_000 });
+    const missingOpenAIStored = await loadPersistedState(missingOpenAIRun.runs[0].testRunId);
+    const missingTurns = missingOpenAIStored?.runs[0].run.results[0].turns ?? [];
+    const names = (index: number) =>
+      (missingTurns[index].requestBody?.tools as ChatTool[]).map(({ function: tool }) => tool.name);
+    expect(names(0)).not.toContain("cd");
+    expect(names(1)).toContain("cd");
+    expect(missingTurns[1].requestBody?.messages).toEqual(expect.arrayContaining([
+      { role: "assistant", content: "The directory navigation tool is unavailable." },
+      { role: "user", content: BFCL_TOOL_RESTORATION_PROMPT },
+    ]));
+
 
 
   } finally {

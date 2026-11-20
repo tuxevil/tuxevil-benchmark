@@ -581,6 +581,22 @@ completions are reported separately from incorrect checkpoints.
 This pilot adapts the BFCL protocol to native local inference and uses a
 small TypeScript implementation of the isolated file system. The reference
 outputs and final file contents for these two cases were checked against
-the pinned upstream simulator. The score applies to these cases and this
-protocol. It does not measure the full benchmark or cover `miss_func`
-and `memory_kv`.
+the pinned upstream simulator. The score applies to these cases and this protocol.
+
+## BFCL V3 Missing Function tuxevil-lite
+
+Select **BFCL V3 Missing Function tuxevil-lite** in Churn Lab. The
+manifest pins `multi_turn_miss_func_12` from the 200-case Apache-2.0 split
+and keeps the base and missing-parameter suite at its previous version.
+The first inference omits `cd`. At the second scripted turn the runner
+adds it to the native tool list and sends the upstream native function
+calling message for the empty dataset turn. Tool results and the previous
+assistant response stay in the conversation.
+
+The simulator refuses to execute a withheld function before restoration.
+The grader verifies the advertised tool list and the recorded tool
+feedback, counts any early calls as unnecessary, then verifies the state
+and expected tool results at each checkpoint. The first response must
+contain visible text. Its wording is outside this scoring protocol. The
+case uses the local in-memory environment and the same action limit as the
+multiturn pilot. It yields a result for the adapted pilot.

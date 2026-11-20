@@ -277,7 +277,7 @@ async function executeModel(runId: string, resultId: string) {
   const fixture = findNativeToolFixture(run.scenarioId);
   const stateful = run.scenarioId === STATEFUL_CASE.scenarioId;
   const bfclMultiturn = findBfclMultiturnCase(run.scenarioId);
-  const tools = bfclMultiturn?.tools ?? (stateful ? STATEFUL_CASE.tools : fixture ? [fixture.tool] : findBfclV3Case(run.scenarioId)?.tools);
+  const staticTools = stateful ? STATEFUL_CASE.tools : fixture ? [fixture.tool] : findBfclV3Case(run.scenarioId)?.tools;
   const device = stateful ? createSimulatedDevice() : null;
   const toolHandler = bfclMultiturn ? createBfclFileSystem(bfclMultiturn).invoke
     : device ? (name: string, args: unknown) => runSimulatedDeviceTool(device, name, args) : null;
@@ -297,6 +297,7 @@ async function executeModel(runId: string, resultId: string) {
       const activeRun = benchmarkStore.getStoredRun(runId);
       if (!activeRun) return;
 
+      const tools = bfclMultiturn?.turnTools[index] ?? staticTools;
       const userTurn = { role: "user" as const, content: userMessage };
       conversation.push(userTurn);
       if (toolHandler) {
@@ -496,7 +497,7 @@ async function executeModel(runId: string, resultId: string) {
               || new Set(response.toolCalls.map((call) => call.id)).size !== calls.length))) break;
           if (!(await waitUntilRunnable(runId))) return;
           actions += calls.length;
-          const results = calls.map(({ function: call }) => JSON.stringify(toolHandler(call.name, call.arguments)));
+          const results = calls.map(({ function: call }) => JSON.stringify(toolHandler(call.name, call.arguments, index)));
           if ("protocolDiagnostics" in response) {
             openAIHistory.push(
               { role: "assistant", content: response.responseText || null, tool_calls: response.toolCalls },
@@ -553,7 +554,7 @@ async function executeModel(runId: string, resultId: string) {
     const responseText = inferredResult?.responseText ?? "";
     const lastTurn = inferredResult?.turns[inferredResult.turns.length - 1];
 
-    if (!tools && responseText.trim().length === 0) {
+    if (!bfclMultiturn && !staticTools && responseText.trim().length === 0) {
       const errorReason = lastTurn?.thinking ? "NO_FINAL_ANSWER" : "EMPTY_RESPONSE";
       console.warn(`[tuxevil-benchmark] [Inference Failed] ${runId}/${resultId}: ${errorReason}.`);
       benchmarkStore.updateResult(runId, resultId, {

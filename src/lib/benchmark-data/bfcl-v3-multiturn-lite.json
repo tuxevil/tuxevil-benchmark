@@ -374,6 +374,99 @@
           }
         ]
       ]
+    },
+    {
+      "source": {
+        "id": "multi_turn_miss_func_12",
+        "question": [
+          [
+            {
+              "role": "user",
+              "content": "Pop on over to the 'Documents' directory and craft a new file dubbed 'summary.txt', would you? If it already exists, return an error"
+            }
+          ],
+          [],
+          [
+            {
+              "role": "user",
+              "content": "In 'Documents', let's capture some profound topic 'quantum computing' and jot them down in the 'summary.txt'. The file should only contain 'quantum computing' in its contents."
+            }
+          ],
+          [
+            {
+              "role": "user",
+              "content": "It would be great to get a sense of how comprehensive this file has become. Mind tallying up the words in 'summary.txt' for me?"
+            }
+          ]
+        ],
+        "initial_config": {
+          "GorillaFileSystem": {
+            "root": {
+              "alex": {
+                "type": "directory",
+                "contents": {
+                  "Documents": {
+                    "type": "directory",
+                    "contents": {}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "path": [
+          "GorillaFileSystem.ls",
+          "GorillaFileSystem.cd",
+          "GorillaFileSystem.touch",
+          "GorillaFileSystem.echo",
+          "GorillaFileSystem.grep",
+          "GorillaFileSystem.sort",
+          "GorillaFileSystem.wc"
+        ],
+        "involved_classes": [
+          "GorillaFileSystem"
+        ],
+        "missed_function": {
+          "1": [
+            "cd"
+          ]
+        }
+      },
+      "groundTruth": [
+        [],
+        [
+          {
+            "name": "cd",
+            "arguments": {
+              "folder": "Documents"
+            }
+          },
+          {
+            "name": "touch",
+            "arguments": {
+              "file_name": "summary.txt"
+            }
+          }
+        ],
+        [
+          {
+            "name": "echo",
+            "arguments": {
+              "content": "quantum computing",
+              "file_name": "summary.txt"
+            }
+          }
+        ],
+        [
+          {
+            "name": "wc",
+            "arguments": {
+              "file_name": "summary.txt",
+              "mode": "w"
+            }
+          }
+        ]
+      ]
     }
   ]
 }
