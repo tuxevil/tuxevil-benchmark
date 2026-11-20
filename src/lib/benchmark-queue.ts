@@ -1,3 +1,4 @@
+import { BFCL_MULTITURN_MAX_ACTIONS, createBfclFileSystem, findBfclMultiturnCase } from "@/lib/bfcl-v3-multiturn";
 import { createSimulatedDevice, runSimulatedDeviceTool, STATEFUL_CASE, STATEFUL_MAX_ACTIONS } from "@/lib/stateful-tool-sandbox";
 import { findBfclV3Case } from "@/lib/bfcl-v3-pilot";
 import { checkFixtureCall, findNativeToolFixture } from "@/lib/native-tool-fixtures";
@@ -275,10 +276,19 @@ async function executeModel(runId: string, resultId: string) {
 
   const fixture = findNativeToolFixture(run.scenarioId);
   const stateful = run.scenarioId === STATEFUL_CASE.scenarioId;
-  const tools = stateful ? STATEFUL_CASE.tools : fixture ? [fixture.tool] : findBfclV3Case(run.scenarioId)?.tools;
+  const bfclMultiturn = findBfclMultiturnCase(run.scenarioId);
+  const tools = bfclMultiturn?.tools ?? (stateful ? STATEFUL_CASE.tools : fixture ? [fixture.tool] : findBfclV3Case(run.scenarioId)?.tools);
+  const device = stateful ? createSimulatedDevice() : null;
+  const toolHandler = bfclMultiturn ? createBfclFileSystem(bfclMultiturn).invoke
+    : device ? (name: string, args: unknown) => runSimulatedDeviceTool(device, name, args) : null;
+  const maxActions = bfclMultiturn ? BFCL_MULTITURN_MAX_ACTIONS : STATEFUL_MAX_ACTIONS;
   const conversation: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
     ...(run.systemPrompt ? [{ role: "system" as const, content: run.systemPrompt }] : []),
   ];
+
+  const ollamaHistory: OllamaChatMessage[] = [...conversation];
+  const openAIHistory: OpenAIChatMessage[] = [...conversation];
+  let stepOrder = 0;
 
   try {
     for (const [index, userMessage] of run.userMessages.entries()) {
@@ -287,7 +297,12 @@ async function executeModel(runId: string, resultId: string) {
       const activeRun = benchmarkStore.getStoredRun(runId);
       if (!activeRun) return;
 
-      conversation.push({ role: "user", content: userMessage });
+      const userTurn = { role: "user" as const, content: userMessage };
+      conversation.push(userTurn);
+      if (toolHandler) {
+        ollamaHistory.push(userTurn);
+        openAIHistory.push(userTurn);
+      }
 
       let partialResponse = "";
       let lastStreamUpdate = 0;
@@ -376,13 +391,13 @@ async function executeModel(runId: string, resultId: string) {
           async () => {
             partialResponse = "";
             benchmarkStore.updateStreamingResponse(runId, resultId, "");
-            await recordDiagnostic("inference", "attempt_started", { turn: index + 1, attempt: attempts.length + 1 });
+            await recordDiagnostic("inference", "attempt_started", { turn: stepOrder + 1, attempt: attempts.length + 1 });
           },
           async (attempt, error) => recordDiagnostic(
             "inference",
             attempt.status === "COMPLETED" ? "attempt_completed" : "attempt_failed",
             {
-              turn: index + 1,
+              turn: stepOrder + 1,
               attempt: attempts.length,
               startedAt: attempt.startedAt,
               durationMs: attempt.durationMs,
@@ -448,8 +463,8 @@ async function executeModel(runId: string, resultId: string) {
         });
       };
 
-      let response = await infer(conversation, conversation);
-      await recordTurn(response, index + 1);
+      let response = await infer(toolHandler ? ollamaHistory.slice() : conversation, toolHandler ? openAIHistory.slice() : conversation);
+      await recordTurn(response, ++stepOrder, bfclMultiturn ? ollamaHistory.slice() : undefined);
       if (fixture && !response.truncated && checkFixtureCall(fixture, response.toolCalls) === "VALID") {
         if (!(await waitUntilRunnable(runId))) return;
         const content = JSON.stringify(fixture.result);
@@ -460,7 +475,7 @@ async function executeModel(runId: string, resultId: string) {
             { role: "assistant", content: response.responseText || null, tool_calls: response.toolCalls },
             { role: "tool", content, tool_call_id: toolCall.id },
           ]);
-          await recordTurn(response, index + 2);
+          await recordTurn(response, ++stepOrder);
         } else {
           const continuation: OllamaChatMessage[] = [
             ...conversation,
@@ -468,36 +483,41 @@ async function executeModel(runId: string, resultId: string) {
             { role: "tool", content, tool_name: fixture.name },
           ];
           response = await infer(continuation, []);
-          await recordTurn(response, index + 2, continuation);
+          await recordTurn(response, ++stepOrder, continuation);
         }
-      } else if (stateful) {
-        const device = createSimulatedDevice();
-        const ollamaConversation: OllamaChatMessage[] = [...conversation];
-        const openAIConversation: OpenAIChatMessage[] = [...conversation];
-        for (let step = 0; step < STATEFUL_MAX_ACTIONS; step++) {
-          const call = response.toolCalls.length === 1 ? response.toolCalls[0] : null;
-          if (response.truncated || !call?.function || typeof call.function.name !== "string"
-            || !call.function.name || ("id" in call && !call.id)) break;
+      } else if (toolHandler) {
+        let actions = 0;
+        while (!response.truncated && response.toolCalls.length > 0) {
+          const calls = response.toolCalls;
+          if (actions + calls.length > maxActions || (!bfclMultiturn && calls.length !== 1)
+            || calls.some((call) => typeof call?.function?.name !== "string" || !call.function.name)
+            || ("protocolDiagnostics" in response && (response.toolCalls.some((call) => !call.id)
+              || new Set(response.toolCalls.map((call) => call.id)).size !== calls.length))) break;
           if (!(await waitUntilRunnable(runId))) return;
-          const name = call.function.name;
-          const content = JSON.stringify(runSimulatedDeviceTool(device, name, call.function.arguments));
-          const stepOrder = index + step + 2;
+          actions += calls.length;
+          const results = calls.map(({ function: call }) => JSON.stringify(toolHandler(call.name, call.arguments)));
           if ("protocolDiagnostics" in response) {
-            openAIConversation.push(
+            openAIHistory.push(
               { role: "assistant", content: response.responseText || null, tool_calls: response.toolCalls },
-              { role: "tool", content, tool_call_id: response.toolCalls[0].id },
+              ...response.toolCalls.map((call, index) => ({ role: "tool" as const, content: results[index], tool_call_id: call.id })),
             );
-            response = await infer([], openAIConversation.slice());
-            await recordTurn(response, stepOrder);
           } else {
-            ollamaConversation.push(
+            ollamaHistory.push(
               { role: "assistant", content: response.responseText, tool_calls: response.toolCalls },
-              { role: "tool", content, tool_name: name },
+              ...response.toolCalls.map((call, index) => ({ role: "tool" as const, content: results[index], tool_name: call.function.name })),
             );
-            const messages = ollamaConversation.slice();
-            response = await infer(messages, []);
-            await recordTurn(response, stepOrder, messages);
           }
+          response = await infer(ollamaHistory.slice(), openAIHistory.slice());
+          await recordTurn(response, ++stepOrder, ollamaHistory.slice());
+        }
+        if (bfclMultiturn && response.truncated) break;
+        if (response.toolCalls.length === 0) {
+          const assistant = { role: "assistant" as const, content: response.responseText };
+          ollamaHistory.push(assistant);
+          openAIHistory.push(assistant);
+        } else if (bfclMultiturn) {
+          // An unfinished call batch cannot be added to the provider history.
+          break;
         }
       }
       const turnResponse = response.responseText.trim();

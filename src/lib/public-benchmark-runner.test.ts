@@ -1,3 +1,4 @@
+import { BFCL_MULTITURN_CASES, BFCL_MULTITURN_SYSTEM } from "@/lib/bfcl-v3-multiturn";
 import { STATEFUL_CASE, STATEFUL_SYSTEM } from "@/lib/stateful-tool-sandbox";
 import { createServer } from "node:http";
 import { once } from "node:events";
@@ -13,7 +14,7 @@ import bfclOracle from "@/lib/benchmark-data/bfcl-v3-oracle.json";
 import { NATIVE_TOOL_FIXTURES } from "@/lib/native-tool-fixtures";
 import { PUBLIC_BENCHMARKS } from "@/lib/public-benchmarks";
 
-it("runs a selected public case via the Ollama queue and persists scored and technical observations", async () => {
+it("runs public cases through provider transports and persists scored and technical observations", async () => {
   const tmp = mkdtempSync(join(tmpdir(), "tuxevil-gsm8k-"));
   vi.stubEnv("SQLITE_PATH", join(tmp, "pilot.db"));
   vi.stubEnv("DATABASE_URL", undefined);
@@ -26,7 +27,8 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
       response.end(JSON.stringify({ models: ["correct", "incorrect", "truncated", "error"].map((name) => ({ name })) }));
       return;
     }
-    if (request.url !== "/api/chat") {
+    const openAICompatible = request.url === "/v1/chat/completions";
+    if (request.url !== "/api/chat" && !openAICompatible) {
       response.end("{}");
       return;
     }
@@ -49,6 +51,40 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
         ]
         : [{ name: "set_wifi", arguments: { enabled: false } }];
       const message = steps < calls.length ? { tool_calls: [{ function: calls[steps] }] } : { content: "Pronto." };
+      response.end(JSON.stringify({ message, done: true, done_reason: body.model === "truncated" ? "length" : "stop" }));
+      return;
+    }
+    if (body.messages[0].content === BFCL_MULTITURN_SYSTEM) {
+      const messages = body.messages as Array<{ role: string; content: string }>;
+      const current = messages.findLastIndex((message) => message.role === "user");
+      const userTurn = messages.filter((message) => message.role === "user").length;
+      const outputs = messages.slice(current).filter((message) => message.role === "tool");
+      const fixture = BFCL_MULTITURN_CASES[openAICompatible ? 0 : 1];
+      const expected = fixture.groundTruth[userTurn - 1];
+      const countWords = BFCL_MULTITURN_CASES[1].groundTruth[3][0];
+      const calls = outputs.length === 0 ? expected : [];
+      const recovery = userTurn === 2 && body.model === "correct";
+      const toolCalls = recovery && outputs.length === 0 ? [{ name: "echo", arguments: {} }]
+        : recovery && outputs.length === 1 ? expected
+          : userTurn === 3 && body.model === "incorrect" && outputs.length === 0 ? [countWords] : calls;
+      if (openAICompatible) {
+        const delta = toolCalls.length ? {
+          tool_calls: toolCalls.map((call, index) => ({
+            index, id: `call_${userTurn}_${outputs.length}_${index}`, type: "function",
+            function: { name: call.name, arguments: JSON.stringify(call.arguments) },
+          })),
+        } : { content: "Done." };
+        const finishReason = toolCalls.length ? "tool_calls" : "stop";
+        response.writeHead(200, { "Content-Type": "text/event-stream" });
+        for (const event of [
+          { choices: [{ index: 0, delta, finish_reason: null }] },
+          { choices: [{ index: 0, delta: {}, finish_reason: finishReason }] },
+        ]) response.write(`data: ${JSON.stringify(event)}\n\n`);
+        response.end("data: [DONE]\n\n");
+        return;
+      }
+      const message = toolCalls.length ? { tool_calls: toolCalls.map((call) => ({ function: call })) }
+        : { content: userTurn === 3 ? "Which file?" : "Done." };
       response.end(JSON.stringify({ message, done: true, done_reason: body.model === "truncated" ? "length" : "stop" }));
       return;
     }
@@ -384,9 +420,62 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
     expect(irrelevanceRequests.map(({ model }) => model).sort()).toEqual(["correct", "error", "incorrect", "truncated"]);
     expect(irrelevanceRequests.map(({ tools }) => tools)).toEqual(variants.map(() => irrelevanceCase.tools));
     expect(irrelevanceRequests.every((item) => item.messages.length === 2)).toBe(true);
+    const multiturn = await startExperimentExecution(experiment.id, {
+      scenarioIds: [BFCL_MULTITURN_CASES[1].scenarioId], successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(experiment.id, multiturn.execution.id);
+      expect(report.publicBenchmarkResults).toHaveLength(4);
+      const items = variants.map((variant) =>
+        report.publicBenchmarkResults!.find((item) => item.variantId === variant.id)!.observations[0]);
+      expect(items.map((item) => item.metadata.outcome)).toEqual(["PASS", "WRONG_ANSWER", "TRUNCATED", "PROVIDER_ERROR"]);
+      expect(items[0].metadata.deterministicGrade).toMatchObject({
+        reason: "MULTITURN_SUCCESS",
+        details: {
+          failedActions: 1, unnecessaryCalls: 0,
+          finalState: { directory: "/alex/Documents", files: [["Documents/summary.txt", "quantum computing"]] },
+        },
+      });
+      expect(items[1].metadata.deterministicGrade).toMatchObject({ details: { unnecessaryCalls: 1 } });
+    }, { timeout: 8_000 });
+    const multiturnRun = multiturn.runs.find((item) => item.variantId === variants[0].id)!;
+    const multiturnStored = await loadPersistedState(multiturnRun.testRunId);
+    const recorded = multiturnStored?.runs[0].run.results[0].turns ?? [];
+    expect(recorded.map(({ stepOrder }) => stepOrder)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(recorded[7].requestBody?.messages).toEqual(expect.arrayContaining([
+      { role: "tool", tool_name: "echo", content: '{"error":"INVALID_ARGUMENTS"}' },
+      { role: "tool", tool_name: "wc", content: '{"count":2,"type":"words"}' },
+      { role: "assistant", content: "Which file?" },
+    ]));
+    const openAITarget = await createExecutionTarget({
+      label: "Local OpenAI-compatible fixture", provider: "llamacpp", endpoint: `http://127.0.0.1:${address.port}/v1`,
+    });
+    const openAIEnvironment = await upsertExecutionEnvironment({ label: "HTTP fixture", runtime: "llama.cpp" });
+    const openAIExperiment = await createExperiment({ name: "BFCL OpenAI-compatible fixture", factorUnderTest: "OTHER" });
+    for (const role of ["BASELINE", "VARIANT"] as const) {
+      await createExperimentVariant(openAIExperiment.id, {
+        name: role, role, modelArtifactId: artifact.id, executionEnvironmentId: openAIEnvironment.id,
+        executionTargetId: openAITarget.id, executionModelName: "correct",
+      });
+    }
+    const openAiRun = await startExperimentExecution(openAIExperiment.id, {
+      scenarioIds: [BFCL_MULTITURN_CASES[0].scenarioId], successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(openAIExperiment.id, openAiRun.execution.id);
+      expect(report.publicBenchmarkResults?.map(({ observations }) => observations[0].metadata.outcome)).toEqual(["PASS", "PASS"]);
+    }, { timeout: 6_000 });
+    const openAIStored = await loadPersistedState(openAiRun.runs[0].testRunId);
+    expect(openAIStored?.runs[0].run.results[0].turns.at(-1)?.requestBody?.messages).toEqual(expect.arrayContaining([
+      { role: "tool", tool_call_id: "call_1_0_0", content: '{"current_working_directory":"Documents"}' },
+      { role: "tool", tool_call_id: "call_1_0_1", content: "null" },
+      { role: "tool", tool_call_id: "call_3_0_0", content: '{"count":2,"type":"words"}' },
+    ]));
+
+
   } finally {
     server.close();
     vi.unstubAllEnvs();
     rmSync(tmp, { force: true, recursive: true });
   }
-}, 25_000);
+}, 35_000);
