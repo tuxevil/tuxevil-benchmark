@@ -454,6 +454,7 @@ async function resolveRun(testRunId: string): Promise<TestRun | null> {
 export async function startExperimentExecution(
   experimentId: string,
   input: ExperimentExecutionInput,
+  { allowBaselineOnly = false } = {},
 ): Promise<ExperimentExecutionView> {
   const parsed = experimentExecutionInputSchema.parse(input);
   await benchmarkStore.hydrate();
@@ -491,7 +492,7 @@ export async function startExperimentExecution(
   const runnableVariants = experiment.variants.filter((variant) =>
     ["BASELINE", "BASELINE_REPEAT", "VARIANT", "CONTROL"].includes(variant.role),
   );
-  if (!runnableVariants.some((variant) => variant.role === "VARIANT" || variant.role === "CONTROL")) {
+  if (!allowBaselineOnly && !runnableVariants.some((variant) => variant.role === "VARIANT" || variant.role === "CONTROL")) {
     throw new Error("Experiment needs at least one variant or control.");
   }
 

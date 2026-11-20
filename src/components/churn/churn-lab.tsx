@@ -2,6 +2,7 @@
 
 import { reasoningEffortSchema } from "@/lib/contracts";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { BenchmarkAssistant } from "@/components/churn/benchmark-assistant";
 import { ExecutionTargetPanel } from "@/components/churn/execution-target-panel";
 import { ExperimentRunnerPanel } from "@/components/churn/experiment-runner-panel";
 
@@ -328,6 +329,7 @@ export function ChurnLab() {
   const [variantEnvironmentId, setVariantEnvironmentId] = useState("");
   const [baselineReasoning, setBaselineReasoning] = useState("off");
   const [variantReasoning, setVariantReasoning] = useState("off");
+  const [targetRevision, setTargetRevision] = useState(0);
   const [createRepeat, setCreateRepeat] = useState(true);
 
   const [observationVariantId, setObservationVariantId] = useState("");
@@ -736,6 +738,12 @@ export function ChurnLab() {
 
   return (
     <div className="churn-lab">
+      <BenchmarkAssistant onOpen={(id) => {
+        setSelectedExperimentId(id);
+        setTargetRevision((revision) => revision + 1);
+        void Promise.all([loadRegistries(), loadExperiment(id)])
+          .catch(() => setError("No se pudo abrir el experimento."));
+      }} />
       <section className="churn-hero">
         <div>
           <p className="eyebrow">Experimental laboratory</p>
@@ -758,7 +766,7 @@ export function ChurnLab() {
         </div>
       )}
 
-      <ExecutionTargetPanel onRegistryChange={loadRegistries} />
+      <ExecutionTargetPanel onRegistryChange={loadRegistries} onTargetsChange={() => setTargetRevision((revision) => revision + 1)} />
 
       <section className="churn-grid churn-registry-grid">
         <div className="panel churn-card">
@@ -985,6 +993,7 @@ export function ChurnLab() {
               key={detail.experiment.id}
               experimentId={detail.experiment.id}
               variants={runnerVariants}
+              targetRevision={targetRevision}
               onBindingsSaved={() => loadExperiment(detail.experiment.id)}
               onComparisons={(values) => {
                 const next = values as Comparison[];

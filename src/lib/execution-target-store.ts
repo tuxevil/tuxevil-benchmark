@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { getSqliteDb } from "@/lib/sqlite-db";
 import {
   ensureExperimentSqliteSchema,
@@ -35,9 +36,32 @@ function validateEndpoint(endpoint: string, provider: string) {
 }
 
 export async function createExecutionTarget(input: ExecutionTargetInput): Promise<ExecutionTarget> {
+  return insertExecutionTarget(input, crypto.randomUUID());
+}
+
+export async function importExecutionTarget(input: ExecutionTargetInput): Promise<ExecutionTarget> {
   const parsed = executionTargetInputSchema.parse(input);
   validateEndpoint(parsed.endpoint, parsed.provider);
-  const id = crypto.randomUUID();
+  const normalize = (endpoint: string) => new URL(endpoint).href.replace(/\/+$/, "");
+  const endpoint = normalize(parsed.endpoint);
+  const existing = (await listExecutionTargets()).find(
+    (target) => target.provider === parsed.provider && normalize(target.endpoint) === endpoint,
+  );
+  if (existing) return existing;
+
+  // Stable UUID for repeated imports, including requests handled by different workers.
+  const digest = createHash("sha256").update(JSON.stringify(["settings-target", parsed.provider, endpoint])).digest("hex");
+  const id = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-8${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+  const target = await insertExecutionTarget(parsed, id);
+  if (target.provider === parsed.provider && normalize(target.endpoint) === endpoint) return target;
+
+  // An imported target may have been edited to point to a different connection.
+  return createExecutionTarget(parsed);
+}
+
+async function insertExecutionTarget(input: ExecutionTargetInput, id: string): Promise<ExecutionTarget> {
+  const parsed = executionTargetInputSchema.parse(input);
+  validateEndpoint(parsed.endpoint, parsed.provider);
   const now = new Date().toISOString();
   const encrypted = parsed.apiKey.trim() ? encryptSecret(parsed.apiKey.trim()) : null;
 
@@ -47,6 +71,7 @@ export async function createExecutionTarget(input: ExecutionTargetInput): Promis
       INSERT INTO execution_targets (
         id, label, provider, endpoint, api_key_encrypted, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (id) DO NOTHING
     `).run(id, parsed.label, parsed.provider, parsed.endpoint, encrypted, now, now);
     return (await getExecutionTarget(id))!;
   }
@@ -60,9 +85,10 @@ export async function createExecutionTarget(input: ExecutionTargetInput): Promis
       ${id}, ${parsed.label}, ${parsed.provider}, ${parsed.endpoint}, ${encrypted},
       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
+    ON CONFLICT (id) DO NOTHING
     RETURNING *
   `;
-  return restoreTarget(rows[0] as Row);
+  return rows.length ? restoreTarget(rows[0] as Row) : (await getExecutionTarget(id))!;
 }
 
 export async function listExecutionTargets(): Promise<ExecutionTarget[]> {
