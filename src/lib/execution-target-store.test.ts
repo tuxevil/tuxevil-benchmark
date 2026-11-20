@@ -77,9 +77,18 @@ describe("execution target persistence", () => {
     expect(first).not.toHaveProperty("apiKey");
     expect((await store.getExecutionTargetConnection(first.id))?.apiKey).toBe("settings-token");
 
+    const rotated = await store.importExecutionTarget({ ...input, apiKey: "rotated-token" });
+    expect(rotated.id).toBe(first.id);
+    expect((await store.getExecutionTargetConnection(first.id))?.apiKey).toBe("rotated-token");
+    await store.importExecutionTarget({ ...input, apiKey: "" });
+    expect((await store.getExecutionTargetConnection(first.id))?.apiKey).toBeNull();
+
     const manual = await store.createExecutionTarget({ ...input, label: "Gemma manual", endpoint: "http://127.0.0.1:18082", apiKey: "manual-token" });
     const reused = await store.importExecutionTarget({ ...input, endpoint: manual.endpoint });
     expect(reused).toEqual(manual);
+    const assistant = await store.importExecutionTarget({ ...input, endpoint: manual.endpoint }, { requireSettingsCredentials: true });
+    expect(assistant.id).not.toBe(manual.id);
+    expect((await store.getExecutionTargetConnection(assistant.id))?.apiKey).toBe("settings-token");
     expect((await store.getExecutionTargetConnection(manual.id))?.apiKey).toBe("manual-token");
   });
 

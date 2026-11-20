@@ -39,19 +39,33 @@ export async function createExecutionTarget(input: ExecutionTargetInput): Promis
   return insertExecutionTarget(input, crypto.randomUUID());
 }
 
-export async function importExecutionTarget(input: ExecutionTargetInput): Promise<ExecutionTarget> {
+export async function importExecutionTarget(
+  input: ExecutionTargetInput,
+  { requireSettingsCredentials = false } = {},
+): Promise<ExecutionTarget> {
   const parsed = executionTargetInputSchema.parse(input);
   validateEndpoint(parsed.endpoint, parsed.provider);
   const normalize = (endpoint: string) => new URL(endpoint).href.replace(/\/+$/, "");
   const endpoint = normalize(parsed.endpoint);
-  const existing = (await listExecutionTargets()).find(
-    (target) => target.provider === parsed.provider && normalize(target.endpoint) === endpoint,
-  );
-  if (existing) return existing;
-
-  // Stable UUID for repeated imports, including requests handled by different workers.
   const digest = createHash("sha256").update(JSON.stringify(["settings-target", parsed.provider, endpoint])).digest("hex");
   const id = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-8${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+  const matching = (await listExecutionTargets()).filter(
+    (target) => target.provider === parsed.provider && normalize(target.endpoint) === endpoint,
+  );
+  const owned = matching.find((target) => target.id === id);
+  const key = parsed.apiKey.trim();
+  if (owned) {
+    const current = await getExecutionTargetConnection(id);
+    if (current && (current.apiKey ?? "") === key) return owned;
+    return (await updateExecutionTarget(id, { apiKey: key })) ?? insertExecutionTarget(parsed, id);
+  }
+
+  for (const target of matching) {
+    if (!requireSettingsCredentials || ((await getExecutionTargetConnection(target.id))?.apiKey ?? "") === key) {
+      return target;
+    }
+  }
+
   const target = await insertExecutionTarget(parsed, id);
   if (target.provider === parsed.provider && normalize(target.endpoint) === endpoint) return target;
 
