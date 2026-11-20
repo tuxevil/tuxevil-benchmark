@@ -64,6 +64,24 @@ it.skipIf(!databaseUrl)("migrates a legacy schema before concurrent reads and re
         }],
       });
     }
+    const persisted = {
+      ollamaUrl: historicalUrl,
+      evaluators: [],
+      activeEvaluatorId: null,
+      evaluatorApiKey: null,
+      parameters: {
+        temperature: 0, numCtx: 4096, topP: 0.9, repeatPenalty: 1.1, numPredict: 512,
+        seed: 42, reasoningEffort: "on" as const,
+      },
+    };
+    await web.persistSettings(persisted);
+    expect((await worker.loadPersistedSettings())?.parameters).toEqual(persisted.parameters);
+
+    const legacySettings = JSON.stringify({ ...persisted.parameters, reasoningEffort: "unknown" });
+    await scoped`UPDATE app_settings SET parameters_json = to_jsonb(${legacySettings}::text) WHERE id = 1`;
+    expect((await worker.loadPersistedSettings())?.parameters.reasoningEffort).toBeUndefined();
+    expect((await worker.loadPersistedSettings())?.parameters.seed).toBe(42);
+
     const [afterRetry] = await scoped`SELECT to_jsonb(app_settings) ? 'active_provider' AS migrated FROM app_settings`;
     expect(afterRetry.migrated).toBe(true);
   } finally {

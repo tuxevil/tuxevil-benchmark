@@ -1,3 +1,4 @@
+import { parsePersistedParameters } from "@/lib/persisted-parameters";
 import { resultIdentity } from "./run-identity";
 import { loadRunManifests, loadVramPeaks } from "./resource-measurement-store";
 import { publicBenchmarkCase } from "@/lib/public-benchmarks";
@@ -1026,24 +1027,6 @@ export async function setPersistedActiveEvaluator(id: string | null) {
     SET active_evaluator_id = ${id}, updated_at = CURRENT_TIMESTAMP
     WHERE id = 1
   `;
-}
-
-function parsePersistedParameters(raw: unknown): import("@/lib/contracts").BenchmarkParameters {
-  const defaults = { temperature: 0.2, numCtx: 8192, topP: 0.9, repeatPenalty: 1.1, numPredict: 4096 };
-  if (!raw) return defaults;
-  try {
-    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-    return {
-      temperature: Number(parsed.temperature ?? defaults.temperature),
-      numCtx: Number(parsed.numCtx ?? defaults.numCtx),
-      topP: Number(parsed.topP ?? defaults.topP),
-      repeatPenalty: Number(parsed.repeatPenalty ?? defaults.repeatPenalty),
-      numPredict: Number(parsed.numPredict ?? defaults.numPredict),
-      seed: parsed.seed === undefined || parsed.seed === null ? undefined : Number(parsed.seed),
-    };
-  } catch {
-    return defaults;
-  }
 }
 
 export async function persistSettings(settings: {

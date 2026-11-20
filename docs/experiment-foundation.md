@@ -475,7 +475,7 @@ environment. Process failures or limits are recorded as `GRADER_ERROR`.
 No model-generated code is executed. Responses are stored for local
 regrading, and persisted grades are reused when the Runner polls.
 
-### Ollama thinking controls
+### Provider thinking controls
 
 The Ollama adapter sends `think: true` for explicit `on` and
 `think: false` for explicit `off`. It sends named effort levels as
@@ -492,7 +492,15 @@ visible measurement is null for a response consisting only of reasoning
 or tool calls. These fields record the request and observed timing. A
 model that cannot disable thinking may still reason, and a runtime may
 choose its default for an unsupported named level. Check the selected
-model's `/api/show` capabilities before comparing effects.
+model's capabilities before comparing effects. For Ollama, inspect `/api/show`.
+For llama.cpp, inspect `/props` when the server exposes it and verify the
+selected model and template with controlled runs.
+
+The settings API preserves an explicit Thinking value when another settings
+update omits that field. Send `off` to request disabled Thinking or `default`
+to let the provider decide. SQLite and PostgreSQL both retain supported
+values on reload. Older records without the field retain the provider
+adapter's existing behavior.
 
 ### OpenAI-compatible stream telemetry
 
