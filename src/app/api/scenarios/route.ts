@@ -1,11 +1,13 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { benchmarkStore } from "@/lib/benchmark-store";
+import { isPublicBenchmarkSuite } from "@/lib/public-benchmarks";
 import { scenarioSchema } from "@/lib/contracts";
 
-async function handleGET() {
+async function handleGET(request: Request) {
   await benchmarkStore.hydrate();
-  return NextResponse.json({ scenarios: benchmarkStore.listScenarios() });
+  const includePublicBenchmarks = new URL(request.url).searchParams.get("includePublicBenchmarks") === "true";
+  return NextResponse.json({ scenarios: benchmarkStore.listScenarios({ includePublicBenchmarks }) });
 }
 
 async function handlePOST(request: Request) {
@@ -19,9 +21,9 @@ async function handlePOST(request: Request) {
 
   const parsed = scenarioSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid scenario." }, { status: 400 });
-  if (parsed.data.suiteKey === "practical-slm") {
+  if (parsed.data.suiteKey === "practical-slm" || isPublicBenchmarkSuite(parsed.data.suiteKey)) {
     return NextResponse.json(
-      { error: "The practical-slm suite key is reserved for built-in versioned scenarios." },
+      { error: "This suite key is reserved for built-in versioned scenarios." },
       { status: 409 },
     );
   }

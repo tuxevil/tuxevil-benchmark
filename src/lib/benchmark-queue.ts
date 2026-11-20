@@ -1,3 +1,10 @@
+import { createToolSandboxHandler, findToolSandboxCase, TOOL_SANDBOX_MAX_ACTIONS } from "@/lib/toolsandbox-upstream";
+import { BFCL_MEMORY_CASE, BFCL_MEMORY_MAX_ACTIONS, BFCL_MEMORY_RECALL_TURN, createBfclMemory } from "@/lib/bfcl-v4-memory-kv";
+import { BFCL_MULTITURN_MAX_ACTIONS, createBfclFileSystem, findBfclMultiturnCase } from "@/lib/bfcl-v3-multiturn";
+import { createSimulatedDevice, runSimulatedDeviceTool, STATEFUL_CASE, STATEFUL_MAX_ACTIONS } from "@/lib/stateful-tool-sandbox";
+import { findBfclV3Case } from "@/lib/bfcl-v3-pilot";
+import { checkFixtureCall, findNativeToolFixture } from "@/lib/native-tool-fixtures";
+import type { OllamaChatMessage, OpenAIChatMessage } from "@/lib/providers/chat-tools";
 import { acquireRunAdmission, ResourceBusyError } from "@/lib/execution-admission";
 import { recordInferenceAttempt, type InferenceAttempt } from "@/lib/inference-attempts";
 import { captureRunManifest } from "@/lib/capture-run-manifest";
@@ -7,8 +14,8 @@ import { appendResultDiagnosticEvent, type DiagnosticSeverity, type DiagnosticSt
 import { sanitizeDiagnosticText } from "@/lib/diagnostic-safety";
 import { evaluateModelResponse, resolveEvaluationMode } from "@/lib/frontier-evaluator";
 import { benchmarkStore } from "@/lib/benchmark-store";
-import { streamOllamaChat } from "@/lib/ollama-client";
-import { streamOpenAICompatibleChat } from "@/lib/providers/openai-client";
+import { streamOllamaChat, type OllamaChatResult } from "@/lib/ollama-client";
+import { streamOpenAICompatibleChat, type OpenAIChatResult } from "@/lib/providers/openai-client";
 import { retryTransient, isTransient } from "@/lib/retry";
 import type { Queue as BullQueue } from "bullmq";
 import { redisConnection } from "@/lib/redis-connection";
@@ -269,9 +276,26 @@ async function executeModel(runId: string, resultId: string) {
     evalDurationMs: number | null;
   }>;
 
+  const fixture = findNativeToolFixture(run.scenarioId);
+  const stateful = run.scenarioId === STATEFUL_CASE.scenarioId;
+  const upstreamSandbox = findToolSandboxCase(run.scenarioId ?? "");
+  const bfclMultiturn = findBfclMultiturnCase(run.scenarioId);
+  const memoryCase = run.scenarioId === BFCL_MEMORY_CASE.scenarioId;
+  let memory = memoryCase ? createBfclMemory() : null;
+  const scriptedTools = Boolean(bfclMultiturn || memoryCase);
+  const staticTools = memoryCase ? BFCL_MEMORY_CASE.tools
+    : upstreamSandbox ? upstreamSandbox.tools : stateful ? STATEFUL_CASE.tools : fixture ? [fixture.tool] : findBfclV3Case(run.scenarioId)?.tools;
+  const device = stateful ? createSimulatedDevice() : null;
+  const statefulHandler = bfclMultiturn ? createBfclFileSystem(bfclMultiturn).invoke
+    : upstreamSandbox ? createToolSandboxHandler(upstreamSandbox.sourceCaseId, run.cancelController.signal) : device ? (name: string, args: unknown) => runSimulatedDeviceTool(device, name, args) : null;
+  const maxActions = upstreamSandbox ? TOOL_SANDBOX_MAX_ACTIONS : memoryCase ? BFCL_MEMORY_MAX_ACTIONS : bfclMultiturn ? BFCL_MULTITURN_MAX_ACTIONS : STATEFUL_MAX_ACTIONS;
   const conversation: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-    { role: "system", content: run.systemPrompt },
+    ...(run.systemPrompt ? [{ role: "system" as const, content: run.systemPrompt }] : []),
   ];
+
+  const ollamaHistory: OllamaChatMessage[] = [...conversation];
+  const openAIHistory: OpenAIChatMessage[] = [...conversation];
+  let stepOrder = 0;
 
   try {
     for (const [index, userMessage] of run.userMessages.entries()) {
@@ -280,7 +304,20 @@ async function executeModel(runId: string, resultId: string) {
       const activeRun = benchmarkStore.getStoredRun(runId);
       if (!activeRun) return;
 
-      conversation.push({ role: "user", content: userMessage });
+      if (memory && index === BFCL_MEMORY_RECALL_TURN) {
+        const snapshot = memory.snapshot();
+        memory = createBfclMemory(snapshot);
+        ollamaHistory.splice(run.systemPrompt ? 1 : 0);
+        openAIHistory.splice(run.systemPrompt ? 1 : 0);
+      }
+      const toolHandler = memory?.invoke ?? statefulHandler;
+      const tools = bfclMultiturn?.turnTools[index] ?? staticTools;
+      const userTurn = { role: "user" as const, content: userMessage };
+      conversation.push(userTurn);
+      if (toolHandler) {
+        ollamaHistory.push(userTurn);
+        openAIHistory.push(userTurn);
+      }
 
       let partialResponse = "";
       let lastStreamUpdate = 0;
@@ -323,14 +360,18 @@ async function executeModel(runId: string, resultId: string) {
         stopResources = await startResourceMeasurement(endpoint);
         await recordDiagnostic("resources", "measurement_started", { model: result.modelName });
       }
-      const response = await retryTransient(
-        () => recordInferenceAttempt(
+      const infer = (
+        ollamaMessages: OllamaChatMessage[],
+        openAIMessages: OpenAIChatMessage[],
+      ) => retryTransient(
+        () => recordInferenceAttempt<OllamaChatResult | OpenAIChatResult>(
           attempts,
           () => provider === "ollama"
             ? streamOllamaChat({
                 endpoint,
                 model: result.modelName,
-                messages: conversation,
+                messages: ollamaMessages,
+                tools,
                 parameters: activeRun.parameters,
                 signal: activeRun.cancelController.signal,
                 apiKey,
@@ -346,7 +387,8 @@ async function executeModel(runId: string, resultId: string) {
             : streamOpenAICompatibleChat({
                 endpoint,
                 model: result.modelName,
-                messages: conversation,
+                messages: openAIMessages,
+                tools,
                 parameters: activeRun.parameters,
                 apiKey,
                 provider,
@@ -364,13 +406,13 @@ async function executeModel(runId: string, resultId: string) {
           async () => {
             partialResponse = "";
             benchmarkStore.updateStreamingResponse(runId, resultId, "");
-            await recordDiagnostic("inference", "attempt_started", { turn: index + 1, attempt: attempts.length + 1 });
+            await recordDiagnostic("inference", "attempt_started", { turn: stepOrder + 1, attempt: attempts.length + 1 });
           },
           async (attempt, error) => recordDiagnostic(
             "inference",
             attempt.status === "COMPLETED" ? "attempt_completed" : "attempt_failed",
             {
-              turn: index + 1,
+              turn: stepOrder + 1,
               attempt: attempts.length,
               startedAt: attempt.startedAt,
               durationMs: attempt.durationMs,
@@ -386,47 +428,126 @@ async function executeModel(runId: string, resultId: string) {
         activeRun.cancelController.signal,
       );
 
-      await recordDiagnostic("inference", "turn_completed", {
-        turn: index + 1,
-        ttftMs: response.ttftMs,
-        durationMs: response.totalDurationMs,
-        inputTokens: response.inputTokens,
-        outputTokens: response.outputTokens,
-        finishReason: response.finishReason,
-        truncated: response.truncated,
-      });
+      const recordTurn = async (
+        response: OllamaChatResult | OpenAIChatResult,
+        stepOrder: number,
+        ollamaContinuation?: OllamaChatMessage[],
+      ) => {
+        await recordDiagnostic("inference", "turn_completed", {
+          turn: stepOrder,
+          ttftMs: response.ttftMs,
+          firstVisibleTokenMs: response.firstVisibleTokenMs,
+          prefillRate: response.prefillRate,
+          decodeRate: response.decodeRate,
+          ...("requestedThinking" in response && { requestedThinking: response.requestedThinking }),
+          ...("reasoningTokens" in response && { reasoningTokens: response.reasoningTokens }),
+          durationMs: response.totalDurationMs,
+          inputTokens: response.inputTokens,
+          outputTokens: response.outputTokens,
+          finishReason: response.finishReason,
+          truncated: response.truncated,
+        });
 
-      turnTelemetry.push({
-        ttftMs: response.ttftMs,
-        outputTokens: response.outputTokens,
-        inputTokens: response.inputTokens,
-        totalDurationMs: response.totalDurationMs,
-        evalDurationMs: response.evalDurationMs,
-      });
+        turnTelemetry.push({
+          ttftMs: response.ttftMs,
+          outputTokens: response.outputTokens,
+          inputTokens: response.inputTokens,
+          totalDurationMs: response.totalDurationMs,
+          evalDurationMs: response.evalDurationMs,
+        });
 
+        const turnThinking = response.thinking?.trim() || null;
+
+        benchmarkStore.addTurn(runId, resultId, {
+          id: crypto.randomUUID(),
+          stepOrder,
+          userMessage,
+          responseText: response.responseText,
+          thinking: turnThinking,
+          finishReason: response.finishReason,
+          truncated: response.truncated,
+          ttftMs: response.ttftMs,
+          inputTokens: response.inputTokens,
+          outputTokens: response.outputTokens,
+          tokPerSec: response.tokPerSec,
+          totalDurationMs: response.totalDurationMs,
+          wireDiagnostics: "wireDiagnostics" in response ? (response.wireDiagnostics as import("@/lib/providers/openai-client").WireDiagnostics | null) : null,
+          protocolDiagnostics: "protocolDiagnostics" in response ? (response.protocolDiagnostics as import("@/lib/providers/openai-client").ProtocolDiagnostics | null) : null,
+          toolCalls: response.toolCalls?.length ? response.toolCalls : null,
+          requestBody: "requestBody" in response ? (response.requestBody as Record<string, unknown> | null) : ollamaContinuation ? { messages: ollamaContinuation, tools } : null,
+        });
+      };
+
+      let response = await infer(toolHandler ? ollamaHistory.slice() : conversation, toolHandler ? openAIHistory.slice() : conversation);
+      await recordTurn(response, ++stepOrder, scriptedTools ? ollamaHistory.slice() : undefined);
+      if (fixture && !response.truncated && checkFixtureCall(fixture, response.toolCalls) === "VALID") {
+        if (!(await waitUntilRunnable(runId))) return;
+        const content = JSON.stringify(fixture.result);
+        if ("protocolDiagnostics" in response) {
+          const toolCall = response.toolCalls[0];
+          response = await infer([], [
+            ...conversation,
+            { role: "assistant", content: response.responseText || null, tool_calls: response.toolCalls },
+            { role: "tool", content, tool_call_id: toolCall.id },
+          ]);
+          await recordTurn(response, ++stepOrder);
+        } else {
+          const continuation: OllamaChatMessage[] = [
+            ...conversation,
+            { role: "assistant", content: response.responseText, tool_calls: response.toolCalls },
+            { role: "tool", content, tool_name: fixture.name,
+              ...(response.toolCalls[0].id && { tool_call_id: response.toolCalls[0].id }) },
+          ];
+          response = await infer(continuation, []);
+          await recordTurn(response, ++stepOrder, continuation);
+        }
+      } else if (toolHandler) {
+        let actions = 0;
+        while (!response.truncated && response.toolCalls.length > 0) {
+          const calls = response.toolCalls;
+          if (actions + calls.length > maxActions || (!scriptedTools && calls.length !== 1)
+            || calls.some((call) => typeof call?.function?.name !== "string" || !call.function.name)
+            || ("protocolDiagnostics" in response && (response.toolCalls.some((call) => !call.id)
+              || new Set(response.toolCalls.map((call) => call.id)).size !== calls.length))) break;
+          if (!(await waitUntilRunnable(runId))) return;
+          actions += calls.length;
+          const results: string[] = [];
+          for (const { function: call } of calls) {
+            results.push(JSON.stringify(await toolHandler(call.name, call.arguments, index)));
+            if (run.cancelController.signal.aborted) return;
+          }
+          if ("protocolDiagnostics" in response) {
+            openAIHistory.push(
+              { role: "assistant", content: response.responseText || null, tool_calls: response.toolCalls },
+              ...response.toolCalls.map((call, index) => ({ role: "tool" as const, content: results[index], tool_call_id: call.id })),
+            );
+          } else {
+            ollamaHistory.push(
+              { role: "assistant", content: response.responseText, tool_calls: response.toolCalls },
+              ...response.toolCalls.map((call, index) => ({
+                role: "tool" as const, content: results[index], tool_name: call.function.name,
+                ...(call.id && { tool_call_id: call.id }),
+              })),
+            );
+          }
+          response = await infer(ollamaHistory.slice(), openAIHistory.slice());
+          await recordTurn(response, ++stepOrder, ollamaHistory.slice());
+        }
+        if (scriptedTools && response.truncated) break;
+        if (response.toolCalls.length === 0) {
+          const assistant = { role: "assistant" as const, content: response.responseText };
+          ollamaHistory.push(assistant);
+          openAIHistory.push(assistant);
+        } else if (scriptedTools) {
+          // An unfinished call batch cannot be added to the provider history.
+          break;
+        }
+      }
       const turnResponse = response.responseText.trim();
       const turnThinking = response.thinking?.trim() || null;
 
-      benchmarkStore.addTurn(runId, resultId, {
-        id: crypto.randomUUID(),
-        stepOrder: index + 1,
-        userMessage,
-        responseText: response.responseText,
-        thinking: turnThinking,
-        finishReason: response.finishReason,
-        truncated: response.truncated,
-        ttftMs: response.ttftMs,
-        inputTokens: response.inputTokens,
-        outputTokens: response.outputTokens,
-        tokPerSec: response.tokPerSec,
-        totalDurationMs: response.totalDurationMs,
-        wireDiagnostics: "wireDiagnostics" in response ? (response.wireDiagnostics as import("@/lib/providers/openai-client").WireDiagnostics | null) : null,
-        protocolDiagnostics: "protocolDiagnostics" in response ? (response.protocolDiagnostics as import("@/lib/providers/openai-client").ProtocolDiagnostics | null) : null,
-        requestBody: "requestBody" in response ? (response.requestBody as Record<string, unknown> | null) : null,
-      });
-
       // If this turn failed to produce visible content, fail the turn and stop conversation
-      if (turnResponse.length === 0) {
+      if (!tools && turnResponse.length === 0) {
         const errorReason = turnThinking ? "NO_FINAL_ANSWER" : "EMPTY_RESPONSE";
         console.warn(`[tuxevil-benchmark] [Inference Failed] ${runId}/${resultId} turn ${index + 1}: ${errorReason}.`);
         benchmarkStore.updateResult(runId, resultId, {
@@ -451,7 +572,7 @@ async function executeModel(runId: string, resultId: string) {
     const responseText = inferredResult?.responseText ?? "";
     const lastTurn = inferredResult?.turns[inferredResult.turns.length - 1];
 
-    if (responseText.trim().length === 0) {
+    if (!bfclMultiturn && !staticTools && responseText.trim().length === 0) {
       const errorReason = lastTurn?.thinking ? "NO_FINAL_ANSWER" : "EMPTY_RESPONSE";
       console.warn(`[tuxevil-benchmark] [Inference Failed] ${runId}/${resultId}: ${errorReason}.`);
       benchmarkStore.updateResult(runId, resultId, {

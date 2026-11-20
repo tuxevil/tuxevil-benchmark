@@ -46,12 +46,31 @@ type ExecutionView = {
     errorMessage: string | null;
   }>;
   comparisons: Comparison[];
+  publicBenchmarkResults?: Array<{
+    variantId: string;
+    plannedSamples: number;
+    gradedSamples: number;
+    accuracy: number | null;
+    outcomes: Record<string, number>;
+    ifeval?: {
+      prompts: number;
+      instructions: number;
+      promptStrict: number | null;
+      promptLoose: number | null;
+      instructionStrict: number | null;
+      instructionLoose: number | null;
+    };
+  }>;
 };
 
 type Binding = {
   executionTargetId: string;
   executionModelName: string;
 };
+
+function formatAccuracy(value: number | null) {
+  return value === null ? "N/A" : `${(value * 100).toFixed(1)}%`;
+}
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -97,7 +116,7 @@ export function ExperimentRunnerPanel({
       try {
         const [targetRes, scenarioRes] = await Promise.all([
           fetch("/api/experiments/targets"),
-          fetch("/api/scenarios"),
+          fetch("/api/scenarios?includePublicBenchmarks=true"),
         ]);
         const [targetData, scenarioData] = await Promise.all([targetRes.json(), scenarioRes.json()]);
         if (!targetRes.ok) throw new Error(targetData.error || "Could not load execution targets.");
@@ -127,6 +146,24 @@ export function ExperimentRunnerPanel({
     () => scenarios.filter((scenario) => scenario.suiteKey === "practical-slm"),
     [scenarios],
   );
+
+  const publicSuites = [
+    { key: "gsm8k-tuxevil-lite", label: "GSM8K tuxevil-lite" },
+    { key: "native-tool-smoke-es", label: "Native tool smoke ES" },
+    { key: "bfcl-v3-tuxevil-lite", label: "BFCL V3 tuxevil-lite" },
+    { key: "bfcl-v3-irrelevance-tuxevil-lite", label: "BFCL V3 Irrelevance tuxevil-lite" },
+    { key: "bfcl-v3-multiturn-tuxevil-lite", label: "BFCL V3 Multiturn tuxevil-lite" },
+    { key: "bfcl-v3-miss-func-tuxevil-lite", label: "BFCL V3 Missing Function tuxevil-lite" },
+    { key: "bfcl-v4-memory-kv-tuxevil-lite", label: "BFCL V4 Memory KV tuxevil-lite" },
+    { key: "toolsandbox-upstream-wifi-tuxevil-lite", label: "ToolSandbox wifi_off tuxevil-lite" },
+    { key: "toolsandbox-upstream-state-tuxevil-lite", label: "ToolSandbox contacts and reminders tuxevil-lite" },
+    { key: "mgsm-es-tuxevil-lite", label: "MGSM ES tuxevil-lite" },
+    { key: "ifeval-tuxevil-lite", label: "IFEval tuxevil-lite" },
+    { key: "ifstruct-tuxevil-lite", label: "IFStruct tuxevil-lite" },
+    { key: "math500-tuxevil-lite", label: "MATH-500 tuxevil-lite" },
+    { key: "practical-pt-br", label: "Practical PT-BR" },
+    { key: "toolsandbox-local-adapted", label: "ToolSandbox local (adapted)" },
+  ].map((suite) => ({ ...suite, scenarios: scenarios.filter((scenario) => scenario.suiteKey === suite.key) }));
 
   const saveBindings = async () => {
     const baseline = variants.find((variant) => variant.role === "BASELINE");
@@ -329,7 +366,18 @@ export function ExperimentRunnerPanel({
                 Select Practical SLM
               </button>
             )}
-            <button className="quiet-button" type="button" onClick={() => setSelectedScenarios(scenarios.map((scenario) => scenario.id))}>
+            {publicSuites.filter((suite) => suite.scenarios.length > 0).map((suite) => (
+              <button key={suite.key} className="quiet-button" type="button" onClick={() => {
+                setSelectedScenarios(suite.scenarios.map((scenario) => scenario.id));
+                setSuccessPolicy("DETERMINISTIC");
+                setUseEvaluator(false);
+              }}>
+                Select {suite.label}
+              </button>
+            ))}
+            <button className="quiet-button" type="button" onClick={() => setSelectedScenarios(
+              scenarios.filter((scenario) => !publicSuites.some((suite) => suite.key === scenario.suiteKey)).map((scenario) => scenario.id),
+            )}>
               Select all
             </button>
             <button className="quiet-button" type="button" onClick={() => setSelectedScenarios([])}>
@@ -407,6 +455,22 @@ export function ExperimentRunnerPanel({
               <span>{variantNameById.get(run.variantId) ?? run.variantId}</span>
               <span>{scenarioNameById.get(run.scenarioId) ?? run.scenarioId}</span>
               <strong>{run.status}</strong>
+            </div>
+          ))}
+          {execution.publicBenchmarkResults?.map((result) => (
+            <div key={result.variantId}>
+              <span>{variantNameById.get(result.variantId) ?? result.variantId}</span>
+              <span>{result.gradedSamples}/{result.plannedSamples} graded</span>
+              <strong>{formatAccuracy(result.accuracy)}</strong>
+              {result.ifeval && (
+                <small>
+                  Prompt strict {formatAccuracy(result.ifeval.promptStrict)} · Prompt loose {formatAccuracy(result.ifeval.promptLoose)}
+                  {" · "}Instruction strict {formatAccuracy(result.ifeval.instructionStrict)} · Instruction loose {formatAccuracy(result.ifeval.instructionLoose)}
+                  {" · "}{result.ifeval.instructions} instructions graded
+                </small>
+              )}
+              <small>{Object.entries(result.outcomes).filter(([, count]) => count > 0)
+                .map(([outcome, count]) => `${outcome} ${count}`).join(" · ")}</small>
             </div>
           ))}
           {execution.execution.errorMessage && (

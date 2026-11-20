@@ -1,0 +1,64 @@
+x-app: &app
+  image: ${BENCHMARK_SMOKE_IMAGE:?Set BENCHMARK_SMOKE_IMAGE}
+  pull_policy: never
+  environment:
+    DATABASE_URL: postgres://smoke:smoke-only@postgres:5432/smoke
+    REDIS_URL: redis://redis:6379
+    APP_ENCRYPTION_KEY: isolated-runtime-smoke-key
+    BENCHMARK_ADMIN_USER: smoke
+    BENCHMARK_ADMIN_PASSWORD: smoke-only
+    ALLOWED_OLLAMA_HOSTS: fixture
+  depends_on:
+    postgres: {condition: service_healthy}
+    redis: {condition: service_healthy}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: smoke
+      POSTGRES_PASSWORD: smoke-only
+      POSTGRES_DB: smoke
+    volumes:
+      - database:/var/lib/postgresql/data
+      - ../db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../db/experiment-schema.sql:/docker-entrypoint-initdb.d/02-experiments.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "smoke", "-d", "smoke"]
+      interval: 1s
+      timeout: 2s
+      retries: 25
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 2s
+      retries: 25
+  fixture:
+    image: node:24-bookworm-slim
+    command: ["node", "/smoke.mjs", "serve"]
+    volumes:
+      - ../e2e/deploy-runtime.mjs:/smoke.mjs:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:11434/api/version').then(response => { if (!response.ok) process.exitCode = 1; })"]
+      interval: 1s
+      timeout: 2s
+      retries: 15
+  web:
+    <<: *app
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3103/').then(response => { if (!response.ok) process.exitCode = 1; })"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+  worker:
+    <<: *app
+    command: ["node", "node_modules/tsx/dist/cli.mjs", "src/worker.ts"]
+
+networks:
+  default:
+    internal: true
+
+volumes:
+  database:

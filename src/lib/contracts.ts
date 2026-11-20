@@ -29,7 +29,7 @@ export const securityAttackTypeSchema = z.enum([
 export type TestCategory = z.infer<typeof testCategorySchema>;
 export type SecurityAttackType = z.infer<typeof securityAttackTypeSchema>;
 
-export const reasoningEffortSchema = z.enum(["off", "default", "low", "medium", "high", "max"]);
+export const reasoningEffortSchema = z.enum(["off", "on", "default", "low", "medium", "high", "max"]);
 export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>;
 
 export const benchmarkParametersSchema = z.object({
@@ -39,7 +39,7 @@ export const benchmarkParametersSchema = z.object({
   repeatPenalty: z.number().min(0).max(3),
   numPredict: z.number().int().min(1).max(32_768),
   seed: z.number().int().min(0).max(2_147_483_647).optional(),
-  reasoningEffort: reasoningEffortSchema.default("off").optional(),
+  reasoningEffort: reasoningEffortSchema.optional(),
 });
 
 export const evaluatorConfigSchema = z.object({
@@ -75,6 +75,10 @@ export type EvaluatorEntry = {
 
 export const modelProviderSchema = z.enum(["ollama", "freetoken", "llamacpp", "strata"]);
 export type ModelProvider = z.infer<typeof modelProviderSchema>;
+
+export function supportsExplicitThinking(provider: ModelProvider) {
+  return provider === "ollama" || provider === "llamacpp";
+}
 export const MODEL_PROVIDERS = ["ollama", "freetoken", "llamacpp", "strata"] as const;
 
 export const createRunSchema = z
@@ -199,8 +203,9 @@ export type TurnResult = Telemetry & {
   wireDiagnostics?: import("@/lib/providers/openai-client").WireDiagnostics | null;
   /** Protocol-level anomaly flags derived from the SSE stream. Always populated for OpenAI-compatible providers. */
   protocolDiagnostics?: import("@/lib/providers/openai-client").ProtocolDiagnostics | null;
-  /** Exact request body sent to the provider (no API key). Populated for OpenAI-compatible providers. */
+  /** Request diagnostics without credentials. Ollama tool continuations retain messages and tool schemas. */
   requestBody?: Record<string, unknown> | null;
+  toolCalls?: import("@/lib/providers/chat-tools").OpenAIToolCall[] | import("@/lib/providers/chat-tools").OllamaToolCall[] | null;
 };
 
 export type Evaluation = {
@@ -288,6 +293,11 @@ export const deterministicGraderSchema = z.discriminatedUnion("type", [
     version: z.literal(1).default(1),
     expected: z.number().finite(),
     tolerance: z.number().finite().min(0).default(0),
+  }),
+  z.object({
+    type: z.literal("GSM8K"),
+    version: z.literal(1).default(1),
+    expected: z.string().regex(/^-?[0-9.]+$/),
   }),
   z.object({
     type: z.literal("CONTAINS_ALL"),

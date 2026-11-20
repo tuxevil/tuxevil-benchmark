@@ -1,6 +1,9 @@
+import { parsePersistedParameters } from "@/lib/persisted-parameters";
 import { resultIdentity } from "./run-identity";
 import { loadRunManifests, loadVramPeaks } from "./resource-measurement-store";
+import { publicBenchmarkCase } from "@/lib/public-benchmarks";
 import postgres, { type TransactionSql } from "postgres";
+import { ensurePostgresCompatibility } from "@/lib/postgres-compatibility";
 import { createHash } from "node:crypto";
 import type {
   Evaluation,
@@ -127,7 +130,8 @@ export type ScenarioAnalysis = {
 
 type SqlClient = ReturnType<typeof postgres>;
 
-let client: SqlClient | null | undefined;
+let client: SqlClient | undefined;
+let compatibilityReady: Promise<void> | undefined;
 const persistenceChains = new Map<string, Promise<void>>();
 
 export function isPostgres() {
@@ -334,7 +338,8 @@ export async function aggregateLeaderboard(options?: {
     speed: options?.weights?.speed ?? 20,
   };
 
-  if (!state || state.runs.length === 0) {
+  const arenaRuns = state?.runs.filter(({ run }) => !run.scenarioId || !publicBenchmarkCase(run.scenarioId)) ?? [];
+  if (arenaRuns.length === 0) {
     return {
       kpis: {
         totalBenchmarkRuns: 0,
@@ -354,7 +359,7 @@ export async function aggregateLeaderboard(options?: {
   const scenarioTier = new Map<string, ScenarioDifficulty>();
   {
     const scenarioSecurity = new Map<string, { attacks: number; failures: number }>();
-    for (const entry of state.runs) {
+    for (const entry of arenaRuns) {
       if (entry.run.category !== "SECURITY") continue;
       const key = scenarioKeyFor(entry.run);
       for (const res of entry.run.results) {
@@ -369,7 +374,7 @@ export async function aggregateLeaderboard(options?: {
       const asr = bucket.attacks > 0 ? (bucket.failures / bucket.attacks) * 100 : 0;
       scenarioTier.set(key, securityDifficultyFor(asr));
     }
-    for (const entry of state.runs) {
+    for (const entry of arenaRuns) {
       const run = entry.run;
       if (run.category === "SECURITY") {
         runTier.set(run.id, scenarioTier.get(scenarioKeyFor(run)) ?? "easy");
@@ -383,7 +388,7 @@ export async function aggregateLeaderboard(options?: {
     }
   }
 
-  let filteredRuns = state.runs;
+  let filteredRuns = arenaRuns;
   if (options?.category && options.category !== "ALL") {
     filteredRuns = filteredRuns.filter((r) => r.run.category === options.category);
   }
@@ -782,7 +787,8 @@ export async function persistScenario(scenario: Scenario) {
     sqlitePersistScenario(scenario);
     return;
   }
-  await getClient()!`
+  const sql = await getClient();
+  await sql`
     INSERT INTO scenarios (id, name, category, attack_type, system_prompt, user_messages, suite_key, suite_version, grader_json, created_at, updated_at)
     VALUES (${scenario.id}, ${scenario.name}, ${scenario.category ?? "GENERAL"}, ${scenario.attackType ?? null}, ${scenario.systemPrompt}, ${JSON.stringify(scenario.userMessages)}::jsonb, ${scenario.suiteKey ?? null}, ${scenario.suiteVersion ?? null}, ${scenario.grader ? JSON.stringify(scenario.grader) : null}::jsonb, ${new Date(scenario.createdAt)}, ${new Date(scenario.updatedAt)})
     ON CONFLICT (id) DO UPDATE SET
@@ -803,7 +809,8 @@ export async function deletePersistedScenario(id: string) {
     sqliteDeleteScenario(id);
     return;
   }
-  await getClient()!`DELETE FROM scenarios WHERE id = ${id}`;
+  const sql = await getClient();
+  await sql`DELETE FROM scenarios WHERE id = ${id}`;
 }
 
 export async function persistHumanReview(resultId: string, status: string, notes: string) {
@@ -811,7 +818,8 @@ export async function persistHumanReview(resultId: string, status: string, notes
     sqlitePersistHumanReview(resultId, status, notes);
     return;
   }
-  await getClient()!`
+  const sql = await getClient();
+  await sql`
     UPDATE model_results
     SET human_status = ${status}, human_notes = ${notes}
     WHERE id = ${resultId}
@@ -822,7 +830,7 @@ export async function deletePersistedResult(runId: string, resultId: string): Pr
   if (!isPostgres()) {
     return sqliteDeleteResult(runId, resultId);
   }
-  const sql = getClient()!;
+  const sql = await getClient();
   const [deleted] = await sql`
     DELETE FROM model_results WHERE id = ${resultId} AND test_run_id = ${runId}
     RETURNING id
@@ -835,7 +843,8 @@ export async function appendEvaluationHistory(resultId: string, evaluation: Eval
     sqliteAppendEvaluationHistory(resultId, evaluation, evaluatorId);
     return;
   }
-  await getClient()!`
+  const sql = await getClient();
+  await sql`
     INSERT INTO evaluation_history (id, model_result_id, evaluator_id, evaluator_model, grammar_rating, compliance_rating, accuracy_rating, score_stars, grammar_analysis, compliance_analysis, accuracy_analysis, feedback_text, security_score, injection_successful, system_leakage_detected, vulnerability_analysis, evaluator_raw_json, created_at)
     VALUES (${crypto.randomUUID()}, ${resultId}, ${evaluatorId}, ${evaluation.evaluatorModel}, ${evaluation.grammarRating}, ${evaluation.complianceRating}, ${evaluation.accuracyRating}, ${evaluation.scoreStars}, ${evaluation.grammarAnalysis}, ${evaluation.complianceAnalysis}, ${evaluation.accuracyAnalysis}, ${evaluation.feedbackText}, ${evaluation.securityScore ?? null}, ${evaluation.injectionSuccessful ?? null}, ${evaluation.systemLeakageDetected ?? null}, ${evaluation.vulnerabilityAnalysis ?? null}, ${JSON.stringify(evaluation.rawJson)}::jsonb, CURRENT_TIMESTAMP)
   `;
@@ -845,7 +854,8 @@ export async function loadEvaluationHistory(resultId: string) {
   if (!isPostgres()) {
     return sqliteLoadEvaluationHistory(resultId);
   }
-  const rows = await getClient()!`
+  const sql = await getClient();
+  const rows = await sql`
     SELECT id, evaluator_id, evaluator_model, grammar_rating, compliance_rating, accuracy_rating, score_stars, grammar_analysis, compliance_analysis, accuracy_analysis, feedback_text, security_score, injection_successful, system_leakage_detected, vulnerability_analysis, evaluator_raw_json, created_at
     FROM evaluation_history
     WHERE model_result_id = ${resultId}
@@ -876,7 +886,8 @@ export async function loadPersistedSettings(): Promise<PersistedSettings | null>
   if (!isPostgres()) {
     return sqliteLoadSettings();
   }
-  const rows = await getClient()!`
+  const sql = await getClient();
+  const rows = await sql`
     SELECT *
     FROM app_settings
     WHERE id = 1
@@ -931,7 +942,8 @@ export async function listPersistedEvaluators(): Promise<EvaluatorEntry[]> {
   if (!isPostgres()) {
     return sqliteListEvaluators();
   }
-  const rows = await getClient()!`
+  const sql = await getClient();
+  const rows = await sql`
     SELECT id, label, base_url, model, api_key_encrypted
     FROM evaluators
     ORDER BY created_at ASC, id ASC
@@ -956,7 +968,7 @@ export async function upsertPersistedEvaluator(input: {
   if (!isPostgres()) {
     return sqliteUpsertEvaluator(input);
   }
-  const sql = getClient()!;
+  const sql = await getClient();
   const id = input.id ?? crypto.randomUUID();
   const [existing] = await sql`SELECT api_key_encrypted FROM evaluators WHERE id = ${id}`;
   let encrypted: string | null = null;
@@ -983,7 +995,8 @@ export async function deletePersistedEvaluator(id: string): Promise<boolean> {
   if (!isPostgres()) {
     return sqliteDeleteEvaluator(id);
   }
-  const [deleted] = await getClient()!`DELETE FROM evaluators WHERE id = ${id} RETURNING id`;
+  const sql = await getClient();
+  const [deleted] = await sql`DELETE FROM evaluators WHERE id = ${id} RETURNING id`;
   return Boolean(deleted);
 }
 
@@ -991,7 +1004,8 @@ export async function loadPersistedEvaluatorKey(id: string): Promise<string | nu
   if (!isPostgres()) {
     return sqliteLoadEvaluatorKey(id);
   }
-  const rows = await getClient()!`SELECT api_key_encrypted FROM evaluators WHERE id = ${id}`;
+  const sql = await getClient();
+  const rows = await sql`SELECT api_key_encrypted FROM evaluators WHERE id = ${id}`;
   const encrypted = rows[0]?.api_key_encrypted ? String(rows[0].api_key_encrypted) : null;
   if (!encrypted) return null;
   try {
@@ -1007,29 +1021,12 @@ export async function setPersistedActiveEvaluator(id: string | null) {
     sqliteSetActiveEvaluator(id);
     return;
   }
-  await getClient()!`
+  const sql = await getClient();
+  await sql`
     UPDATE app_settings
     SET active_evaluator_id = ${id}, updated_at = CURRENT_TIMESTAMP
     WHERE id = 1
   `;
-}
-
-function parsePersistedParameters(raw: unknown): import("@/lib/contracts").BenchmarkParameters {
-  const defaults = { temperature: 0.2, numCtx: 8192, topP: 0.9, repeatPenalty: 1.1, numPredict: 4096 };
-  if (!raw) return defaults;
-  try {
-    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-    return {
-      temperature: Number(parsed.temperature ?? defaults.temperature),
-      numCtx: Number(parsed.numCtx ?? defaults.numCtx),
-      topP: Number(parsed.topP ?? defaults.topP),
-      repeatPenalty: Number(parsed.repeatPenalty ?? defaults.repeatPenalty),
-      numPredict: Number(parsed.numPredict ?? defaults.numPredict),
-      seed: parsed.seed === undefined || parsed.seed === null ? undefined : Number(parsed.seed),
-    };
-  } catch {
-    return defaults;
-  }
 }
 
 export async function persistSettings(settings: {
@@ -1055,7 +1052,8 @@ export async function persistSettings(settings: {
   }
   const active = settings.evaluators.find((evaluator) => evaluator.id === settings.activeEvaluatorId) ?? null;
   const encrypted = settings.evaluatorApiKey ? encryptSecret(settings.evaluatorApiKey) : null;
-  const [existing] = (await getClient()!`SELECT freetoken_api_key_encrypted, llamacpp_api_key_encrypted, strata_api_key_encrypted, freetoken_url, llamacpp_url, strata_url, active_provider FROM app_settings WHERE id = 1`) as [Record<string, unknown> | undefined];
+  const sql = await getClient();
+  const [existing] = (await sql`SELECT freetoken_api_key_encrypted, llamacpp_api_key_encrypted, strata_api_key_encrypted, freetoken_url, llamacpp_url, strata_url, active_provider FROM app_settings WHERE id = 1`) as [Record<string, unknown> | undefined];
 
   let freetokenEncrypted = existing?.freetoken_api_key_encrypted ? String(existing.freetoken_api_key_encrypted) : null;
   if (settings.clearFreetokenApiKey) {
@@ -1077,7 +1075,7 @@ export async function persistSettings(settings: {
     strataEncrypted = encryptSecret(settings.strataApiKey);
   }
 
-  await getClient()!`
+  await sql`
     INSERT INTO app_settings (id, ollama_url, freetoken_url, freetoken_api_key_encrypted, llamacpp_url, llamacpp_api_key_encrypted, strata_url, strata_api_key_encrypted, active_provider, evaluator_base_url, evaluator_model, evaluator_api_key_encrypted, active_evaluator_id, parameters_json, updated_at)
     VALUES (
       1,
@@ -1118,10 +1116,10 @@ export async function loadPersistedState(runId?: string): Promise<DatabaseState 
   if (!isPostgres()) {
     return sqliteLoadState(runId);
   }
-  const sql = getClient()!;
   const emptyRows = Promise.resolve([] as Array<Record<string, unknown>>);
 
   try {
+    const sql = await getClient();
     const [runRows, resultRows, turnRows, evaluationRows, scenarioRows] = await sql.begin(async (transaction) => Promise.all([
       runId
         ? transaction`SELECT id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, execution_target_id, user_messages, selected_models, parameters, evaluator_config, created_at, updated_at, started_at, finished_at, error_message FROM test_runs WHERE id = ${runId}`
@@ -1130,8 +1128,8 @@ export async function loadPersistedState(runId?: string): Promise<DatabaseState 
         ? transaction`SELECT id, test_run_id, model_name, sample_index, status, eval_status, response_text, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, error_message, human_status, human_notes FROM model_results WHERE test_run_id = ${runId}`
         : transaction`SELECT id, test_run_id, model_name, sample_index, status, eval_status, response_text, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, error_message, human_status, human_notes FROM model_results`,
       runId
-        ? transaction`SELECT id, model_result_id, step_order, user_message, response_text, thinking, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms FROM model_result_turns WHERE model_result_id IN (SELECT id FROM model_results WHERE test_run_id = ${runId}) ORDER BY step_order ASC`
-        : transaction`SELECT id, model_result_id, step_order, user_message, response_text, thinking, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms FROM model_result_turns ORDER BY step_order ASC`,
+        ? transaction`SELECT id, model_result_id, step_order, user_message, response_text, thinking, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body, tool_calls FROM model_result_turns WHERE model_result_id IN (SELECT id FROM model_results WHERE test_run_id = ${runId}) ORDER BY step_order ASC`
+        : transaction`SELECT id, model_result_id, step_order, user_message, response_text, thinking, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body, tool_calls FROM model_result_turns ORDER BY step_order ASC`,
       runId
         ? transaction`SELECT model_result_id, evaluator_model, grammar_rating, compliance_rating, accuracy_rating, score_stars, grammar_analysis, compliance_analysis, accuracy_analysis, feedback_text, security_score, injection_successful, system_leakage_detected, vulnerability_analysis, evaluator_raw_json FROM evaluations WHERE model_result_id IN (SELECT id FROM model_results WHERE test_run_id = ${runId})`
         : transaction`SELECT model_result_id, evaluator_model, grammar_rating, compliance_rating, accuracy_rating, score_stars, grammar_analysis, compliance_analysis, accuracy_analysis, feedback_text, security_score, injection_successful, system_leakage_detected, vulnerability_analysis, evaluator_raw_json FROM evaluations`,
@@ -1216,7 +1214,7 @@ export async function listPersistedHistory(filters: {
       pageSize: filters.pageSize,
     };
   }
-  const sql = getClient()!;
+  const sql = await getClient();
   const score = filters.score ?? null;
   const vulnerableOnly = Boolean(filters.vulnerableOnly);
   const where = sql`
@@ -1329,7 +1327,7 @@ export async function exportResults(filters: ExportFilters = {}): Promise<Export
     const rows = state.runs.flatMap((entry) => entry.run.results.map((result) => toExportRow(entry.run, result, entry.config.ollamaUrl)));
     return filterExportRows(rows, filters);
   }
-  const sql = getClient()!;
+  const sql = await getClient();
   const scenarioId = filters.scenarioId ?? "";
   const modelName = filters.modelName ?? "";
   const category = filters.category ?? "";
@@ -1503,8 +1501,7 @@ async function persistRun(run: TestRun, config: RunPersistenceConfig) {
     sqlitePersistRun(run, config);
     return;
   }
-  const sql = getClient();
-  if (!sql) return;
+  const sql = await getClient();
   const evaluatorConfig = config.evaluator
     ? JSON.stringify({
         apiKeyEncrypted: config.evaluator.apiKey ? encryptSecret(config.evaluator.apiKey) : null,
@@ -1571,7 +1568,7 @@ async function persistTurn(transaction: TransactionSql, resultId: string, turn: 
     INSERT INTO model_result_turns (
       id, model_result_id, step_order, user_message, response_text, thinking,
       input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms,
-      finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body
+      finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body, tool_calls
     )
     VALUES (
       ${turn.id}, ${resultId}, ${turn.stepOrder}, ${turn.userMessage}, ${turn.responseText}, ${turn.thinking ?? ""},
@@ -1579,7 +1576,8 @@ async function persistTurn(transaction: TransactionSql, resultId: string, turn: 
       ${turn.finishReason ?? null}, ${turn.truncated ?? false},
       ${turn.wireDiagnostics ? JSON.stringify(turn.wireDiagnostics) : null}::jsonb,
       ${turn.protocolDiagnostics ? JSON.stringify(turn.protocolDiagnostics) : null}::jsonb,
-      ${turn.requestBody ? JSON.stringify(turn.requestBody) : null}::jsonb
+      ${turn.requestBody ? JSON.stringify(turn.requestBody) : null}::text::jsonb,
+      ${turn.toolCalls ? JSON.stringify(turn.toolCalls) : null}::text::jsonb
     )
   `;
 }
@@ -1591,37 +1589,16 @@ async function persistEvaluation(transaction: TransactionSql, resultId: string, 
   `;
 }
 
-let pgMigrated = false;
-
-function getClient() {
-  if (client !== undefined) return client;
+async function getClient(): Promise<SqlClient> {
   const url = process.env.DATABASE_URL?.trim();
-  client = url ? postgres(url, { connect_timeout: 5, idle_timeout: 20, max: 5 }) : null;
-  if (client && !pgMigrated) {
-    pgMigrated = true;
-    client`
-      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS freetoken_url TEXT;
-      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS freetoken_api_key_encrypted TEXT;
-      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS llamacpp_url TEXT;
-      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS llamacpp_api_key_encrypted TEXT;
-      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS strata_url TEXT;
-      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS strata_api_key_encrypted TEXT;
-      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS active_provider VARCHAR(32) DEFAULT 'ollama';
-      ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS provider VARCHAR(32) DEFAULT 'ollama';
-      ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS provider_url TEXT;
-      ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS execution_target_id UUID;
-      ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS finish_reason TEXT;
-      ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS truncated BOOLEAN;
-      ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS wire_diagnostics JSONB;
-      ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS protocol_diagnostics JSONB;
-      ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS request_body JSONB;
-      ALTER TABLE model_results ADD COLUMN IF NOT EXISTS finish_reason TEXT;
-      ALTER TABLE model_results ADD COLUMN IF NOT EXISTS truncated BOOLEAN;
-      ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS visible_prompt_leak BOOLEAN;
-      ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS reasoning_prompt_leak BOOLEAN;
-    `.catch(() => undefined);
-  }
-  return client;
+  if (!url) throw new Error("PostgreSQL is not configured.");
+  const sql = client ??= postgres(url, { connect_timeout: 5, idle_timeout: 20, max: 5 });
+  compatibilityReady ??= ensurePostgresCompatibility(sql).catch((error: unknown) => {
+    compatibilityReady = undefined;
+    throw error;
+  });
+  await compatibilityReady;
+  return sql;
 }
 
 function groupTurns(rows: Array<Record<string, unknown>>) {
@@ -1643,7 +1620,8 @@ function groupTurns(rows: Array<Record<string, unknown>>) {
       truncated: row.truncated === true || row.truncated === 1,
       wireDiagnostics: row.wire_diagnostics != null ? (row.wire_diagnostics as import("@/lib/providers/openai-client").WireDiagnostics) : null,
       protocolDiagnostics: row.protocol_diagnostics != null ? (row.protocol_diagnostics as import("@/lib/providers/openai-client").ProtocolDiagnostics) : null,
-      requestBody: row.request_body != null ? (row.request_body as Record<string, unknown>) : null,
+      toolCalls: Array.isArray(row.tool_calls) ? row.tool_calls : null,
+      requestBody: (parseJson(row.request_body) as Record<string, unknown> | null) ?? null,
     });
     grouped.set(String(row.model_result_id), turns);
   }
@@ -1812,8 +1790,8 @@ function reportPersistenceError(error: unknown) {
  */
 export async function loadPersistedStateForResult(resultId: string): Promise<PersistedRun | null> {
   if (!isPostgres()) return null;
-  const sql = getClient()!;
   try {
+    const sql = await getClient();
     const runRow = await sql`SELECT tr.id, tr.category, tr.attack_type, tr.status, tr.paused, tr.control_version, tr.scenario_id, tr.samples_per_model, tr.system_prompt, tr.ollama_url, tr.user_messages, tr.selected_models, tr.parameters, tr.evaluator_config, tr.created_at, tr.updated_at, tr.started_at, tr.finished_at, tr.error_message FROM test_runs tr JOIN model_results mr ON mr.test_run_id = tr.id WHERE mr.id = ${resultId} LIMIT 1`;
     if (!runRow.length) return null;
     const full = await loadPersistedState(String(runRow[0].id));

@@ -70,15 +70,20 @@ export function safeRuntimeFlagSettings(flags: string[]): Array<{ flag: string; 
   return settings;
 }
 
+const numericInferenceMetrics = new Set([
+  "inputTokens", "outputTokens", "reasoningTokens", "tokensPerSecond", "firstVisibleTokenMs",
+]);
+
 /** Defense in depth for diagnostic payloads assembled by multiple call sites. */
 export function sanitizeDiagnosticPayload(value: unknown): unknown {
   if (typeof value === "string") return sanitizeDiagnosticText(value);
   if (Array.isArray(value)) return value.map(sanitizeDiagnosticPayload);
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [
-      key,
-      sensitiveKey.test(key) ? "[redacted]" : sanitizeDiagnosticPayload(entry),
-    ]));
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => {
+      const numericMetric = numericInferenceMetrics.has(key)
+        && (entry === null || (typeof entry === "number" && Number.isFinite(entry) && entry >= 0));
+      return [key, sensitiveKey.test(key) && !numericMetric ? "[redacted]" : sanitizeDiagnosticPayload(entry)];
+    }));
   }
   return value;
 }

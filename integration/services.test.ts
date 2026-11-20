@@ -9,6 +9,12 @@ import Redis from "ioredis";
 import { loadPersistedState, persistScenario, queuePersistedRun, waitForPersistedRun } from "../src/lib/database";
 import type { TestRun } from "../src/lib/contracts";
 
+import { createExperiment, createExperimentVariant } from "../src/lib/experiment-store";
+import { createExperimentExecutionRecord } from "../src/lib/experiment-execution-store";
+import { upsertExecutionEnvironment, upsertModelArtifact } from "../src/lib/experiment-metadata-store";
+import { listExperimentObservations, upsertExperimentObservations } from "../src/lib/experiment-observation-store";
+import { listExperimentExecutionObservations, upsertExperimentExecutionObservations } from "../src/lib/experiment-execution-observation-store";
+
 const databaseUrl = process.env.DATABASE_URL;
 const redisUrl = process.env.REDIS_URL;
 const serviceSuite = describe.skipIf(!databaseUrl || !redisUrl);
@@ -124,6 +130,52 @@ serviceSuite("local infrastructure", () => {
     await sql`DELETE FROM execution_targets WHERE id = ${targetId}`;
   }, 30_000);
 
+  it("stores queryable JSONB observations and reads legacy JSON strings", async () => {
+    sql ??= postgres(databaseUrl!);
+    const model = await upsertModelArtifact({ displayName: "Fixture", baseModel: crypto.randomUUID() });
+    const environment = await upsertExecutionEnvironment({ label: "Fixture", runtime: "fixture", runtimeVersion: crypto.randomUUID() });
+    const experiment = await createExperiment({ name: "Observation JSONB integration", factorUnderTest: "OTHER" });
+    try {
+      const variant = await createExperimentVariant(experiment.id, {
+        name: "Baseline", role: "BASELINE", modelArtifactId: model.id, executionEnvironmentId: environment.id,
+      });
+      const execution = await createExperimentExecutionRecord(experiment.id,{ scenarioIds: [crypto.randomUUID()] });
+      const observation = {
+        caseId: "test:0", canonicalValue: "18", success: true,
+        metadata: { outcome: "PASS", benchmark: { sourceCaseId: "test:0" } }, telemetry: { inputTokens: 102 },
+      };
+      const [manual] = await upsertExperimentObservations(experiment.id, variant.id, [observation]);
+      const [automated] = await upsertExperimentExecutionObservations(execution.id, variant.id, [observation]);
+
+      for (const [table, id] of [
+        ["experiment_observations",manual.id], ["experiment_execution_observations",automated.id],
+      ]) {
+        const [row] = await sql`
+          SELECT jsonb_typeof(metadata) AS kind, metadata#>>'{benchmark,sourceCaseId}' AS source,
+                 telemetry->>'inputTokens' AS tokens
+          FROM ${sql(table)} WHERE id=${id}
+        `;
+        expect(row).toEqual({ kind: "object", source: "test:0", tokens: "102" });
+        await sql`
+          UPDATE ${sql(table)}
+          SET metadata=to_jsonb(${JSON.stringify(observation.metadata)}::text),
+              telemetry=to_jsonb(${JSON.stringify(observation.telemetry)}::text)
+          WHERE id=${id}
+        `;
+      }
+      expect(await listExperimentObservations(experiment.id, variant.id)).toMatchObject([{ ...observation, id: manual.id }]);
+      expect(await listExperimentExecutionObservations(execution.id, variant.id)).toMatchObject([{ ...observation, id: automated.id }]);
+      expect(await upsertExperimentExecutionObservations(execution.id, variant.id, [{ ...observation, metadata: { outcome: "WRONG_ANSWER" }, success: false }]))
+        .toMatchObject([{ id: automated.id, createdAt: automated.createdAt, success: false, metadata: { outcome: "WRONG_ANSWER" } }]);
+      const [updated] = await sql`SELECT metadata->>'outcome' AS outcome FROM experiment_execution_observations WHERE id=${automated.id}`;
+      expect(updated.outcome).toBe("WRONG_ANSWER");
+    } finally {
+      await sql`DELETE FROM experiments WHERE id=${experiment.id}`;
+      await sql`DELETE FROM model_artifacts WHERE id=${model.id}`;
+      await sql`DELETE FROM execution_environments WHERE id=${environment.id}`;
+    }
+  }, 30_000);
+
   it("round-trips Practical SLM grader metadata through PostgreSQL scenario persistence", async () => {
     sql ??= postgres(databaseUrl!);
     const scenarioId = crypto.randomUUID();
@@ -164,7 +216,7 @@ serviceSuite("local infrastructure", () => {
     await sql`DELETE FROM scenarios WHERE id = ${scenarioId}`;
   }, 30_000);
 
-  it("round-trips executionTargetId through PostgreSQL TestRun persistence", async () => {
+  it("round-trips executionTargetId and turn completion metadata through PostgreSQL", async () => {
     sql ??= postgres(databaseUrl!);
     const targetId = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -189,7 +241,39 @@ serviceSuite("local infrastructure", () => {
         reasoningEffort: "off",
       },
       evaluatorModel: null,
-      results: [],
+      results: [{
+        id: crypto.randomUUID(),
+        modelName: "test-model",
+        sampleIndex: 0,
+        status: "COMPLETED",
+        evalStatus: "SKIPPED",
+        responseText: "#### 18",
+        evaluation: null,
+        humanStatus: "UNREVIEWED",
+        humanNotes: "",
+        errorMessage: null,
+        inputTokens: 12,
+        outputTokens: 8,
+        ttftMs: 5,
+        tokPerSec: 30,
+        totalDurationMs: 20,
+        turns: [{
+          id: crypto.randomUUID(),
+          stepOrder: 1,
+          userMessage: "test",
+          responseText: "#### 18",
+          thinking: null,
+          toolCalls: [{ id: "call_1", type: "function", function: { name: "add_numbers", arguments: '{"a":17' } }],
+          requestBody: { messages: [{ role: "tool", content: '{"sum":42}', tool_call_id: "call_1" }] },
+          finishReason: "length",
+          truncated: true,
+          inputTokens: 12,
+          outputTokens: 8,
+          ttftMs: 5,
+          tokPerSec: 30,
+          totalDurationMs: 20,
+        }],
+      }],
       createdAt: now,
       updatedAt: now,
       startedAt: null,
@@ -209,6 +293,12 @@ serviceSuite("local infrastructure", () => {
 
     const rows = await sql`SELECT execution_target_id FROM test_runs WHERE id = ${run.id}`;
     expect(String(rows[0].execution_target_id)).toBe(targetId);
+    const state = await loadPersistedState(run.id);
+    expect(state?.runs[0]?.run.results[0]?.turns[0]).toMatchObject({
+      responseText: "#### 18", finishReason: "length", truncated: true,
+      requestBody: { messages: [{ role: "tool", content: '{"sum":42}', tool_call_id: "call_1" }] },
+      toolCalls: [{ id: "call_1", type: "function", function: { name: "add_numbers", arguments: '{"a":17' } }],
+    });
     await sql`DELETE FROM test_runs WHERE id = ${run.id}`;
   }, 30_000);
 });

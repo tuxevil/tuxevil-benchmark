@@ -1,0 +1,17 @@
+[
+  {
+    "sourceCaseId": "es:test:0",
+    "question": "Los patos de Janet ponen 16 huevos por día. Ella come tres en el desayuno todas las mañanas y usa cuatro para hornear magdalenas para sus amigos todos los días. Vende lo que sobra en el mercado de productores diariamente a $2 el huevo fresco de pato. ¿Cuánto gana en dólares todos los días en el mercado de productores?",
+    "sourceAnswer": "18"
+  },
+  {
+    "sourceCaseId": "es:test:124",
+    "question": "Jennie está colaborando en la oficina de su madre. Tiene una pila de 60 cartas que necesitan estampillas y una pila de cartas que ya tienen estampillas. Le coloca estampillas a un tercio de las cartas que necesitan estampillas. Si ahora hay 30 cartas en la pila de cartas que ya tienen estampillas, ¿cuántas había en esa pila cuando Jennie comenzó?",
+    "sourceAnswer": "10"
+  },
+  {
+    "sourceCaseId": "es:test:230",
+    "question": "Mark compra una flota de 12 automóviles para su empresa. Cada automóvil se vende a $20 000. Paga el 10 % de impuestos sobre los vehículos y luego otros $1000 para registrar a cada uno de ellos. ¿Cuánto paga por todo?",
+    "sourceAnswer": "276,000"
+  }
+]

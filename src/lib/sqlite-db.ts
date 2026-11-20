@@ -1,3 +1,4 @@
+import { parsePersistedParameters } from "@/lib/persisted-parameters";
 import Database from "better-sqlite3";
 import type {
   BenchmarkParameters,
@@ -336,6 +337,9 @@ function initSqliteTables(db: Database.Database) {
   if (!turnCols.some((column) => column.name === "protocol_diagnostics")) {
     migrationDb.exec("ALTER TABLE model_result_turns ADD COLUMN protocol_diagnostics TEXT");
   }
+  if (!turnCols.some((column) => column.name === "tool_calls")) {
+    migrationDb.exec("ALTER TABLE model_result_turns ADD COLUMN tool_calls TEXT");
+  }
   if (!turnCols.some((column) => column.name === "request_body")) {
     migrationDb.exec("ALTER TABLE model_result_turns ADD COLUMN request_body TEXT");
   }
@@ -647,20 +651,7 @@ export function sqliteLoadSettings(): {
   const evaluators = sqliteListEvaluators();
   const activeEvaluatorId = row.active_evaluator_id ? String(row.active_evaluator_id) : null;
   const active = evaluators.find((evaluator) => evaluator.id === activeEvaluatorId) ?? null;
-  let params: BenchmarkParameters = { temperature: 0.2, numCtx: 8192, topP: 0.9, repeatPenalty: 1.1, numPredict: 4096 };
-  if (row.parameters_json) {
-    try {
-      const parsed = JSON.parse(String(row.parameters_json));
-      params = {
-        temperature: Number(parsed.temperature ?? params.temperature),
-        numCtx: Number(parsed.numCtx ?? params.numCtx),
-        topP: Number(parsed.topP ?? params.topP),
-        repeatPenalty: Number(parsed.repeatPenalty ?? params.repeatPenalty),
-        numPredict: Number(parsed.numPredict ?? params.numPredict),
-        seed: parsed.seed === undefined || parsed.seed === null ? undefined : Number(parsed.seed),
-      };
-    } catch {}
-  }
+  const params = parsePersistedParameters(row.parameters_json);
 
   let freetokenApiKey: string | null = null;
   if (row.freetoken_api_key_encrypted) {
@@ -884,9 +875,9 @@ export function sqlitePersistRun(
           INSERT INTO model_result_turns (
             id, model_result_id, step_order, user_message, response_text, thinking,
             input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms,
-            finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body
+            finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body, tool_calls
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const turn of result.turns) {
           insertTurn.run(
@@ -906,6 +897,7 @@ export function sqlitePersistRun(
             turn.wireDiagnostics ? JSON.stringify(turn.wireDiagnostics) : null,
             turn.protocolDiagnostics ? JSON.stringify(turn.protocolDiagnostics) : null,
             turn.requestBody ? JSON.stringify(turn.requestBody) : null,
+            turn.toolCalls ? JSON.stringify(turn.toolCalls) : null,
           );
         }
       }
@@ -1018,6 +1010,7 @@ export function sqliteLoadState(targetRunId?: string) {
       totalDurationMs: row.total_duration_ms !== null ? Number(row.total_duration_ms) : null,
       wireDiagnostics: row.wire_diagnostics ? JSON.parse(String(row.wire_diagnostics)) : null,
       protocolDiagnostics: row.protocol_diagnostics ? JSON.parse(String(row.protocol_diagnostics)) : null,
+      toolCalls: row.tool_calls ? JSON.parse(String(row.tool_calls)) : null,
       requestBody: row.request_body ? JSON.parse(String(row.request_body)) : null,
     });
     turnsByResult.set(key, list);

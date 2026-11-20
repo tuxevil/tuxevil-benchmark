@@ -388,9 +388,15 @@ Los despliegues de producción se gestionan desde Coolify, usando el repositorio
 y `deploy/Dockerfile`; no iniciar una segunda instalación manual en el servidor.
 Proporciona las variables privadas en tiempo de ejecución, nunca en la imagen.
 Web y worker necesitan la misma base de datos, Redis y clave de cifrado para
-leer la configuración migrada. Publica únicamente HTTPS a través del proxy;
+leer la configuración migrada. Aplica `npm run db:migrate` antes de actualizar
+web y worker. Si una base ya creada conserva columnas antiguas, ambos procesos
+esperan a que finalice la actualización aditiva de compatibilidad antes de
+leer o escribir. Publica únicamente HTTPS a través del proxy;
 PostgreSQL, Redis y el colector deben quedar en redes privadas o loopback.
 El proceso worker se inicia con `node node_modules/tsx/dist/cli.mjs src/worker.ts`.
+La etapa final de `deploy/Dockerfile` incluye las dependencias npm de
+producción y los entornos Python de IFStruct y MATH-500. ESLint, Playwright,
+Vitest y el compilador de TypeScript se instalan en la etapa de compilación.
 La raíz es pública tanto para visitantes como para administradores; las rutas `/admin`
 solicitan autenticación. Conserva el despliegue anterior hasta validar el nuevo
 para disponer de una reversión del enrutamiento.
@@ -411,6 +417,25 @@ Las especificaciones del rig son públicas: CPU, RAM y GPU conservan las etiquet
 de la landing original. Se pueden ajustar con `SNAPSHOT_CPU`, `SNAPSHOT_RAM`,
 `SNAPSHOT_GPU` y `SNAPSHOT_PROVIDER`. No se publican direcciones internas,
 usuarios, cuentas ni credenciales junto a esos componentes.
+
+#### Prueba local de la imagen de producción
+
+Ejecuta esta prueba desde un checkout del candidato con Docker Compose v2 y
+BuildKit disponibles.
+
+```sh
+docker build -f deploy/Dockerfile -t tuxevil-benchmark:runtime-smoke .
+BENCHMARK_SMOKE_IMAGE=tuxevil-benchmark:runtime-smoke bash scripts/smoke-deployment.sh
+```
+
+La prueba crea un proyecto Compose efímero, instala el esquema en PostgreSQL
+y conecta el worker a Redis. Usa una red interna sin puertos publicados y un
+proveedor Ollama simulado con respuestas fijas. Comprueba que el caso público
+GSM8K conserva la respuesta original y su procedencia y que PostgreSQL guarda
+por separado acierto, respuesta incorrecta y error del proveedor. Al terminar
+retira los contenedores y sus volúmenes de prueba. Para validar el despliegue en
+Coolify staging quedan las comprobaciones de HTTPS, el proveedor de inferencia
+real y la reversión del enrutamiento.
 
 ## Chat de resultados
 

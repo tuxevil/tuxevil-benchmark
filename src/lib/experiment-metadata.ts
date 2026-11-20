@@ -24,7 +24,7 @@ export const modelArtifactInputSchema = z.object({
   sourceUri: nullableString(2048),
   sourceRevision: nullableString(255),
   tokenizerRevision: nullableString(255),
-  metadata: z.record(z.unknown()).default({}),
+  metadata: z.record(z.string(), z.unknown()).default({}),
 });
 
 export type ModelArtifactInput = z.input<typeof modelArtifactInputSchema>;
@@ -59,7 +59,7 @@ export const executionEnvironmentInputSchema = z.object({
   batchSize: nullableNonnegativeInt,
   ubatchSize: nullableNonnegativeInt,
   parallel: nullableNonnegativeInt,
-  metadata: z.record(z.unknown()).default({}),
+  metadata: z.record(z.string(), z.unknown()).default({}),
 });
 
 export type ExecutionEnvironmentInput = z.input<typeof executionEnvironmentInputSchema>;

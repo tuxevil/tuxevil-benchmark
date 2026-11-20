@@ -20,7 +20,7 @@ export const experimentInputSchema = z.object({
   suiteKey: nullableText(255),
   suiteVersion: nullableText(255),
   scenarioVersion: nullableText(255),
-  samplingSnapshot: z.record(z.unknown()).default({}),
+  samplingSnapshot: z.record(z.string(), z.unknown()).default({}),
   notes: z.string().max(20_000).default(""),
 });
 
@@ -41,7 +41,7 @@ export const experimentVariantInputSchema = z.object({
   executionEnvironmentId: z.string().uuid(),
   executionTargetId: z.string().uuid().nullable().default(null),
   executionModelName: nullableText(255),
-  inferenceParameters: z.record(z.unknown()).default({}),
+  inferenceParameters: z.record(z.string(), z.unknown()).default({}),
   promptVersion: nullableText(255),
   reasoningMode: nullableText(64),
   parentVariantId: z.string().uuid().nullable().default(null),

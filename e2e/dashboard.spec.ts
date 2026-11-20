@@ -305,6 +305,10 @@ test("Churn Lab renders the experiment workbench", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Execution Environment" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Experiment Builder" })).toBeVisible();
   await expect(page.getByText("Quant / weights")).toBeVisible();
+  const reasoningModes = page.getByRole("combobox", { name: "Reasoning mode", exact: true });
+  await expect(reasoningModes).toHaveCount(2);
+  await reasoningModes.last().selectOption("on");
+  await expect(reasoningModes.last()).toHaveValue("on");
   await expect(page.getByText("Observation Import")).toBeVisible();
   await expect(page.getByText("Paired Comparison")).toBeVisible();
 });
@@ -332,7 +336,7 @@ test("Churn Lab exposes automatic Experiment Runner for a selected experiment", 
       },
     });
   });
-  await page.route(/\/api\/scenarios$/, async (route) => {
+  await page.route(/\/api\/scenarios\?includePublicBenchmarks=true$/, async (route) => {
     await route.fulfill({
       json: {
         scenarios: [{
@@ -343,7 +347,13 @@ test("Churn Lab exposes automatic Experiment Runner for a selected experiment", 
           suiteKey: "practical-slm",
           suiteVersion: "1.0.0",
           grader: { type: "EXACT_TEXT", version: 1, expected: "OK", caseSensitive: true, collapseWhitespace: false },
-        }],
+        }, ...[0, 659].map((index) => ({
+          id: `gsm8k-${index}`,
+          name: `GSM8K · tuxevil-lite · test:${index}`,
+          category: "GENERAL",
+          suiteKey: "gsm8k-tuxevil-lite",
+          suiteVersion: "1.0.0",
+        }))],
       },
     });
   });
@@ -416,6 +426,112 @@ test("Churn Lab exposes automatic Experiment Runner for a selected experiment", 
   await expect(runner.getByText(/Practical SLM 1\.0\.0 · objective/)).toBeVisible();
   await expect(runner.getByText("baseline", { exact: true })).toBeVisible();
   await expect(runner.getByText("variant", { exact: true })).toBeVisible();
+  await runner.getByRole("button", { name: "Select GSM8K tuxevil-lite" }).click();
+  await expect(runner.getByRole("button", { name: "Run 2 scenarios" })).toBeVisible();
+  await runner.getByRole("checkbox", { name: /test:659/ }).uncheck();
+  await expect(runner.getByRole("button", { name: "Run 1 scenario", exact: true })).toBeVisible();
+});
+
+test("lists public benchmark provenance and protects opt-in scenarios", async ({ request, baseURL }) => {
+  const external = await fetch(new URL("/api/scenarios?includePublicBenchmarks=true", baseURL));
+  expect(external.status).toBe(401);
+
+  const catalog = await request.get("/api/experiments/benchmarks");
+  expect(catalog.ok()).toBeTruthy();
+  const { benchmarks: [suite, nativeTools, bfcl, mgsm, ifeval, ifstruct, math500, ptBr, stateful, irrelevance, multiturn, missFunc, memory, toolsandbox, toolsandboxState] } = await catalog.json();
+  expect(toolsandbox).toMatchObject({
+    id: "toolsandbox-upstream-wifi-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
+    grader: { type: "TOOL_SANDBOX_UPSTREAM_MILESTONES" },
+    cases: [{ sourceCaseId: "wifi_off" }],
+  });
+  expect(toolsandboxState).toMatchObject({
+    id: "toolsandbox-upstream-state-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
+    grader: { type: "TOOL_SANDBOX_UPSTREAM_STATE", version: 1, clock: "2024-03-20T12:00:00Z" },
+    cases: [
+      { sourceCaseId: "add_contact_with_name_and_phone_number" },
+      { sourceCaseId: "add_reminder_content_and_date_and_time" },
+    ],
+  });
+  expect(memory).toMatchObject({
+    id: "bfcl-v4-memory-kv-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
+    dataset: { split: "memory", caseCount: 155, license: "Apache-2.0" },
+    cases: [{ sourceCaseId: "memory_138-notetaker-8", prerequisiteId: "memory_prereq_32-notetaker-0" }],
+  });
+  expect(missFunc).toMatchObject({
+    id: "bfcl-v3-miss-func-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
+    dataset: { split: "multi_turn_miss_func", license: "Apache-2.0", caseCount: 200 },
+    cases: [{ sourceCaseId: "multi_turn_miss_func_12" }],
+  });
+  expect(multiturn).toMatchObject({
+    id: "bfcl-v3-multiturn-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
+    dataset: { split: "multi_turn_base, multi_turn_miss_param", license: "Apache-2.0", caseCount: 400 },
+  });
+  expect(multiturn.cases.map((entry: { sourceCaseId: string }) => entry.sourceCaseId))
+    .toEqual(["multi_turn_base_12", "multi_turn_miss_param_12"]);
+  expect(irrelevance).toMatchObject({
+    id: "bfcl-v3-irrelevance-tuxevil-lite", modality: "native-tools", officiallyComparable: false,
+    dataset: { split: "irrelevance", license: "Apache-2.0", caseCount: 240 },
+  });
+  expect(irrelevance.cases.map((entry: { sourceCaseId: string }) => entry.sourceCaseId))
+    .toEqual(["irrelevance_0", "irrelevance_3", "irrelevance_5"]);
+  expect(stateful).toMatchObject({
+    id: "toolsandbox-local-adapted", modality: "stateful-tools", officiallyComparable: false,
+  });
+  expect(stateful.cases).toHaveLength(1);
+  expect(ptBr).toMatchObject({
+    id: "practical-pt-br", language: "pt-BR", officiallyComparable: false,
+    dataset: { split: "synthetic", license: "MIT", caseCount: 6 },
+  });
+  expect(ptBr.cases).toHaveLength(6);
+  expect(math500).toMatchObject({
+    id: "math500-tuxevil-lite", officiallyComparable: false,
+    grader: { type: "MATH_VERIFY_BOXED", upstreamVersion: "0.9.0" }, dataset: { caseCount: 500 },
+  });
+  expect(math500.cases.map((entry: { level: number }) => entry.level)).toEqual([5, 4, 5, 5]);
+  expect(ifstruct).toMatchObject({
+    id: "ifstruct-tuxevil-lite", officiallyComparable: false,
+    grader: { type: "IFSTRUCT_UPSTREAM" }, dataset: { caseCount: 2000 },
+  });
+  expect(ifstruct.cases.map((entry: { outputFormat: string }) => entry.outputFormat)).toEqual(["json", "json", "yaml", "yaml"]);
+  expect(ifeval).toMatchObject({
+    id: "ifeval-tuxevil-lite", officiallyComparable: false, systemPrompt: "",
+    dataset: { license: "Apache-2.0", caseCount: 541 },
+  });
+  expect(ifeval.cases.map((entry: { sourceCaseId: string }) => entry.sourceCaseId))
+    .toEqual(["1001", "2015", "2314", "1325"]);
+  expect(mgsm).toMatchObject({
+    id: "mgsm-es-tuxevil-lite", language: "es", officiallyComparable: false,
+    dataset: { license: "CC-BY-4.0", caseCount: 250 },
+  });
+  expect(mgsm.cases.map((entry: { sourceCaseId: string }) => entry.sourceCaseId))
+    .toEqual(["es:test:0", "es:test:124", "es:test:230"]);
+  expect(suite.cases[0].scenarioId).toBe("58d9a0a0-6730-4d22-8f78-23a7c164753c");
+  expect(bfcl).toMatchObject({ id: "bfcl-v3-tuxevil-lite", modality: "native-tools", officiallyComparable: false });
+  expect(bfcl.cases.map((entry: { category: string }) => entry.category))
+    .toEqual(["simple", "multiple", "parallel", "parallel_multiple"]);
+  expect(nativeTools).toMatchObject({ id: "native-tool-smoke-es", modality: "native-tools", officiallyComparable: false });
+  expect(nativeTools.cases.map((entry: { sourceCaseId: string }) => entry.sourceCaseId))
+    .toEqual(["calculator-es", "battery-soc-es"]);
+  expect(suite).toMatchObject({
+    id: "gsm8k-tuxevil-lite",
+    version: "1.0.0",
+    officiallyComparable: false,
+    dataset: { split: "test", license: "MIT" },
+  });
+
+  const ordinary = await request.get("/api/scenarios");
+  expect(ordinary.ok()).toBeTruthy();
+  expect((await ordinary.json()).scenarios).not.toEqual(expect.arrayContaining([
+    expect.objectContaining({ suiteKey: suite.id }),
+  ]));
+
+  const included = await request.get("/api/scenarios?includePublicBenchmarks=true");
+  expect(included.ok()).toBeTruthy();
+  const selected = (await included.json()).scenarios.find((item: { id: string }) => item.id === suite.cases[0].scenarioId);
+  expect(selected).toMatchObject({ suiteKey: suite.id, grader: { type: "GSM8K" } });
+  expect((await request.patch(`/api/scenarios/${selected.id}`, { data: selected })).status()).toBe(409);
+  expect((await request.delete(`/api/scenarios/${selected.id}`)).status()).toBe(409);
+  expect((await request.post("/api/scenarios", { data: selected })).status()).toBe(409);
 });
 
 

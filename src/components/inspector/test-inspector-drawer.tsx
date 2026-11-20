@@ -103,7 +103,7 @@ export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawe
   const [historyResultId, setHistoryResultId] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<InspectorDiagnostics | null>(null);
   const [diagnosticsResultId, setDiagnosticsResultId] = useState<string | null>(null);
-  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
+  const [diagnosticsFailure, setDiagnosticsFailure] = useState<{ resultId: string; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [localResult, setLocalResult] = useState<ModelResult | null>(null);
   const [copiedCurl, setCopiedCurl] = useState<"stream" | "nostream" | null>(null);
@@ -114,9 +114,6 @@ export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawe
   useEffect(() => {
     if (!resultId || !runId) return;
     let cancelled = false;
-    setDiagnostics(null);
-    setDiagnosticsResultId(null);
-    setDiagnosticsError(null);
     fetch("/api/settings")
       .then((res) => (res.ok ? res.json() : null))
       .then((payload: { settings?: { evaluators?: EvaluatorEntry[]; activeEvaluatorId?: string | null } } | null) => {
@@ -153,10 +150,13 @@ export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawe
         if (!cancelled) {
           setDiagnostics(payload.diagnostics ?? null);
           setDiagnosticsResultId(resultId);
-          setDiagnosticsError(null);
+          setDiagnosticsFailure(null);
         }
       } catch (err) {
-        if (!cancelled) setDiagnosticsError(err instanceof Error ? err.message : "No se pudieron cargar los diagnósticos.");
+        if (!cancelled) setDiagnosticsFailure({
+          resultId,
+          message: err instanceof Error ? err.message : "No se pudieron cargar los diagnósticos.",
+        });
       } finally {
         inFlight = false;
       }
@@ -219,6 +219,7 @@ export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawe
     if (run?.category === "SECURITY") return <span className="badge safe">🟢 IMMUNE</span>;
     return <span className="badge safe">🟢 PASS</span>;
   };
+  const diagnosticsError = diagnosticsFailure?.resultId === displayResult.id ? diagnosticsFailure.message : null;
   const activeDiagnostics = diagnosticsResultId === displayResult.id ? diagnostics : null;
   const diagnosticEvents = activeDiagnostics?.events ?? [];
   const manifestDiagnostics = activeDiagnostics?.manifest?.diagnostics as Record<string, unknown> | undefined;
