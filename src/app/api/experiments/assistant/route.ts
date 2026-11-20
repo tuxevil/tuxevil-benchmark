@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     if (!snapshot.evidence.active || snapshot.selectedModel !== command.model) {
       return NextResponse.json({ error: "El modelo activo cambió. Prepara la prueba de nuevo." }, { status: 409 });
     }
-    const target = await importExecutionTarget({ ...connection, apiKey: connection.apiKey ?? undefined });
+    const target = await importExecutionTarget({ ...connection, apiKey: connection.apiKey ?? undefined }, { requireSettingsCredentials: true });
     const [artifact, environment] = await Promise.all([
       upsertModelArtifact(snapshot.artifact),
       upsertExecutionEnvironment(snapshot.environment),
