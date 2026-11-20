@@ -511,3 +511,13 @@ the interval from the first observed emission to stream completion.
 The client estimate includes provider transport and buffering. A phase
 without enough information remains null. Historical Arena throughput
 retains its existing formula.
+
+### Practical PT-BR
+
+Select **Practical PT-BR** in Churn Lab for six original, versioned cases
+written in Brazilian Portuguese. The suite covers instruction following,
+support classification, JSON extraction and arithmetic. Cases include
+Brazilian payment terminology and a reais-to-centavos conversion.
+The grader checks exact text or typed JSON. Case results describe the
+fixed synthetic suite and should not be interpreted as a general
+Portuguese-language capability score.

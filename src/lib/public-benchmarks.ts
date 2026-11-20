@@ -94,6 +94,57 @@ const mgsmCases = mgsmFixtures.map(({ sourceCaseId, question, sourceAnswer }) =>
   { ...mgsmEs.grader, expected: sourceAnswer.replaceAll(",", ""), caseSensitive: true, collapseWhitespace: false },
 ));
 
+const practicalPtBr = {
+  id: "practical-pt-br",
+  version: "1.0.0",
+  language: "pt-BR",
+  modality: "chat",
+  officiallyComparable: false,
+  dataset: { project: "tuxevil Benchmark", revision: "1.0.0", split: "synthetic", license: "MIT", caseCount: 6 },
+  grader: { type: "EXACT_TEXT_OR_JSON", version: 1 },
+  systemPrompt: "Siga as instruções do usuário. Responda no formato solicitado, sem introdução nem explicação.",
+} as const;
+
+const ptBrFixtures = [
+  {
+    id: "ordered-labels",
+    question: "Coloque estas palavras em ordem alfabética: tucano, arara, beija-flor. Escreva tudo em maiúsculas e separe as palavras com uma barra vertical, sem espaços.",
+    expected: "ARARA|BEIJA-FLOR|TUCANO",
+  },
+  {
+    id: "support-routing",
+    question: "Classifique o relato como FINANCEIRO, TÉCNICO ou COMERCIAL. O cliente recebeu duas cobranças pelo mesmo boleto. Responda apenas com a categoria.",
+    expected: "FINANCEIRO",
+  },
+  {
+    id: "pix-payment",
+    question: 'Transforme os dados em um objeto JSON com as chaves "metodo", "pago" e "valor_centavos". Use o valor "PIX" para o método e um booleano para o pagamento. O pedido de R$ 38,50 já foi pago por Pix. Não inclua Markdown.',
+    expected: { metodo: "PIX", pago: true, valor_centavos: 3850 },
+  },
+  {
+    id: "stock-transfer",
+    question: 'Converta a solicitação para um objeto JSON com as chaves "origem", "destino" e "quantidade", nesta última use um número. Transfira 12 unidades do estoque Recife para o estoque Fortaleza. Não inclua Markdown.',
+    expected: { origem: "Recife", destino: "Fortaleza", quantidade: 12 },
+  },
+  {
+    id: "shared-delivery",
+    question: "Três vizinhos dividem igualmente o frete de R$ 27,00. Cada um também paga R$ 16,00 pelos seus produtos. Quanto cada vizinho paga no total? Responda apenas com o número inteiro em reais.",
+    expected: "25",
+  },
+  {
+    id: "event-capacity",
+    question: "O auditório tem 9 fileiras de 12 lugares. Reserve 18 lugares para a equipe. Dos lugares restantes, metade já foi vendida. Quantos lugares ainda estão disponíveis? Responda apenas com um número inteiro.",
+    expected: "45",
+  },
+];
+
+const ptBrCases = ptBrFixtures.map(({ id, question, expected }) => textBenchmarkCase(
+  practicalPtBr, "Practical PT-BR", id, question, JSON.stringify(expected),
+  typeof expected === "string"
+    ? { type: "EXACT_TEXT", version: 1, expected, caseSensitive: true, collapseWhitespace: false }
+    : { type: "JSON_EXACT", version: 1, expected },
+));
+
 const nativeToolScenarios = NATIVE_TOOL_FIXTURES.map((fixture) => ({
   id: fixture.scenarioId,
   name: `Native tool smoke ES · ${fixture.sourceCaseId}`,
@@ -231,9 +282,15 @@ export const PUBLIC_BENCHMARKS = [{
   cases: MATH500_CASES.map(({ scenarioId, sourceCaseId, contentSha256, fixture }) => ({
     scenarioId, sourceCaseId, subject: fixture.subject, level: fixture.level, caseVersion: 1, contentSha256,
   })),
+}, {
+  ...practicalPtBr,
+  caseIdsSha256: caseHash(ptBrCases.map(({ sourceCaseId }) => sourceCaseId)),
+  cases: ptBrCases.map(({ scenarioId, sourceCaseId, caseVersion, contentSha256 }) => ({
+    scenarioId, sourceCaseId, caseVersion, contentSha256,
+  })),
 }] as const;
 
-export const PUBLIC_BENCHMARK_SCENARIOS = [
+export const PUBLIC_BENCHMARK_SCENARIOS: Array<Omit<Scenario, "createdAt" | "updatedAt">> = [
   ...cases.map(({ scenario }) => scenario),
   ...nativeToolScenarios,
   ...BFCL_V3_CASES.map(({ scenario }) => scenario),
@@ -241,6 +298,7 @@ export const PUBLIC_BENCHMARK_SCENARIOS = [
   ...IFEVAL_CASES.map(({ scenario }) => scenario),
   ...IFSTRUCT_CASES.map(({ scenario }) => scenario),
   ...MATH500_CASES.map(({ scenario }) => scenario),
+  ...ptBrCases.map(({ scenario }) => scenario),
 ];
 
 export function isPublicBenchmarkSuite(key?: string | null) {

@@ -67,6 +67,13 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
       response.end(JSON.stringify({ message, done: true, done_reason: "stop" }));
       return;
     }
+    if (body.messages[0].content === PUBLIC_BENCHMARKS[7].systemPrompt) {
+      response.end(JSON.stringify({
+        message: { content: JSON.stringify({ metodo: "PIX", pago: true, valor_centavos: body.model === "correct" ? 3850 : "3850" }) },
+        done: true, done_reason: body.model === "truncated" ? "length" : "stop",
+      }));
+      return;
+    }
     if (body.messages[0].content === MATH500_PROMPT) {
       response.end(JSON.stringify({
         message: { content: body.model === "correct" ? String.raw`\boxed{6/112}` : String.raw`\boxed{3/57}` },
@@ -300,6 +307,20 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
         reason: "EQUIVALENT", details: { boxedAnswer: "6/112", evaluatorVersion: "0.9.0" },
       });
     }, { timeout: 6_000 });
+    const ptCase = PUBLIC_BENCHMARKS[7].cases.find((item) => item.sourceCaseId === "pix-payment")!;
+    const ptBr = await startExperimentExecution(experiment.id, {
+      scenarioIds: [ptCase.scenarioId], successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(experiment.id, ptBr.execution.id);
+      expect(report.publicBenchmarkResults).toHaveLength(4);
+      const items = variants.map((variant) =>
+        report.publicBenchmarkResults!.find((item) => item.variantId === variant.id)!.observations[0]);
+      expect(items.map((item) => item.metadata.outcome)).toEqual(["PASS", "WRONG_ANSWER", "TRUNCATED", "PROVIDER_ERROR"]);
+      expect(items[0].metadata).toMatchObject({
+        benchmark: { sourceCaseId: "pix-payment", suite: { language: "pt-BR", id: "practical-pt-br" } },
+      });
+    }, { timeout: 5_000 });
   } finally {
     server.close();
     vi.unstubAllEnvs();

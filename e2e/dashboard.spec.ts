@@ -434,7 +434,12 @@ test("lists public benchmark provenance and protects opt-in scenarios", async ({
 
   const catalog = await request.get("/api/experiments/benchmarks");
   expect(catalog.ok()).toBeTruthy();
-  const { benchmarks: [suite, nativeTools, bfcl, mgsm, ifeval, ifstruct, math500] } = await catalog.json();
+  const { benchmarks: [suite, nativeTools, bfcl, mgsm, ifeval, ifstruct, math500, ptBr] } = await catalog.json();
+  expect(ptBr).toMatchObject({
+    id: "practical-pt-br", language: "pt-BR", officiallyComparable: false,
+    dataset: { split: "synthetic", license: "MIT", caseCount: 6 },
+  });
+  expect(ptBr.cases).toHaveLength(6);
   expect(math500).toMatchObject({
     id: "math500-tuxevil-lite", officiallyComparable: false,
     grader: { type: "MATH_VERIFY_BOXED", upstreamVersion: "0.9.0" }, dataset: { caseCount: 500 },
