@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Scenario, TestCategory, SecurityAttackType, BenchmarkParameters, ModelProvider, ReasoningEffort } from "@/lib/contracts";
+import { supportsExplicitThinking, type Scenario, type TestCategory, type SecurityAttackType, type BenchmarkParameters, type ModelProvider, type ReasoningEffort } from "@/lib/contracts";
 import type { DiscoveredModel } from "@/lib/providers/model-discovery";
 import { quickProfileSummary } from "@/lib/ia-solar-quick-profile";
 import { chatbotPlusSummary } from "@/lib/ia-solar-chatbot-plus-profile";
@@ -267,18 +267,20 @@ export function TestSuitesMatrix({
     : mode === "update" ? availableModels.map(model => model.name) : selectedModels;
   const reasoningOptions: Array<{ value: ReasoningEffort; label: string }> = [
     { value: "off", label: "Off (Standard benchmark)" },
+    { value: "on", label: "On (model support required)" },
     { value: "default", label: "Provider Default" },
     { value: "low", label: "Low" },
     { value: "medium", label: "Medium" },
     { value: "high", label: "High" },
     { value: "max", label: "Max" },
   ];
-  const availableReasoning = reasoningOptions.filter(({ value }) =>
-    value === "off" || (targetModels.length > 0 && (
-      (value === "default" && activeProvider !== "ollama") ||
-      targetModels.every(name => availableModels.find(model => model.name === name)?.reasoningEfforts?.includes(value))
-    )),
-  );
+  const availableReasoning = reasoningOptions.filter(({ value }) => {
+    if (value === "off") return true;
+    if (targetModels.length === 0) return false;
+    if (value === "on") return supportsExplicitThinking(activeProvider);
+    return (value === "default" && activeProvider !== "ollama")
+      || targetModels.every(name => availableModels.find(model => model.name === name)?.reasoningEfforts?.includes(value));
+  });
   const selectedReasoning = parameters.reasoningEffort ?? "off";
   const reasoningEffort = availableReasoning.some(option => option.value === selectedReasoning)
     ? selectedReasoning : "off";

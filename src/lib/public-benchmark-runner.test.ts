@@ -250,6 +250,7 @@ it("runs public cases through provider transports and persists scored and techni
     const { loadResultDiagnosticEvents } = await import("@/lib/result-diagnostic-store");
     const events = await loadResultDiagnosticEvents(baselineResult!.id);
     expect(events.find((item) => item.event === "turn_completed")?.payload).toMatchObject({
+      firstVisibleTokenMs: expect.any(Number),
       prefillRate: { tokensPerSecond: 100, source: "engine_duration" },
       decodeRate: { tokensPerSecond: 20, source: "engine_duration" },
     });

@@ -190,6 +190,7 @@ export function ArenaLeaderboard({
             >
               <option value="ALL">All Modes</option>
               <option value="off">Off (Standard)</option>
+              <option value="on">On</option>
               <option value="default">Provider Default</option>
               <option value="low">Low</option>
               <option value="medium">Medium</option>

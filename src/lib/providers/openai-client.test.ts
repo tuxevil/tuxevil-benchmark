@@ -1047,3 +1047,32 @@ it.each([
     vi.restoreAllMocks();
   }
 });
+
+it.each(["llamacpp", "freetoken", "strata"] as const)("handles explicit Thinking On for %s", async (provider) => {
+  const fetchMock = vi.spyOn(global, "fetch").mockResolvedValue(new Response(
+    'data: {"choices":[{"delta":{"content":"answer"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+  ));
+  try {
+    const pending = streamOpenAICompatibleChat({
+      provider,
+      providerName: provider,
+      endpoint: "http://localhost:8080/v1",
+      model: "fixture",
+      messages: [{ role: "user", content: "Question" }],
+      parameters: { temperature: 0, numCtx: 2048, topP: 1, repeatPenalty: 1, numPredict: 128, reasoningEffort: "on" },
+      signal: new AbortController().signal,
+    });
+    if (provider === "llamacpp") {
+      const result = await pending;
+      const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+      expect(body).toMatchObject({ chat_template_kwargs: { enable_thinking: true } });
+      expect(body).not.toHaveProperty("reasoning_effort");
+      expect(result.requestBody).toMatchObject({ chat_template_kwargs: { enable_thinking: true } });
+    } else {
+      await expect(pending).rejects.toThrow("Thinking ON is unavailable");
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
+  } finally {
+    fetchMock.mockRestore();
+  }
+});

@@ -188,6 +188,7 @@ describe("streamOllamaChat", () => {
 
 it.each([
   ["off", false],
+  ["on", true],
   ["default", undefined],
   ["high", "high"],
 ] as const)("sends Ollama thinking mode %s and separates visible timing", async (effort, expected) => {

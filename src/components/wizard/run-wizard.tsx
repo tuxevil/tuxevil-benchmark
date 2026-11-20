@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { ModelProvider, Scenario, SecurityAttackType, TestCategory } from "@/lib/contracts";
+import { supportsExplicitThinking, type ModelProvider, type ReasoningEffort, type Scenario, type SecurityAttackType, type TestCategory } from "@/lib/contracts";
 import { SECURITY_TEMPLATES } from "@/lib/security-templates";
 
 export type ModelOption = {
@@ -15,7 +15,7 @@ export type ParameterState = {
   topP: string;
   repeatPenalty: string;
   numPredict: string;
-  reasoningEffort?: "off" | "default" | "low" | "medium" | "high" | "max";
+  reasoningEffort?: ReasoningEffort;
 };
 
 interface RunWizardProps {
@@ -212,8 +212,9 @@ export function RunWizard({
     });
   };
 
+  const unsupportedThinking = parameters.reasoningEffort === "on" && !supportsExplicitThinking(activeProvider);
   const handleLaunch = async () => {
-    if (selectedModels.length === 0) return;
+    if (selectedModels.length === 0 || unsupportedThinking) return;
     await onStartRun({
       category: testType === "security" ? "SECURITY" : "GENERAL",
       attackType: testType === "security" ? attackType : null,
@@ -649,11 +650,12 @@ export function RunWizard({
                   onChange={(e) =>
                     setParameters({
                       ...parameters,
-                      reasoningEffort: e.target.value as "off" | "default" | "low" | "medium" | "high" | "max",
+                      reasoningEffort: e.target.value as ReasoningEffort,
                     })
                   }
                 >
                   <option value="off">Off (Standard benchmark - recommended)</option>
+                  <option value="on" disabled={!supportsExplicitThinking(activeProvider)}>On (Ollama / llama.cpp)</option>
                   <option value="default">Provider Default</option>
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
@@ -664,6 +666,7 @@ export function RunWizard({
             </div>
           )}
 
+          {unsupportedThinking && <p role="alert">Thinking On requires Ollama or llama.cpp. Choose another reasoning mode to continue.</p>}
           {parameters.reasoningEffort && parameters.reasoningEffort !== "off" && Number(parameters.numPredict) < 1024 && (
             <div className="notice-banner warn" style={{ marginTop: "16px", padding: "10px 14px", fontSize: "0.85rem", background: "rgb(255 200 87 / 15%)", border: "1px solid var(--warning)", borderRadius: "8px", color: "var(--warning)" }}>
               ⚠️ <strong>Warning:</strong> Reasoning mode is enabled with only <code>{parameters.numPredict}</code> max output tokens. The model may exhaust its generation budget thinking before producing a final answer.
@@ -677,7 +680,7 @@ export function RunWizard({
             <button
               type="button"
               className="btn-launch-hero"
-              disabled={isStarting || selectedModels.length === 0}
+              disabled={isStarting || selectedModels.length === 0 || unsupportedThinking}
               onClick={handleLaunch}
             >
               {isStarting ? "⏳ Starting Benchmark..." : "🚀 Launch Benchmark & Evaluate"}

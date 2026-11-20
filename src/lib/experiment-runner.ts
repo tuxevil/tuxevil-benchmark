@@ -7,7 +7,7 @@ import { findBfclV3Case } from "@/lib/bfcl-v3-pilot";
 import { resourceSummary } from "@/lib/resource-telemetry";
 import { loadResourceMeasurements } from "@/lib/resource-measurement-store";
 import type { BenchmarkParameters, ModelResult, TestRun } from "@/lib/contracts";
-import { benchmarkParametersSchema, reasoningEffortSchema } from "@/lib/contracts";
+import { benchmarkParametersSchema, reasoningEffortSchema, supportsExplicitThinking } from "@/lib/contracts";
 import { benchmarkStore } from "@/lib/benchmark-store";
 import { gradeDeterministicResponse, type DeterministicGrade } from "@/lib/deterministic-grader";
 import { publicBenchmarkCase } from "@/lib/public-benchmarks";
@@ -178,6 +178,10 @@ function buildParameters(
 ): BenchmarkParameters {
   const raw = preflight.variant.inferenceParameters;
   const reasoning = reasoningEffortSchema.safeParse(preflight.variant.reasoningMode);
+  const reasoningEffort = reasoning.success ? reasoning.data : (defaults.reasoningEffort ?? "off");
+  if (reasoningEffort === "on" && !supportsExplicitThinking(preflight.provider)) {
+    throw new Error(`Thinking ON is unavailable for variant "${preflight.variant.name}" (${preflight.provider}).`);
+  }
   return benchmarkParametersSchema.parse({
     temperature: numeric(raw.temperature) ?? defaults.temperature,
     numCtx: numeric(raw.numCtx) ?? preflight.contextSize ?? defaults.numCtx,
@@ -185,7 +189,7 @@ function buildParameters(
     repeatPenalty: numeric(raw.repeatPenalty) ?? defaults.repeatPenalty,
     numPredict: numeric(raw.numPredict) ?? defaults.numPredict,
     seed: numeric(raw.seed) ?? defaults.seed,
-    reasoningEffort: reasoning.success ? reasoning.data : (defaults.reasoningEffort ?? "off"),
+    reasoningEffort,
   });
 }
 
@@ -513,18 +517,19 @@ export async function startExperimentExecution(
     throw new Error("Execution requested evaluator scoring, but no active evaluator with credentials is configured.");
   }
 
+  const defaults = benchmarkStore.getSettings().parameters;
+  const variantPlans = preflights.map((preflight) => ({ preflight, parameters: buildParameters(defaults, preflight) }));
   const execution = await createExperimentExecutionRecord(experimentId, parsed);
   try {
     await acquireExecutionTargetLeases(execution.id, preflights.map((item) => item.targetId));
 
-    const defaults = benchmarkStore.getSettings().parameters;
     const plannedMappings: ExperimentExecutionWithRuns["runs"] = [];
     let sequenceOrder = 0;
 
     // Persist the complete execution plan before starting any worker. This
     // prevents a very fast local run from making a partially-built execution
     // look terminal while later variant/scenario mappings are still being added.
-    for (const preflight of preflights) {
+    for (const { preflight, parameters } of variantPlans) {
       for (const scenario of scenarios) {
         if (!scenario) continue;
         const run = benchmarkStore.createRun({
@@ -539,7 +544,7 @@ export async function startExperimentExecution(
           systemPrompt: scenario.systemPrompt,
           userMessages: scenario.userMessages,
           models: [preflight.modelName],
-          parameters: buildParameters(defaults, preflight),
+          parameters,
           evaluator,
         });
         await benchmarkStore.flush(run.id);
