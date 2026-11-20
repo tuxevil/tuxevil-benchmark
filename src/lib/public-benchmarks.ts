@@ -1,3 +1,6 @@
+import {
+  BFCL_MULTITURN_CASES, BFCL_MULTITURN_SUITE, BFCL_MULTITURN_SYSTEM, BFCL_MULTITURN_VERSION,
+} from "@/lib/bfcl-v3-multiturn";
 import { STATEFUL_CASE, STATEFUL_SUITE, STATEFUL_SYSTEM, STATEFUL_VERSION } from "@/lib/stateful-tool-sandbox";
 import { MATH500_CASES, MATH500_PROMPT, MATH500_SUITE, MATH500_VERSION } from "@/lib/math500-pilot";
 import { IFSTRUCT_CASES, IFSTRUCT_SUITE, IFSTRUCT_VERSION } from "@/lib/ifstruct-pilot";
@@ -337,6 +340,30 @@ export const PUBLIC_BENCHMARKS = [{
   cases: BFCL_V3_IRRELEVANCE_CASES.map(({ scenarioId, sourceCaseId, category, contentSha256 }) => ({
     scenarioId, sourceCaseId, category, caseVersion: 1, contentSha256,
   })),
+}, {
+  id: BFCL_MULTITURN_SUITE,
+  version: BFCL_MULTITURN_VERSION,
+  language: "en",
+  modality: "stateful-tools",
+  officiallyComparable: false,
+  dataset: {
+    project: "Berkeley Function Calling Leaderboard V3",
+    revision: "61fc0608cfd831fcfbbaa676ebdfef0ed963eeda",
+    url: "https://huggingface.co/datasets/gorilla-llm/Berkeley-Function-Calling-Leaderboard/tree/61fc0608cfd831fcfbbaa676ebdfef0ed963eeda",
+    split: "multi_turn_base, multi_turn_miss_param",
+    license: "Apache-2.0",
+    caseCount: 400,
+  },
+  grader: {
+    type: "BFCL_V3_MULTITURN_STATE",
+    version: 1,
+    upstreamRevision: "6ea57973c7a6097fd7c5915698c54c17c5b1b6c8",
+  },
+  systemPrompt: BFCL_MULTITURN_SYSTEM,
+  caseIdsSha256: caseHash(BFCL_MULTITURN_CASES.map(({ sourceCaseId }) => sourceCaseId)),
+  cases: BFCL_MULTITURN_CASES.map(({ scenarioId, sourceCaseId, category, contentSha256 }) => ({
+    scenarioId, sourceCaseId, category, caseVersion: 1, contentSha256,
+  })),
 }] as const;
 
 export const PUBLIC_BENCHMARK_SCENARIOS: Array<Omit<Scenario, "createdAt" | "updatedAt">> = [
@@ -350,6 +377,7 @@ export const PUBLIC_BENCHMARK_SCENARIOS: Array<Omit<Scenario, "createdAt" | "upd
   ...ptBrCases.map(({ scenario }) => scenario),
   STATEFUL_CASE.scenario,
   ...BFCL_V3_IRRELEVANCE_CASES.map(({ scenario }) => scenario),
+  ...BFCL_MULTITURN_CASES.map(({ scenario }) => scenario),
 ];
 
 export function isPublicBenchmarkSuite(key?: string | null) {

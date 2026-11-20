@@ -557,3 +557,30 @@ completion with no call and no visible response is recorded as
 `NO_FINAL_ANSWER`. These rules differ from the upstream irrelevance
 checker, which tests whether a call can be decoded. The three cases are
 an adapted subset and do not yield an official BFCL score.
+
+## BFCL V3 Multiturn tuxevil-lite
+
+In Churn Lab select **BFCL V3 Multiturn tuxevil-lite**. The suite contains
+`multi_turn_base_12` and `multi_turn_miss_param_12` from the pinned Gorilla
+dataset. They use the original user messages, initial directory layout,
+tool definitions and reference calls. Each result starts with an empty
+virtual directory tree and retains tool state across user turns. The seven
+advertised operations run in memory. They never read or write host files.
+The registry records the dataset revision, case IDs, hashes and grader version.
+
+The Ollama and OpenAI-compatible transports send native tool schemas and
+persist tool results and assistant messages in the conversation. Within a
+user turn, the runner executes calls in provider order, up to six actions
+including recovered errors. The deterministic grader replays the recorded
+tool feedback, checks state and reference tool results at each user
+checkpoint, and checks that the model abstains until the missing filename
+arrives. The clarification itself must contain visible text. Its wording
+is outside the scoring protocol. Provider errors, truncation and empty
+completions are reported separately from incorrect checkpoints.
+
+This pilot adapts the BFCL protocol to native local inference and uses a
+small TypeScript implementation of the isolated file system. The reference
+outputs and final file contents for these two cases were checked against
+the pinned upstream simulator. The score applies to these cases and this
+protocol. It does not measure the full benchmark or cover `miss_func`
+and `memory_kv`.
