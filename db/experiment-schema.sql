@@ -2,6 +2,19 @@
 -- Kept separate from the legacy schema so experimental data can evolve
 -- independently while db:migrate applies both files.
 
+CREATE TABLE IF NOT EXISTS execution_targets (
+  id UUID PRIMARY KEY,
+  label VARCHAR(255) NOT NULL,
+  provider VARCHAR(32) NOT NULL,
+  endpoint TEXT NOT NULL,
+  api_key_encrypted TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS execution_targets_updated_idx
+  ON execution_targets (updated_at DESC);
+
 CREATE TABLE IF NOT EXISTS model_artifacts (
   id UUID PRIMARY KEY,
   fingerprint VARCHAR(64) NOT NULL UNIQUE,
@@ -52,6 +65,8 @@ CREATE TABLE IF NOT EXISTS experiment_variants (
   role VARCHAR(32) NOT NULL,
   model_artifact_id UUID NOT NULL REFERENCES model_artifacts(id),
   execution_environment_id UUID NOT NULL REFERENCES execution_environments(id),
+  execution_target_id UUID REFERENCES execution_targets(id) ON DELETE SET NULL,
+  execution_model_name VARCHAR(255),
   inference_parameters JSONB NOT NULL DEFAULT '{}'::jsonb,
   prompt_version VARCHAR(255),
   reasoning_mode VARCHAR(64),
@@ -67,6 +82,85 @@ CREATE INDEX IF NOT EXISTS experiment_variants_experiment_idx
 CREATE UNIQUE INDEX IF NOT EXISTS experiment_one_baseline_idx
   ON experiment_variants (experiment_id)
   WHERE role = 'BASELINE';
+
+ALTER TABLE experiment_variants
+  ADD COLUMN IF NOT EXISTS execution_target_id UUID REFERENCES execution_targets(id) ON DELETE SET NULL;
+ALTER TABLE experiment_variants
+  ADD COLUMN IF NOT EXISTS execution_model_name VARCHAR(255);
+
+CREATE TABLE IF NOT EXISTS experiment_executions (
+  id UUID PRIMARY KEY,
+  experiment_id UUID NOT NULL REFERENCES experiments(id) ON DELETE CASCADE,
+  status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+  scenario_ids JSONB NOT NULL,
+  samples_per_model SMALLINT NOT NULL DEFAULT 1,
+  execution_mode VARCHAR(32) NOT NULL DEFAULT 'STANDARD',
+  warmup_samples SMALLINT NOT NULL DEFAULT 0,
+  include_cold_sample BOOLEAN NOT NULL DEFAULT FALSE,
+  use_evaluator BOOLEAN NOT NULL DEFAULT TRUE,
+  success_policy VARCHAR(32) NOT NULL DEFAULT 'NONE',
+  success_threshold SMALLINT NOT NULL DEFAULT 4,
+  error_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  finished_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS experiment_executions_experiment_idx
+  ON experiment_executions (experiment_id, created_at DESC);
+
+ALTER TABLE experiment_executions ADD COLUMN IF NOT EXISTS execution_mode VARCHAR(32) NOT NULL DEFAULT 'STANDARD';
+ALTER TABLE experiment_executions ADD COLUMN IF NOT EXISTS warmup_samples SMALLINT NOT NULL DEFAULT 0;
+ALTER TABLE experiment_executions ADD COLUMN IF NOT EXISTS include_cold_sample BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE UNIQUE INDEX IF NOT EXISTS experiment_one_active_execution_idx
+  ON experiment_executions (experiment_id)
+  WHERE status IN ('PENDING', 'RUNNING');
+
+CREATE TABLE IF NOT EXISTS experiment_execution_runs (
+  id UUID PRIMARY KEY,
+  execution_id UUID NOT NULL REFERENCES experiment_executions(id) ON DELETE CASCADE,
+  variant_id UUID NOT NULL REFERENCES experiment_variants(id) ON DELETE CASCADE,
+  scenario_id UUID NOT NULL REFERENCES scenarios(id),
+  test_run_id UUID NOT NULL REFERENCES test_runs(id) ON DELETE CASCADE,
+  sequence_order INTEGER NOT NULL DEFAULT 0,
+  enqueued_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (execution_id, variant_id, scenario_id)
+);
+
+CREATE INDEX IF NOT EXISTS experiment_execution_runs_execution_idx
+  ON experiment_execution_runs (execution_id, variant_id);
+
+ALTER TABLE experiment_execution_runs ADD COLUMN IF NOT EXISTS sequence_order INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE experiment_execution_runs ADD COLUMN IF NOT EXISTS enqueued_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS execution_target_leases (
+  target_id UUID PRIMARY KEY REFERENCES execution_targets(id) ON DELETE CASCADE,
+  execution_id UUID NOT NULL REFERENCES experiment_executions(id) ON DELETE CASCADE,
+  acquired_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS execution_target_leases_execution_idx
+  ON execution_target_leases (execution_id);
+
+CREATE TABLE IF NOT EXISTS experiment_execution_observations (
+  id UUID PRIMARY KEY,
+  execution_id UUID NOT NULL REFERENCES experiment_executions(id) ON DELETE CASCADE,
+  variant_id UUID NOT NULL REFERENCES experiment_variants(id) ON DELETE CASCADE,
+  case_id TEXT NOT NULL,
+  comparison_kind VARCHAR(32) NOT NULL DEFAULT 'EXACT',
+  canonical_value TEXT NOT NULL,
+  success BOOLEAN,
+  telemetry JSONB NOT NULL DEFAULT '{}'::jsonb,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (execution_id, variant_id, case_id)
+);
+
+CREATE INDEX IF NOT EXISTS experiment_execution_observations_idx
+  ON experiment_execution_observations (execution_id, variant_id, case_id);
 
 CREATE TABLE IF NOT EXISTS experiment_observations (
   id UUID PRIMARY KEY,

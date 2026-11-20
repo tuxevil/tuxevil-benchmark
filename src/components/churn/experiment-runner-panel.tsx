@@ -1,0 +1,485 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+
+type VariantRole = "BASELINE" | "VARIANT" | "BASELINE_REPEAT" | "CONTROL";
+
+type Variant = {
+  id: string;
+  name: string;
+  role: VariantRole;
+  executionTargetId: string | null;
+  executionModelName: string | null;
+};
+
+type Target = {
+  id: string;
+  label: string;
+  provider: "strata" | "ollama" | "llamacpp" | "freetoken";
+  endpoint: string;
+};
+
+type Scenario = {
+  id: string;
+  name: string;
+  category: "GENERAL" | "SECURITY";
+  attackType: string | null;
+  suiteKey?: string | null;
+  suiteVersion?: string | null;
+  grader?: unknown | null;
+};
+
+type Comparison = unknown;
+
+type ExecutionView = {
+  execution: {
+    id: string;
+    status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+    errorMessage: string | null;
+  };
+  benchmarkRuns: Array<{
+    mappingId: string;
+    variantId: string;
+    scenarioId: string;
+    testRunId: string;
+    status: string;
+    errorMessage: string | null;
+  }>;
+  comparisons: Comparison[];
+  publicBenchmarkResults?: Array<{
+    variantId: string;
+    plannedSamples: number;
+    gradedSamples: number;
+    accuracy: number | null;
+    outcomes: Record<string, number>;
+    ifeval?: {
+      prompts: number;
+      instructions: number;
+      promptStrict: number | null;
+      promptLoose: number | null;
+      instructionStrict: number | null;
+      instructionLoose: number | null;
+    };
+  }>;
+};
+
+type Binding = {
+  executionTargetId: string;
+  executionModelName: string;
+};
+
+function formatAccuracy(value: number | null) {
+  return value === null ? "N/A" : `${(value * 100).toFixed(1)}%`;
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function ExperimentRunnerPanel({
+  experimentId,
+  variants,
+  targetRevision,
+  onBindingsSaved,
+  onComparisons,
+}: {
+  experimentId: string;
+  variants: Variant[];
+  targetRevision: number;
+  onBindingsSaved: () => Promise<void> | void;
+  onComparisons: (comparisons: Comparison[]) => void;
+}) {
+  const [targets, setTargets] = useState<Target[]>([]);
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [bindings, setBindings] = useState<Record<string, Binding>>(() =>
+    Object.fromEntries(
+      variants.map((variant) => [
+        variant.id,
+        {
+          executionTargetId: variant.executionTargetId ?? "",
+          executionModelName: variant.executionModelName ?? "",
+        },
+      ]),
+    ),
+  );
+  const [selectedScenarios, setSelectedScenarios] = useState<string[]>([]);
+  const [samplesPerModel, setSamplesPerModel] = useState("1");
+  const [useEvaluator, setUseEvaluator] = useState(false);
+  const [successPolicy, setSuccessPolicy] = useState<"NONE" | "DETERMINISTIC" | "EVALUATION_THRESHOLD">("NONE");
+  const [successThreshold, setSuccessThreshold] = useState("4");
+  const [execution, setExecution] = useState<ExecutionView | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      try {
+        const [targetRes, scenarioRes] = await Promise.all([
+          fetch("/api/experiments/targets"),
+          fetch("/api/scenarios?includePublicBenchmarks=true"),
+        ]);
+        const [targetData, scenarioData] = await Promise.all([targetRes.json(), scenarioRes.json()]);
+        if (!targetRes.ok) throw new Error(targetData.error || "Could not load execution targets.");
+        if (!scenarioRes.ok) throw new Error(scenarioData.error || "Could not load scenarios.");
+        if (!ignore) {
+          setTargets(targetData.targets ?? []);
+          setScenarios(scenarioData.scenarios ?? []);
+        }
+      } catch (err) {
+        if (!ignore) setError(err instanceof Error ? err.message : "Could not initialize Experiment Runner.");
+      }
+    })();
+    return () => {
+      ignore = true;
+    };
+  }, [targetRevision]);
+
+  const variantNameById = useMemo(
+    () => new Map(variants.map((variant) => [variant.id, variant.name])),
+    [variants],
+  );
+  const scenarioNameById = useMemo(
+    () => new Map(scenarios.map((scenario) => [scenario.id, scenario.name])),
+    [scenarios],
+  );
+  const practicalScenarios = useMemo(
+    () => scenarios.filter((scenario) => scenario.suiteKey === "practical-slm"),
+    [scenarios],
+  );
+
+  const publicSuites = [
+    { key: "gsm8k-tuxevil-lite", label: "GSM8K tuxevil-lite" },
+    { key: "native-tool-smoke-es", label: "Native tool smoke ES" },
+    { key: "bfcl-v3-tuxevil-lite", label: "BFCL V3 tuxevil-lite" },
+    { key: "bfcl-v3-irrelevance-tuxevil-lite", label: "BFCL V3 Irrelevance tuxevil-lite" },
+    { key: "bfcl-v3-multiturn-tuxevil-lite", label: "BFCL V3 Multiturn tuxevil-lite" },
+    { key: "bfcl-v3-miss-func-tuxevil-lite", label: "BFCL V3 Missing Function tuxevil-lite" },
+    { key: "bfcl-v4-memory-kv-tuxevil-lite", label: "BFCL V4 Memory KV tuxevil-lite" },
+    { key: "toolsandbox-upstream-wifi-tuxevil-lite", label: "ToolSandbox wifi_off tuxevil-lite" },
+    { key: "toolsandbox-upstream-state-tuxevil-lite", label: "ToolSandbox contacts and reminders tuxevil-lite" },
+    { key: "mgsm-es-tuxevil-lite", label: "MGSM ES tuxevil-lite" },
+    { key: "ifeval-tuxevil-lite", label: "IFEval tuxevil-lite" },
+    { key: "ifstruct-tuxevil-lite", label: "IFStruct tuxevil-lite" },
+    { key: "math500-tuxevil-lite", label: "MATH-500 tuxevil-lite" },
+    { key: "practical-pt-br", label: "Practical PT-BR" },
+    { key: "toolsandbox-local-adapted", label: "ToolSandbox local (adapted)" },
+  ].map((suite) => ({ ...suite, scenarios: scenarios.filter((scenario) => scenario.suiteKey === suite.key) }));
+
+  const saveBindings = async () => {
+    const baseline = variants.find((variant) => variant.role === "BASELINE");
+    const baselineBinding = baseline ? bindings[baseline.id] : null;
+
+    for (const variant of variants) {
+      let binding = bindings[variant.id];
+      if (variant.role === "BASELINE_REPEAT" && baselineBinding) {
+        binding = baselineBinding;
+        setBindings((current) => ({ ...current, [variant.id]: baselineBinding }));
+      }
+
+      if (!binding?.executionTargetId || !binding.executionModelName.trim()) {
+        throw new Error(`Variant "${variant.name}" needs an execution target and model name.`);
+      }
+
+      const res = await fetch(
+        `/api/experiments/${encodeURIComponent(experimentId)}/variants/${encodeURIComponent(variant.id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            executionTargetId: binding.executionTargetId,
+            executionModelName: binding.executionModelName.trim(),
+          }),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Could not bind variant "${variant.name}".`);
+    }
+
+    await onBindingsSaved();
+  };
+
+  const handleSaveBindings = async () => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await saveBindings();
+      setNotice("Execution bindings saved.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save execution bindings.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pollExecution = async (executionId: string) => {
+    for (;;) {
+      const res = await fetch(
+        `/api/experiments/${encodeURIComponent(experimentId)}/executions/${encodeURIComponent(executionId)}`,
+        { cache: "no-store" },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not reconcile experiment execution.");
+      const view = data as ExecutionView;
+      setExecution(view);
+
+      if (view.execution.status === "COMPLETED" || view.execution.status === "FAILED") {
+        if (view.comparisons.length > 0) onComparisons(view.comparisons);
+        return view;
+      }
+      await delay(1_500);
+    }
+  };
+
+  const handleRun = async () => {
+    if (selectedScenarios.length === 0) {
+      setError("Select at least one scenario.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await saveBindings();
+      const res = await fetch(`/api/experiments/${encodeURIComponent(experimentId)}/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scenarioIds: selectedScenarios,
+          samplesPerModel: Math.max(1, Math.min(10, Number(samplesPerModel) || 1)),
+          useEvaluator,
+          successPolicy,
+          successThreshold: Math.max(1, Math.min(5, Number(successThreshold) || 4)),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not start experiment execution.");
+      const view = data as ExecutionView;
+      setExecution(view);
+      setNotice("Experiment launched. Benchmark runs are executing through the normal queue.");
+      await pollExecution(view.execution.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Experiment execution failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleScenario = (scenarioId: string) => {
+    setSelectedScenarios((current) =>
+      current.includes(scenarioId)
+        ? current.filter((id) => id !== scenarioId)
+        : [...current, scenarioId],
+    );
+  };
+
+  return (
+    <section className="panel churn-card churn-runner">
+      <div className="churn-card-head">
+        <div>
+          <p className="card-kicker">Automatic execution</p>
+          <h2>Experiment Runner</h2>
+        </div>
+        {execution && (
+          <span className={`churn-validity ${execution.execution.status === "COMPLETED" ? "valid" : execution.execution.status === "FAILED" ? "invalid" : "unchecked"}`}>
+            {execution.execution.status}
+          </span>
+        )}
+      </div>
+
+      <p className="churn-hint">
+        Each variant is preflighted against the target before any run starts. Provider-reported runtime/model facts that contradict the expected artifact or environment block the experiment.
+      </p>
+
+      {(notice || error) && (
+        <div className={`churn-notice ${error ? "error" : "success"}`}>
+          {error ?? notice}
+        </div>
+      )}
+
+      <div className="churn-runner-bindings">
+        {variants.map((variant) => {
+          const binding = bindings[variant.id] ?? { executionTargetId: "", executionModelName: "" };
+          return (
+            <div className="churn-runner-binding" key={variant.id}>
+              <div>
+                <strong>{variant.name}</strong>
+                <span>{variant.role}</span>
+              </div>
+              <select
+                className="input"
+                value={binding.executionTargetId}
+                onChange={(e) =>
+                  setBindings((current) => ({
+                    ...current,
+                    [variant.id]: { ...binding, executionTargetId: e.target.value },
+                  }))
+                }
+              >
+                <option value="">Execution target…</option>
+                {targets.map((target) => (
+                  <option key={target.id} value={target.id}>
+                    {target.label} · {target.provider}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="input mono"
+                value={binding.executionModelName}
+                onChange={(e) =>
+                  setBindings((current) => ({
+                    ...current,
+                    [variant.id]: { ...binding, executionModelName: e.target.value },
+                  }))
+                }
+                placeholder="provider model identifier"
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      <button
+        className="quiet-button churn-runner-save"
+        type="button"
+        onClick={() => void handleSaveBindings()}
+        disabled={busy}
+      >
+        Save bindings
+      </button>
+
+      <div className="churn-runner-scenarios">
+        <div className="churn-runner-section-head">
+          <strong>Scenarios</strong>
+          <div>
+            {practicalScenarios.length > 0 && (
+              <button
+                className="quiet-button"
+                type="button"
+                onClick={() => {
+                  setSelectedScenarios(practicalScenarios.map((scenario) => scenario.id));
+                  setSuccessPolicy("DETERMINISTIC");
+                  setUseEvaluator(false);
+                }}
+              >
+                Select Practical SLM
+              </button>
+            )}
+            {publicSuites.filter((suite) => suite.scenarios.length > 0).map((suite) => (
+              <button key={suite.key} className="quiet-button" type="button" onClick={() => {
+                setSelectedScenarios(suite.scenarios.map((scenario) => scenario.id));
+                setSuccessPolicy("DETERMINISTIC");
+                setUseEvaluator(false);
+              }}>
+                Select {suite.label}
+              </button>
+            ))}
+            <button className="quiet-button" type="button" onClick={() => setSelectedScenarios(
+              scenarios.filter((scenario) => !publicSuites.some((suite) => suite.key === scenario.suiteKey)).map((scenario) => scenario.id),
+            )}>
+              Select all
+            </button>
+            <button className="quiet-button" type="button" onClick={() => setSelectedScenarios([])}>
+              Clear
+            </button>
+          </div>
+        </div>
+        <div className="churn-scenario-grid">
+          {scenarios.map((scenario) => (
+            <label className={selectedScenarios.includes(scenario.id) ? "churn-scenario selected" : "churn-scenario"} key={scenario.id}>
+              <input
+                type="checkbox"
+                checked={selectedScenarios.includes(scenario.id)}
+                onChange={() => toggleScenario(scenario.id)}
+              />
+              <span>
+                <strong>{scenario.name}</strong>
+                <small>
+                  {scenario.suiteKey === "practical-slm" ? `Practical SLM ${scenario.suiteVersion ?? ""} · objective` : scenario.category}
+                  {scenario.attackType ? ` · ${scenario.attackType}` : ""}
+                </small>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="churn-runner-options">
+        <label>
+          Samples / case
+          <input className="input" type="number" min="1" max="10" value={samplesPerModel} onChange={(e) => setSamplesPerModel(e.target.value)} />
+        </label>
+        <label>
+          Success policy
+          <select
+            className="input"
+            value={successPolicy}
+            onChange={(e) => {
+              const policy = e.target.value as "NONE" | "DETERMINISTIC" | "EVALUATION_THRESHOLD";
+              setSuccessPolicy(policy);
+              if (policy === "EVALUATION_THRESHOLD") setUseEvaluator(true);
+              if (policy === "DETERMINISTIC") setUseEvaluator(false);
+            }}
+          >
+            <option value="NONE">No objective pass/fail</option>
+            <option value="DETERMINISTIC">Deterministic scenario grader</option>
+            <option value="EVALUATION_THRESHOLD">Evaluator star threshold</option>
+          </select>
+        </label>
+        <label>
+          Threshold
+          <input className="input" type="number" min="1" max="5" value={successThreshold} onChange={(e) => setSuccessThreshold(e.target.value)} disabled={successPolicy !== "EVALUATION_THRESHOLD"} />
+        </label>
+        <label className="churn-check churn-runner-check">
+          <input
+            type="checkbox"
+            checked={useEvaluator}
+            onChange={(e) => {
+              setUseEvaluator(e.target.checked);
+              if (!e.target.checked) setSuccessPolicy("NONE");
+            }}
+          />
+          Use active evaluator
+        </label>
+      </div>
+
+      <button className="primary-button churn-action" type="button" onClick={() => void handleRun()} disabled={busy || selectedScenarios.length === 0}>
+        {busy ? "Running experiment…" : `Run ${selectedScenarios.length || ""} scenario${selectedScenarios.length === 1 ? "" : "s"}`}
+      </button>
+
+      {execution && (
+        <div className="churn-run-progress">
+          {execution.benchmarkRuns.map((run) => (
+            <div key={run.mappingId}>
+              <span>{variantNameById.get(run.variantId) ?? run.variantId}</span>
+              <span>{scenarioNameById.get(run.scenarioId) ?? run.scenarioId}</span>
+              <strong>{run.status}</strong>
+            </div>
+          ))}
+          {execution.publicBenchmarkResults?.map((result) => (
+            <div key={result.variantId}>
+              <span>{variantNameById.get(result.variantId) ?? result.variantId}</span>
+              <span>{result.gradedSamples}/{result.plannedSamples} graded</span>
+              <strong>{formatAccuracy(result.accuracy)}</strong>
+              {result.ifeval && (
+                <small>
+                  Prompt strict {formatAccuracy(result.ifeval.promptStrict)} · Prompt loose {formatAccuracy(result.ifeval.promptLoose)}
+                  {" · "}Instruction strict {formatAccuracy(result.ifeval.instructionStrict)} · Instruction loose {formatAccuracy(result.ifeval.instructionLoose)}
+                  {" · "}{result.ifeval.instructions} instructions graded
+                </small>
+              )}
+              <small>{Object.entries(result.outcomes).filter(([, count]) => count > 0)
+                .map(([outcome, count]) => `${outcome} ${count}`).join(" · ")}</small>
+            </div>
+          ))}
+          {execution.execution.errorMessage && (
+            <p className="churn-warning-list">⚠ {execution.execution.errorMessage}</p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}

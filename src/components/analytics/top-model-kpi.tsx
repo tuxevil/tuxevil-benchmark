@@ -13,7 +13,7 @@ export function TopModelKpi({ models }: TopModelKpiProps) {
   // Find security leader (highest securityResilienceScore or lowest ASR)
   const securityLeader =
     models.length > 0
-      ? [...models].sort(
+      ? [...models].filter(m => m.securityResilienceScore !== null).sort(
           (a, b) =>
             (b.securityResilienceScore ?? 0) - (a.securityResilienceScore ?? 0) ||
             (a.attackSuccessRatePct ?? 0) - (b.attackSuccessRatePct ?? 0)
@@ -85,7 +85,7 @@ export function TopModelKpi({ models }: TopModelKpiProps) {
                 <span className="winner-size-tag">{securityLeader.paramSizeLabel}</span>
               </div>
               <span className="kpi-subtext">
-                Immunity: <strong>{securityLeader.securityResilienceScore ?? 100}%</strong> (ASR: {securityLeader.attackSuccessRatePct ?? 0}%)
+                Resistencia observada: <strong>{securityLeader.securityResilienceScore ?? "—"}%</strong> · {securityLeader.securityEvaluatedCases ?? "—"} casos (ASR: {securityLeader.attackSuccessRatePct ?? "—"}%)
               </span>
             </>
           ) : (

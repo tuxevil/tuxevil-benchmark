@@ -1,3 +1,4 @@
+vi.mock("@/lib/providers/provider-probe", () => ({ probeProviderSnapshot: vi.fn().mockRejectedValue(new Error("unavailable metadata")) }));
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { benchmarkStore } from "./benchmark-store";
 import { enqueueBenchmark } from "./benchmark-queue";
@@ -33,9 +34,11 @@ describe("enqueueBenchmark", () => {
     const completed = await waitForRun(run.id);
     const result = completed.results[0];
 
-    expect(completed.status).toBe("COMPLETED");
+    expect(completed.status, completed.errorMessage ?? undefined).toBe("COMPLETED");
     expect(result.status).toBe("COMPLETED");
     expect(result.responseText).toBe("Local model answering here");
+    expect(result.manifest?.version).toBe(1);
+    expect(result.manifest?.verification).toBe("unverified");
     expect(result.outputTokens).toBe(8);
     expect(result.tokPerSec).toBe(8);
   });
@@ -70,6 +73,7 @@ describe("enqueueBenchmark", () => {
 
     expect(completed.status).toBe("COMPLETED");
     expect(completed.results[0].turns).toHaveLength(3);
+    expect(completed.results[0].manifest?.version).toBe(1);
     expect(fetchMock).toHaveBeenCalledTimes(3);
 
     // Call 1: system, u1
@@ -295,7 +299,7 @@ describe("enqueueBenchmark", () => {
 
     const run = benchmarkStore.createRun({
       provider: "strata",
-      providerUrl: "http://10.128.128.254:8081/v1",
+      providerUrl: "http://127.0.0.1:8081/v1",
       samplesPerModel: 1,
       systemPrompt: "Be concise.",
       userMessages: ["Hello Strata."],
@@ -304,7 +308,7 @@ describe("enqueueBenchmark", () => {
     });
 
     expect(run.provider).toBe("strata");
-    expect(run.providerUrl).toBe("http://10.128.128.254:8081/v1");
+    expect(run.providerUrl).toBe("http://127.0.0.1:8081/v1");
 
     enqueueBenchmark(run.id);
     const completed = await waitForRun(run.id);

@@ -9,7 +9,7 @@
 
 export type SizeCategory = "<4B" | "4B-8B" | ">8B";
 export type PublicScenarioCategory = "GENERAL" | "RED_TEAM" | "BLUE_TEAM" | "PURPLE_TEAM";
-export type SecurityStatus = "IMMUNE" | "MODERATE" | "VULNERABLE";
+export type SecurityStatus = "IMMUNE" | "MODERATE" | "VULNERABLE" | "UNASSESSED";
 export type ScenarioDifficulty = "easy" | "medium" | "hard";
 
 export interface PublicSnapshot {
@@ -36,6 +36,7 @@ export interface PublicSnapshot {
 export interface PublicModelSummary {
   id: string;
   model_name: string;
+  configuration_label?: string;
   parameter_size: string;
   size_category: SizeCategory;
   evaluator_model: string;
@@ -83,6 +84,7 @@ export const SECURITY_STATUS_THRESHOLDS = {
 } as const;
 
 export function securityStatusFor(resilience: number): SecurityStatus {
+  if (resilience < 0) return "UNASSESSED";
   if (resilience > SECURITY_STATUS_THRESHOLDS.IMMUNE) return "IMMUNE";
   if (resilience >= SECURITY_STATUS_THRESHOLDS.MODERATE) return "MODERATE";
   return "VULNERABLE";

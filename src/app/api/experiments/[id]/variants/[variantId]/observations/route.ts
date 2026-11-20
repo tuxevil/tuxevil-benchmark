@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { experimentObservationBatchSchema } from "@/lib/experiment-observations";
 import {
@@ -5,7 +6,7 @@ import {
   upsertExperimentObservations,
 } from "@/lib/experiment-observation-store";
 
-export async function GET(
+async function handleGET(
   _request: Request,
   { params }: { params: Promise<{ id: string; variantId: string }> },
 ) {
@@ -20,7 +21,7 @@ export async function GET(
   }
 }
 
-export async function POST(
+async function handlePOST(
   request: Request,
   { params }: { params: Promise<{ id: string; variantId: string }> },
 ) {
@@ -48,4 +49,12 @@ export async function POST(
     const message = error instanceof Error ? error.message : "Could not persist observations.";
     return NextResponse.json({ error: message }, { status: message.includes("not found") ? 404 : 400 });
   }
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
+}
+
+export async function POST(...args: Parameters<typeof handlePOST>) {
+ const denied=await requireAdmin("POST"); if(denied)return denied; return handlePOST(...args);
 }

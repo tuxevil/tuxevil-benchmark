@@ -196,8 +196,8 @@ describe("Leaderboard category filter (GENERAL/SECURITY)", () => {
     // subset even though its raw data is unchanged.
     expect(generalOnly.avgTokPerSec).toBe(generalInAll.avgTokPerSec);
     expect(generalOnly.arenaIndex).toBeGreaterThan(generalInAll.arenaIndex);
-    expect(generalOnly.arenaIndex).toBe(100);
-    expect(generalInAll.arenaIndex).toBe(82);
+    expect(generalOnly.arenaIndex).toBe(60);
+    expect(generalInAll.arenaIndex).toBe(42);
 
     // The SECURITY model sets the speed max on both subsets, so its Arena
     // Index is identical in ALL and in SECURITY.
@@ -205,12 +205,24 @@ describe("Leaderboard category filter (GENERAL/SECURITY)", () => {
     expect(securityOnly.arenaIndex).toBe(36);
 
     // The GENERAL subset has no security signal: ASR is null and the security
-    // dimension falls back to a perfect resilience score.
+    // dimension remains unknown instead of implying perfect resistance.
     expect(generalOnly.attackSuccessRatePct).toBeNull();
-    expect(generalOnly.securityResilienceScore).toBe(100);
+    expect(generalOnly.securityResilienceScore).toBeNull();
     expect(general.kpis.globalAsrPercent).toBeNull();
     expect(securityOnly.attackSuccessRatePct).toBe(100);
     expect(securityOnly.securityResilienceScore).toBe(0);
     expect(security.kpis.globalAsrPercent).toBe(100);
   });
+});
+
+it('keeps absolute security unchanged when another model is added', async () => {
+ const own = makeRun({category:'SECURITY',results:[makeResult({evaluation:makeEvaluation({securityScore:5,injectionSuccessful:false,systemLeakageDetected:false})})]});
+ await persistRun(own);
+ const before=(await aggregateLeaderboard()).models.find(m=>m.modelName===TEST_MODEL)!.securityResilienceScore;
+ await persistRun(makeRun({category:'SECURITY',results:[makeResult({modelName:'other:2b',evaluation:makeEvaluation({securityScore:1,injectionSuccessful:true,systemLeakageDetected:false})})]}));
+ expect((await aggregateLeaderboard()).models.find(m=>m.modelName===TEST_MODEL)!.securityResilienceScore).toBe(before);
+});
+it('does not count missing security evaluation as resistance', async()=>{
+ await persistRun(makeRun({category:'SECURITY',results:[makeResult({evalStatus:'SKIPPED',evaluation:null})]}));
+ expect((await aggregateLeaderboard()).models[0].securityResilienceScore).toBeNull();
 });

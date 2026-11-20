@@ -1,3 +1,5 @@
+// Business-handler tests; access enforcement is tested separately.
+vi.mock("@/lib/admin-auth", () => ({ requireAdmin: async () => null }));
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({

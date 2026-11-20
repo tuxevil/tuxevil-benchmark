@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { enqueueBenchmark } from "@/lib/benchmark-queue";
 import { benchmarkStore } from "@/lib/benchmark-store";
@@ -14,7 +15,7 @@ import {
  * Runs the whole Chatbot Plus profile with one click and a single selected
  * model. This does not change the v1 /quick-profile endpoint or its fixtures.
  */
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   let body: unknown;
   try {
     body = await request.json();
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { modelName, provider, providerUrl } = parsed.data;
+  const { modelName, provider, providerUrl, reasoningEffort, inference, samplesPerModel } = parsed.data;
   const endpointError = validateProviderEndpoint(providerUrl, provider);
   if (endpointError) return NextResponse.json({ error: endpointError }, { status: 400 });
 
@@ -55,8 +56,8 @@ export async function POST(request: Request) {
       systemPrompt: test.systemPrompt,
       userMessages: [...test.userMessages],
       models: [modelName],
-      samplesPerModel: IA_SOLAR_CHATBOT_PLUS_SAMPLES,
-      parameters: { ...IA_SOLAR_CHATBOT_PLUS_PARAMETERS },
+      samplesPerModel: samplesPerModel ?? IA_SOLAR_CHATBOT_PLUS_SAMPLES,
+      parameters: { ...IA_SOLAR_CHATBOT_PLUS_PARAMETERS, ...inference, reasoningEffort },
       provider,
       providerUrl,
       ollamaUrl: providerUrl,
@@ -88,4 +89,8 @@ export async function POST(request: Request) {
     { ...chatbotPlusSummary(), modelName, queuedRunIds },
     { status: 202 },
   );
+}
+
+export async function POST(...args: Parameters<typeof handlePOST>) {
+ const denied=await requireAdmin("POST"); if(denied)return denied; return handlePOST(...args);
 }

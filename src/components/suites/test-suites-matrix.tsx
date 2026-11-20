@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Scenario, TestCategory, SecurityAttackType, BenchmarkParameters, ModelProvider } from "@/lib/contracts";
+import { useRouter } from "next/navigation";
+import { supportsExplicitThinking, type Scenario, type TestCategory, type SecurityAttackType, type BenchmarkParameters, type ModelProvider, type ReasoningEffort } from "@/lib/contracts";
+import type { DiscoveredModel } from "@/lib/providers/model-discovery";
 import { quickProfileSummary } from "@/lib/ia-solar-quick-profile";
 import { chatbotPlusSummary } from "@/lib/ia-solar-chatbot-plus-profile";
 
@@ -28,9 +30,10 @@ export function TestSuitesMatrix({
   onProviderChange,
   onLaunchRun,
 }: TestSuitesMatrixProps) {
+  const router = useRouter();
   // Scenarios state
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
-  const [availableModels, setAvailableModels] = useState<Array<{ name: string; size: string }>>([]);
+  const [availableModels, setAvailableModels] = useState<DiscoveredModel[]>([]);
   const [isRefreshingModels, setIsRefreshingModels] = useState(false);
 
   // Left Panel - Scenario Editor
@@ -45,6 +48,8 @@ export function TestSuitesMatrix({
   ]);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
   const [savingNotice, setSavingNotice] = useState<string | null>(null);
+  const selectedScenario = scenarios.find((scenario) => scenario.id === selectedScenarioId) ?? null;
+  const selectedIsPractical = selectedScenario?.suiteKey === "practical-slm";
 
   // Right Panel - Matrix Launcher Mode
   const [mode, setMode] = useState<"onboarding" | "update" | "custom">("onboarding");
@@ -258,6 +263,28 @@ export function TestSuitesMatrix({
     setUserMessages(sc.userMessages);
   };
 
+  const targetModels = mode === "onboarding" ? [onboardingModel]
+    : mode === "update" ? availableModels.map(model => model.name) : selectedModels;
+  const reasoningOptions: Array<{ value: ReasoningEffort; label: string }> = [
+    { value: "off", label: "Off (Standard benchmark)" },
+    { value: "on", label: "On (model support required)" },
+    { value: "default", label: "Provider Default" },
+    { value: "low", label: "Low" },
+    { value: "medium", label: "Medium" },
+    { value: "high", label: "High" },
+    { value: "max", label: "Max" },
+  ];
+  const availableReasoning = reasoningOptions.filter(({ value }) => {
+    if (value === "off") return true;
+    if (targetModels.length === 0) return false;
+    if (value === "on") return supportsExplicitThinking(activeProvider);
+    return (value === "default" && activeProvider !== "ollama")
+      || targetModels.every(name => availableModels.find(model => model.name === name)?.reasoningEfforts?.includes(value));
+  });
+  const selectedReasoning = parameters.reasoningEffort ?? "off";
+  const reasoningEffort = availableReasoning.some(option => option.value === selectedReasoning)
+    ? selectedReasoning : "off";
+
   // Mode A: one-click quick profile, or historic full scenario library.
   const handleRunModoA = async () => {
     if (!onboardingModel) {
@@ -273,6 +300,13 @@ export function TestSuitesMatrix({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             modelName: onboardingModel,
+            reasoningEffort,
+            samplesPerModel,
+            inference: {
+              temperature: parameters.temperature,
+              numCtx: parameters.numCtx,
+              numPredict: parameters.numPredict,
+            },
             provider: activeProvider,
             providerUrl: ollamaUrl,
           }),
@@ -285,7 +319,7 @@ export function TestSuitesMatrix({
         }
         // All cases have been queued durably, not completed. Monitor shows
         // their independent run states and lets the user pause/cancel runs.
-        window.location.assign("/monitor");
+        router.push("/admin/monitor");
         return;
       }
 
@@ -309,7 +343,7 @@ export function TestSuitesMatrix({
           systemPrompt: sc.systemPrompt,
           userMessages: sc.userMessages,
           models: [onboardingModel],
-          parameters,
+          parameters: { ...parameters, reasoningEffort },
           samplesPerModel,
           scenarioId: sc.id,
           provider: activeProvider,
@@ -343,7 +377,7 @@ export function TestSuitesMatrix({
         systemPrompt: targetSysPrompt,
         userMessages: targetUserMsgs,
         models: availableModels.map((m) => m.name),
-        parameters,
+        parameters: { ...parameters, reasoningEffort },
         samplesPerModel,
         scenarioId: targetScenario ? targetScenario.id : null,
         provider: activeProvider,
@@ -367,7 +401,7 @@ export function TestSuitesMatrix({
         systemPrompt,
         userMessages,
         models: selectedModels,
-        parameters,
+        parameters: { ...parameters, reasoningEffort },
         samplesPerModel,
         scenarioId: selectedScenarioId,
         provider: activeProvider,
@@ -410,7 +444,7 @@ export function TestSuitesMatrix({
               <option value="">-- Select Saved Scenario --</option>
               {scenarios.map((s) => (
                 <option key={s.id} value={s.id}>
-                  [{s.category}] {s.name}
+                  [{s.suiteKey === "practical-slm" ? "Practical SLM" : s.category}] {s.name}
                 </option>
               ))}
             </select>
@@ -515,10 +549,13 @@ export function TestSuitesMatrix({
           <button type="button" className="btn-save-library" onClick={handleSaveScenario}>
             💾 Save to Library
           </button>
-          {selectedScenarioId && (
+          {selectedScenarioId && !selectedIsPractical && (
             <button type="button" className="btn-delete-library" onClick={handleDeleteScenario}>
               🗑️ Delete from Library
             </button>
+          )}
+          {selectedIsPractical && (
+            <span className="sub">🔒 Versioned Practical SLM case · Save to Library creates a customizable copy.</span>
           )}
         </div>
       </div>
@@ -635,19 +672,16 @@ export function TestSuitesMatrix({
 
               {onboardingProfile === "chatbot" ? (
                 <p className="mode-desc" role="status">
-                  <strong>{chatbotSummary.cases} casos · {chatbotSummary.turns} turnos · 1 muestra</strong>.
+                  <strong>{chatbotSummary.cases} casos · {chatbotSummary.turns} turnos · {samplesPerModel} {samplesPerModel === 1 ? "muestra por caso" : "muestras por caso"}</strong>.
                   Perfil de chatbots web: las 11 pruebas originales más preguntas
                   factuales, contexto, memoria, contradicciones, JSON, soporte
-                  y seguridad textual de µTuxbot. Contexto 8192, 768 tokens
-                  máximos de respuesta, temperatura 0. Tiempo orientativo:
-                  alrededor del doble del perfil rápido, no garantizado.
+                  y seguridad textual de µTuxbot. Usa la configuración de inferencia de abajo.
                   Las puntuaciones de ambos perfiles no son equivalentes.
                 </p>
               ) : onboardingProfile === "quick" ? (
                 <p className="mode-desc" role="status">
-                  <strong>{quickSummary.cases} casos · {quickSummary.turns} turnos · 1 muestra</strong>.
-                  Parámetros fijos: temperatura 0, contexto 8192, máximo 512 tokens
-                  y razonamiento desactivado. Se encolan todos los casos en un clic
+                  <strong>{quickSummary.cases} casos · {quickSummary.turns} turnos · {samplesPerModel} {samplesPerModel === 1 ? "muestra por caso" : "muestras por caso"}</strong>.
+                  Usa la configuración de inferencia de abajo. Se encolan todos los casos en un clic
                   y puedes ver su progreso en Monitor. El juez LLM se usa solo si
                   está configurado. Las pruebas de <code>tool_calls</code> reales
                   se realizan aparte; este perfil mide texto y seguridad conversacional.
@@ -767,8 +801,6 @@ export function TestSuitesMatrix({
             </div>
           )}
 
-          {/* The quick profile uses fixed, reproducible parameters. */}
-          {!(mode === "onboarding" && (onboardingProfile === "quick" || onboardingProfile === "chatbot")) && (
           <div className="parameters-card">
             <h5>⚙ Inference Configuration</h5>
             <div className="params-grid">
@@ -832,30 +864,29 @@ export function TestSuitesMatrix({
               <div className="p-item">
                 <label>Reasoning Mode (CoT)</label>
                 <select
-                  value={parameters.reasoningEffort ?? "off"}
+                  value={reasoningEffort}
                   onChange={(e) =>
                     setParameters({
                       ...parameters,
-                      reasoningEffort: e.target.value as "off" | "default" | "low" | "medium" | "high" | "max",
+                      reasoningEffort: e.target.value as ReasoningEffort,
                     })
                   }
                 >
-                  <option value="off">Off (Standard benchmark)</option>
-                  <option value="default">Provider Default</option>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="max">Max</option>
+                  {availableReasoning.map(({ value, label }) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
                 </select>
+                {availableReasoning.every(option => option.value === "off" || option.value === "default") && (
+                  <small>No hay niveles de CoT confirmados para la selección.</small>
+                )}
               </div>
             </div>
-            {parameters.reasoningEffort && parameters.reasoningEffort !== "off" && (parameters.numPredict ?? 512) < 1024 && (
+            {reasoningEffort !== "off" && parameters.numPredict < 1024 && (
               <p style={{ marginTop: "12px", marginBottom: 0, fontSize: "0.78rem", color: "var(--warning)" }}>
-                ⚠️ <strong>Warning:</strong> Reasoning enabled with only {parameters.numPredict ?? 512} output tokens. The model may exhaust its generation budget thinking before producing a visible final answer.
+                ⚠️ <strong>Warning:</strong> Reasoning enabled with only {parameters.numPredict} output tokens. The model may exhaust its generation budget thinking before producing a visible final answer.
               </p>
             )}
           </div>
-          )}
         </div>
       </div>
     </div>

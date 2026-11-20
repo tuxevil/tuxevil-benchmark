@@ -11,6 +11,7 @@ beforeAll(async()=>{
  const db=getSqliteDb();
  db.prepare(`INSERT INTO test_runs (id,status,system_prompt,ollama_url,user_messages,selected_models,parameters,created_at,updated_at) VALUES ('run','COMPLETED','system','http://localhost','[]','["a","b"]','{}','today','today')`).run();
  for(const model of ['a','b']) db.prepare(`INSERT INTO model_results (id,test_run_id,model_name,status,eval_status,response_text,created_at) VALUES (?, 'run', ?, 'COMPLETED','COMPLETED','answer','today')`).run(model,model);
+ db.prepare(`INSERT INTO result_resource_measurements VALUES ('a', '{"wattsMean":42}')`).run();
  db.prepare(`INSERT INTO model_result_turns (id,model_result_id,step_order,user_message,response_text) VALUES ('turn','a',1,'question','answer')`).run();
 });
 afterAll(async()=>{getSqliteDb().close();vi.unstubAllEnvs();await rm(directory,{recursive:true,force:true});});
@@ -23,10 +24,21 @@ it('backs up, prevents stale cleanup, restores selected models and preserves tur
  getSqliteDb().prepare("UPDATE model_results SET response_text='answer' WHERE id='a'").run();
  expect(await clearResults(backup.id)).toEqual({deleted:2});
  expect(await restoreBackup(backup.id,['a'])).toEqual({restored:1,skipped:0});
+ expect(getSqliteDb().prepare('SELECT count(*) AS n FROM result_resource_measurements').get()).toEqual({n:1});
  expect(getSqliteDb().prepare('SELECT count(*) AS n FROM model_result_turns').get()).toEqual({n:1});
  expect(await restoreBackup(backup.id,['a'])).toEqual({restored:0,skipped:1});
  expect(await restoreBackup(backup.id,['b'])).toEqual({restored:1,skipped:0});
  expect(JSON.parse((getSqliteDb().prepare('SELECT selected_models FROM test_runs').get() as {selected_models:string}).selected_models).sort()).toEqual(['a','b']);
  getSqliteDb().prepare("UPDATE test_runs SET status='RUNNING'").run();
  await expect(createBackup('active')).rejects.toThrow('pendientes');
+});
+it('blocks cleaning linked experiment results and preserves both sides of the relation', async()=>{
+ const db=getSqliteDb();
+ db.prepare("UPDATE test_runs SET status='COMPLETED'").run();
+ db.exec('CREATE TABLE experiment_execution_runs(id TEXT PRIMARY KEY, test_run_id TEXT REFERENCES test_runs(id) ON DELETE CASCADE)');
+ db.prepare("INSERT INTO experiment_execution_runs VALUES ('link','run')").run();
+ const backup=await createBackup('experiment safety');
+ await expect(clearResults(backup.id)).rejects.toThrow('vinculados a experimentos');
+ expect(db.prepare('SELECT count(*) AS n FROM experiment_execution_runs').get()).toEqual({n:1});
+ expect(db.prepare('SELECT count(*) AS n FROM model_results').get()).toEqual({n:2});
 });

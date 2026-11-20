@@ -5,6 +5,7 @@ import { benchmarkStore } from "@/lib/benchmark-store";
 import { loadPersistedState } from "@/lib/database";
 import { redisConnection } from "@/lib/redis-connection";
 import { LEGACY_QUEUE_NAME, LEGACY_RECOVERY_KEY_PREFIX } from "@/lib/legacy-identifiers";
+import { isTestRunAwaitingExperimentEnqueue } from "@/lib/experiment-execution-store";
 
 const QUEUE_NAME = LEGACY_QUEUE_NAME;
 const RECOVERY_KEY_PREFIX = LEGACY_RECOVERY_KEY_PREFIX;
@@ -32,6 +33,10 @@ export async function reconcileOrphanedRuns(options: { maxRecoveries?: number } 
 
     const candidates = persisted.runs.filter(({ run }) => run.status === "PENDING" || run.status === "RUNNING");
     for (const { run } of candidates) {
+      if (await isTestRunAwaitingExperimentEnqueue(run.id)) {
+        result.skipped.push(run.id);
+        continue;
+      }
       if (run.paused) {
         result.skipped.push(run.id);
         continue;
@@ -39,10 +44,15 @@ export async function reconcileOrphanedRuns(options: { maxRecoveries?: number } 
       const jobId = `benchmark-${run.id}`;
       const job = await queue.getJob(jobId);
       const jobState = job ? await job.getState() : null;
-      if (jobState && jobState !== "failed") {
+      const hasIncompleteResults = run.results.some((entry) =>
+        ["PENDING", "INFERRING", "EVALUATING"].includes(entry.status),
+      );
+      const completedJobNeedsRecovery = jobState === "completed" && hasIncompleteResults;
+      if (jobState && jobState !== "failed" && !completedJobNeedsRecovery) {
         result.skipped.push(run.id);
         continue;
       }
+      if (completedJobNeedsRecovery) await job?.remove();
 
       const recoveryKey = `${RECOVERY_KEY_PREFIX}${run.id}`;
       const recoveries = Number((await redis.get(recoveryKey)) ?? 0);
@@ -89,6 +99,15 @@ export async function reconcileOrphanedEvals(persisted?: Awaited<ReturnType<type
     }
     if (markedInRun > 0) {
       await benchmarkStore.flush(run.id);
+      try {
+        const { reconcileExperimentExecutionsForTestRun } = await import("@/lib/experiment-runner");
+        await reconcileExperimentExecutionsForTestRun(run.id);
+      } catch (error) {
+        console.error("[tuxevil-benchmark] experiment reconciliation after eval recovery failed", {
+          runId: run.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
       marked += markedInRun;
     }
   }
@@ -108,4 +127,13 @@ async function markStalled(runId: string) {
     errorMessage: STALLED_ERROR_MESSAGE,
   });
   await benchmarkStore.flush(runId);
+  try {
+    const { reconcileExperimentExecutionsForTestRun } = await import("@/lib/experiment-runner");
+    await reconcileExperimentExecutionsForTestRun(runId);
+  } catch (error) {
+    console.error("[tuxevil-benchmark] experiment reconciliation after stalled run failed", {
+      runId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }

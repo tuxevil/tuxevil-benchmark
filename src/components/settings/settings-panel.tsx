@@ -65,7 +65,7 @@ export function SettingsPanel({
   onLlamacppApiKeyChange,
   llamacppApiKeyConfigured = false,
   onClearLlamacppApiKey,
-  strataUrl = "http://10.128.128.254:8081/v1",
+  strataUrl = "http://127.0.0.1:8081/v1",
   onStrataUrlChange,
   strataApiKey = "",
   onStrataApiKeyChange,
@@ -286,7 +286,7 @@ export function SettingsPanel({
                 type="url"
                 value={strataUrl}
                 onChange={(e) => onStrataUrlChange?.(e.target.value)}
-                placeholder="http://10.128.128.254:8081/v1"
+                placeholder="http://127.0.0.1:8081/v1"
               />
             </div>
             <div className="input-group" style={{ marginBottom: "0.5rem" }}>

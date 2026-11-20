@@ -1,14 +1,15 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { benchmarkStore } from "@/lib/benchmark-store";
 import { settingsUpdateSchema } from "@/lib/contracts";
 import { validateProviderEndpoint } from "@/lib/endpoints";
 
-export async function GET() {
+async function handleGET() {
   await benchmarkStore.hydrate();
   return NextResponse.json({ settings: benchmarkStore.getSettings() });
 }
 
-export async function PATCH(request: Request) {
+async function handlePATCH(request: Request) {
   await benchmarkStore.hydrate();
   let body: unknown;
   try {
@@ -43,4 +44,12 @@ export async function PATCH(request: Request) {
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not persist settings." }, { status: 503 });
   }
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
+}
+
+export async function PATCH(...args: Parameters<typeof handlePATCH>) {
+ const denied=await requireAdmin("PATCH"); if(denied)return denied; return handlePATCH(...args);
 }

@@ -136,6 +136,24 @@ describe("benchmarkStore evaluator catalog", () => {
     expect(benchmarkStore.getEvaluatorConfig()?.model).toBe("judge-a-v2");
   });
 
+  it("preserves Thinking when a settings form omits it and accepts an explicit override", async () => {
+    const original = benchmarkStore.getSettings().parameters;
+    const parameters = { temperature: 0, numCtx: 4096, topP: 0.9, repeatPenalty: 1.1, numPredict: 512 };
+    try {
+      await benchmarkStore.updateSettings({ clearEvaluatorApiKey: false, parameters: { ...parameters, reasoningEffort: "on" } });
+      await benchmarkStore.updateSettings({ clearEvaluatorApiKey: false, parameters: { ...parameters, seed: 42 } });
+      expect(benchmarkStore.getSettings().parameters).toEqual({ ...parameters, seed: 42, reasoningEffort: "on" });
+
+      await benchmarkStore.updateSettings({ clearEvaluatorApiKey: false, parameters: { ...parameters, reasoningEffort: "off" } });
+      expect(benchmarkStore.getSettings().parameters.reasoningEffort).toBe("off");
+    } finally {
+      await benchmarkStore.updateSettings({
+        clearEvaluatorApiKey: false,
+        parameters: { ...original, reasoningEffort: original.reasoningEffort ?? "off" },
+      });
+    }
+  });
+
   it("updateSettings can switch the active evaluator by id", async () => {
     const first = await benchmarkStore.addEvaluator({ baseUrl: "https://a.example/v1", model: "judge-a", apiKey: "k-a" });
     const second = await benchmarkStore.addEvaluator({ baseUrl: "https://b.example/v1", model: "judge-b", apiKey: "k-b" });

@@ -12,7 +12,7 @@ test("Test Suite discovers and launches Strata using its configured endpoint", a
     const isStrata = url.searchParams.get("url") === "http://strata.local:8081/v1";
     return route.fulfill({ json: { models: [{ name: isStrata ? "strata-only-model" : "ollama-only-model", size: "local" }] } });
   });
-  await page.goto("/suites");
+  await page.goto("/admin/suites");
   await expect(page.getByRole("option", { name: /ollama-only-model/ })).toHaveCount(1);
   await page.getByRole("button", { name: "Strata", exact: true }).click();
   await expect(page.getByRole("option", { name: /strata-only-model/ })).toHaveCount(1);

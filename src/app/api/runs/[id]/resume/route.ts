@@ -1,7 +1,8 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { benchmarkStore } from "@/lib/benchmark-store";
 
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handlePOST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   await benchmarkStore.hydrate();
   const { id } = await params;
   const run = benchmarkStore.getStoredRun(id);
@@ -10,4 +11,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: `Run is already ${run.status.toLowerCase()}.` }, { status: 409 });
   }
   return NextResponse.json({ run: benchmarkStore.resumeRun(id) });
+}
+
+export async function POST(...args: Parameters<typeof handlePOST>) {
+ const denied=await requireAdmin("POST"); if(denied)return denied; return handlePOST(...args);
 }

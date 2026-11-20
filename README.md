@@ -1,617 +1,454 @@
 # tuxevil Benchmark
 
-[![CI](https://github.com/tuxevil/tuxevil-benchmark/actions/workflows/ci.yml/badge.svg)](https://github.com/tuxevil/tuxevil-benchmark/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Node.js >= 20](https://img.shields.io/badge/node-%3E%3D20-339933.svg)](.nvmrc)
-[![TypeScript](https://img.shields.io/badge/types-TypeScript-3178c6.svg)](tsconfig.json)
-[![Next.js 16](https://img.shields.io/badge/Next.js-16-black.svg)](package.json)
-[![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](package.json)
-[![Live](https://img.shields.io/badge/live-benchmark.tuxevil.com-4caf50.svg)](https://benchmark.tuxevil.com/)
-
-tuxevil Benchmark is an enterprise-grade local language-model benchmarking, security evaluation, and quality telemetry workspace in Sebastián Real's (tuxevil) personal project portfolio. It positions the **Small Language Model (SLM)** as a first-class entity and applies universal UX/UI patterns—*Progressive Disclosure*, *Master-Detail Navigation*, and *Contextual Analytics*—making model comparison intuitive for both AI engineers and non-technical stakeholders.
-
-tuxevil Benchmark executes standardized scenarios across local Ollama models, captures response-quality metrics and granular inference telemetry, evaluates model outputs via an OpenAI-compatible frontier judge model, and compiles rankings on an interactive Arena Leaderboard.
-
-The application is built for secure, local, and private model evaluations. It supports both a zero-config single-process development mode backed by SQLite and a scalable, durable multi-process deployment backed by PostgreSQL and Redis.
-
-> 🌐 **Public Leaderboard:** [https://benchmark.tuxevil.com/](https://benchmark.tuxevil.com/) — static snapshot showcase of evaluated models, security results, and public scenarios.
-
-
-## IA Solar LIVE — perfil rápido (un clic)
-
-En **Test Suites → Mode A**, elige proveedor/modelo, mantén seleccionado **Rápido IA Solar** y pulsa **Ejecutar perfil rápido IA Solar**. Encola **11 escenarios / 13 turnos**, una muestra por escenario, con parámetros breves reproducibles y seguimiento en **Monitor**. No borra ni modifica la batería histórica; puedes volver a **Completo** cuando necesites la evaluación extensa.
-
-Detalles técnicos, límites y uso por API: [docs/ia-solar-quick-profile.md](docs/ia-solar-quick-profile.md). Las pruebas de \u0060tool_calls\u0060 reales siguen separadas en [PR #24](https://github.com/tuxevil/tuxevil-benchmark/pull/24).
-
-
-## Contents
-
-- [UX/UI Architecture & Navigation](#uxui-architecture--navigation)
-- [Highlights](#highlights)
-- [Architecture](#architecture)
-- [Security Testing Framework](#security-testing-framework)
-- [Arena Leaderboard & Analytics](#arena-leaderboard--analytics)
-- [Theme System (Light / Dark / System)](#theme-system-light--dark--system)
-- [Requirements](#requirements)
-- [Quick Start](#quick-start)
-- [Configuring Evaluation](#configuring-evaluation)
-- [Durable PostgreSQL and Redis Setup](#durable-postgresql-and-redis-setup)
-- [Environment Variables](#environment-variables)
-- [Using the Modules](#using-the-modules)
-- [HTTP API Overview](#http-api-overview)
-- [MCP Server (Agent Integration)](#mcp-server-agent-integration)
-- [Persistence and Data Model](#persistence-and-data-model)
-- [Public Landing Site](#public-landing-site)
-- [Project Layout](#project-layout)
-- [Development Commands](#development-commands)
-- [Contributing](#contributing)
-
-## UX/UI Architecture & Navigation
-
-The application is structured into **5 independent core modules**, cleanly separating analytical consultation, controlled experimentation, and operational execution, alongside a 3-level navigation hierarchy:
-
-```text
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│ tuxevil Benchmark [ 📊 Leaderboard ] [ 🧪 Test Suites ] [ 🧬 Churn Lab ] [ ⚡ Monitor ] [ ⚙️ Settings ] │
-└──────────────────────────────────────────────────────────────────────────────────┘
-```
-
-1. **📊 Arena Leaderboard (`/`):** Public executive showcase and comparative database. Features 4 global KPI cards (*Evaluated Models*, *Overall Leader*, *Security Leader*, *Average Speed*), a Master Model Table with unit micro-pills (`tok/s`, `ms`, `tok`, `s`), color-coded security badges (`🟢 Immune`, `🟡 Moderate`, `🔴 Vulnerable`), custom weight sliders (`[⚙ Weights]`), and real-time linked visual charts (*Scatter Plot* & *Radar Chart*).
-2. **🧪 Test Suites & Matrix (`/suites`):** Dual-panel test creator and matrix orchestrator.
-   - **Left Panel:** Syntax-highlighted system prompt editor, category selector, Canary Token Injector (`CANARY_SEC_9842_ALPHA`), multi-turn conversation builder, scenario library saver, and delete button (`[ 🗑️ Delete from Library ]`).
-   - **Right Panel:** **Mode A (Model Onboarding)** (run the active editor scenario on a single model), **Mode B (Suite Update)** (run 1 scenario across ALL local models), and **Custom Matrix Mode** (N models $\times$ M scenarios) with a live model refresh trigger (`[ 🔄 Refresh Models ]`).
-3. **🧬 Churn Lab (`/churn`):** Controlled paired-experiment workbench for local model changes. Register immutable model artifacts and execution environments, create baseline / baseline-repeat / variant experiments, import case-level observations, and inspect churn, lost/gained successes, intrinsic run noise, McNemar significance, and per-case diffs. Includes presets for quant/weights, KV cache, backend builds, context depth, reasoning mode, Flash Attention, and sampling.
-4. **⚡ Live Monitor (`/monitor`):** Technical operations and real-time inference monitoring. Displays local Ollama server status (ping, installed models, active model loaded in VRAM via `/api/ps`, VRAM usage), active run progress bar, token-by-token live SSE streaming box, queue flow controls (*Pause*, *Resume*, *Cancel*, *Retry Failed*), and run history log.
-5. **⚙️ Settings (`/settings`):** Endpoint configurations (Ollama URL, evaluator catalog with active judge selection), inference hyper-parameters, and theme options.
-6. **Level 2: Model Profile (`/models/[modelId]` & Inline Modal):** Technical dossier for an individual model available both as a dedicated page and an interactive modal when clicking `[View Profile]` on the Leaderboard. Displays model averages (Rating, Grammar, Compliance, Accuracy, Security Resilience), filterable executed test benchmarks table, and inspector triggers.
-7. **Level 3: Test Inspector Drawer:** Slide-over panel sliding from the right without losing background context. Displays System Prompt, User Prompt, Model Output Response, Evaluator Verdict (star ratings, qualitative feedback, vulnerability analysis), and Execution Telemetry (*TTFT, Speed, Output Tokens, Latency*).
-
-## Highlights
-
-- **Model Discovery & Execution Orchestrator:** Discover installed Ollama models automatically, configure multi-model matrix comparisons, set multi-sample repetition (1–10 runs per model), and fine-tune inference parameters (temperature, context length `numCtx`, top-p, repeat penalty, max tokens `numPredict`).
-- **Canary Token Security Testing:** Auto-inject canary tokens (`CANARY_SEC_9842_ALPHA`) and evaluate 8 major security attack vectors (*Instruction Override*, *System Prompt Leakage*, *Indirect Prompt Injection*, *Delimiter Hijacking*, *Context Overstuffing*, *Encoding Obfuscation*, *Tool Parameter Hijacking*, *Refusal Suppression*).
-- **Linked Visual Analytics:** Interactive 2D *Scatter Plot (Arena Score vs. Speed)* and 6-axis *Radar Chart (Grammar, Compliance, Accuracy, Security, TTFT, Speed)* that dynamically react in real time to checked models (`[x]`) in the Master Table.
-- **Custom Weighting Formula:** Adjust Arena Score weighting dynamically:
-  $$\text{Arena Index} = (W_q \cdot \text{Quality}) + (W_s \cdot \text{Security}) + (W_v \cdot \text{Speed})$$
-- **Granular Inference Telemetry:** Capture Time to First Token (TTFT), token output throughput (tok/sec), thinking token consumption, prompt token count, output token count, and execution latency for every turn and sample.
-- **Controlled Churn Experiments:** Compare baseline and variant outputs case-by-case instead of relying only on aggregate scores. Track agreement/churn, lost vs gained successes, Wilson confidence intervals, exact McNemar p-values, deterministic baseline-repeat noise, and model/runtime fingerprints.
-- **Automated Frontier Evaluation (LLM-as-a-Judge):** Evaluate outputs automatically using OpenAI-compatible `/chat/completions` endpoints. Receives structured JSON metrics (1–5 star overall score, Grammar, Compliance, Accuracy, and vulnerability breakdown).
-- **Real-Time Token Streaming & Queue Controls:** Stream output token-by-token over Server-Sent Events (SSE) in the Live Monitor, with queue control actions (*Pause*, *Resume*, *Cancel*, *Retry Failed*).
-- **Theme Support (Light / Dark / System):** Native support for Light mode, Dark mode, and OS preference matching without flash of unstyled content (FOUC).
-- **Anomaly Detection Dashboard:** Automatic detection and surfacing of empty/near-zero responses (trimmed length < 15 chars, grouped by model x scenario), failed or stalled evaluations (with one-click re-evaluate), and TPS telemetry outliers (z-score based with Samuelson bound gating). Available in the Monitor module and via `GET /api/anomalies`.
-- **Worker Auto-Recovery:** Orphaned benchmark runs (PENDING/RUNNING with no active BullMQ job) are automatically detected on worker startup and every 5 minutes. Runs are re-enqueued or marked as STALLED after exceeding a bounded retry counter (Redis TTL 7d), preventing infinite retry loops. Stalled evaluations on finished runs are also reconciled.
-- **Data Export:** Export benchmark results as JSON or CSV with optional filters (model, scenario, date range) via `GET /api/export_results`.
-- **Flexible Execution Modes:** Zero-dependency local SQLite setup or enterprise-ready PostgreSQL + Redis BullMQ worker queue architecture.
-- **MCP Server for Agent-Driven Benchmarking:** Expose the tuxevil Benchmark REST API as Model Context Protocol (MCP) tools and resources so autonomous agents (e.g. Hermes) can read metrics, create test scenarios, and orchestrate matrix benchmarks programmatically.
-
-## Architecture
-
-tuxevil Benchmark is built as a Next.js 16 application with a React 19 single-page dashboard, typed server-side REST API routes, and a decoupled BullMQ worker process.
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                      Browser Dashboard                      │
-└──────────────┬──────────────────────────────▲───────────────┘
-               │ HTTP API                     │ SSE Streaming
-               ▼                              │
-┌─────────────────────────────────────────────┴───────────────┐
-│                    Next.js API Server                       │
-│  (/api/runs, /api/scenarios, /api/leaderboard, /api/...)    │
-└──────┬──────────────────────────────┬───────────────────────┘
-       │                              │
-       ▼                              ▼
-┌──────────────┐              ┌──────────────┐
-│ Ollama Server│              │  Evaluator   │
-│  /api/chat   │              │    Judge     │
-└──────────────┘              └──────────────┘
-       ▲                              ▲
-       │                              │
-┌──────┴──────────────────────────────┴───────────────────────┐
-│                Benchmark Engine / Store                     │
-│    (Local SQLite or Durable PostgreSQL + Redis/BullMQ)      │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │ Durable Worker      │
-                    │ (src/worker.ts)     │
-                    └─────────────────────┘
-```
-
-### Execution Modes
-
-- **Local Mode (Default):** Leave `REDIS_URL` empty. Benchmark runs execute directly in the web server process and persist to an embedded SQLite database (`SQLITE_PATH`, default `./tuxevil-benchmark.db`). Existing checkouts with only the legacy `compare.db` are detected automatically when `SQLITE_PATH` is unset.
-- **Durable Mode:** Set both `DATABASE_URL` and `REDIS_URL`. Benchmark jobs are enqueued in Redis via BullMQ, processed asynchronously by `src/worker.ts`, and persisted to PostgreSQL. Progress updates and events are broadcast across processes via Redis pub/sub.
-
-> **Note:** `REDIS_URL` requires `DATABASE_URL` (workers must recover run state from PostgreSQL), and the durable worker additionally requires `APP_ENCRYPTION_KEY` to decrypt stored evaluator credentials.
-
-## Security Testing Framework
-
-tuxevil Benchmark includes a security testing suite engineered to evaluate Small Language Models against adversarial jailbreak techniques and system prompt exfiltration attempts.
-
-### Built-in Attack Vectors & Specialized Security Categories
-
-The benchmark suite includes pre-configured security attack vectors and specialized SecOps/Purple Team operational templates:
-
-#### Adversarial Red Teaming Vectors (Canary Token Evaluation)
-
-| Attack Vector | Category Code | Objective |
-| --- | --- | --- |
-| **System Prompt Exfiltration** | `SYSTEM_PROMPT_LEAKAGE` | Forces translation or extraction of confidential system prompt instructions and secret canary keys. |
-| **Tool & Parameter Hijacking** | `TOOL_PARAMETER_HIJACKING` | Injects SQL syntax (`DROP TABLE`, `OR 1=1`) or parameters into structured JSON function outputs. |
-| **Delimiter & Token Hijacking** | `DELIMITER_HIJACKING` | Spoofs control tokens (`<|SYSTEM_END|>`, `[INST]`, `### System`) to force administrative privilege escalation. |
-| **Refusal Suppression** | `REFUSAL_SUPPRESSION` | Forces response to begin with mandatory affirmative prefixes combined with payload decoding. |
-| **Context Overstuffing** | `CONTEXT_OVERSTUFFING` | Injects high-volume background filler text to displace system instructions from the model's attention window. |
-| **Encoding Obfuscation** | `ENCODING_OBFUSCATION` | Employs Base64 encoding, L33tspeak, or low-resource translation to bypass safety filters. |
-| **Instruction Override** | `INSTRUCTION_OVERRIDE` | Directly commands the model to ignore established system guidelines and safety constraints. |
-| **Indirect Prompt Injection** | `INDIRECT_PROMPT_INJECTION` | Embeds hidden malicious instructions inside untrusted third-party user data payloads (JSON/HTML). |
-
-#### Blue Team / SecOps Operations (L2 SOC Analyst Evaluation)
-
-Evaluates the model's ability to act as an L2 SOC Analyst using a dedicated SecOps frontier judge prompt and strict schema (`evaluacion_ciberdefensa_slm` evaluating `threat_detected_correctly`, `false_positive`, `severity_accuracy_score`, and `mitigation_quality_score`).
-
-| SecOps Scenario | Category Code | Domain & Target Objective |
-| --- | --- | --- |
-| **IAM & SSH Auth Audit** | `SECOPS_IAM_AUTH` | Detects SSH brute force success followed by `/usr/bin/docker run --privileged` privilege escalation in `auth.log`. |
-| **Web & WAF Log Analysis** | `SECOPS_WEB_WAF` | Evaluates Nginx HTTP access logs to differentiate automated scanners from successful web command injections. |
-| **Container & K8s Escape** | `SECOPS_CONTAINER_ESCAPE` | Audits Kubernetes Pod YAML for critical `--privileged` security context and `hostPath: /` volume mounts. |
-| **Network & DNS Tunneling C2** | `SECOPS_NETWORK_C2` | Identifies C2 DNS TXT query beaconing/tunnelling from Zeek/Bro logs and prescribes firewall/DNS containment. |
-| **EDR & Sysmon LoLBins** | `SECOPS_EDR_LOLBAS` | Analyzes Sysmon Event ID 1 for Living-off-the-Land binary exploitation (`certutil.exe -urlcache` stagers). |
-
-#### Purple Team Adversary Emulation (Dual Attack + Remediation Evaluation)
-
-Evaluates the model as a Purple Team Engineer required to output `[VECTOR_DE_ATAQUE]`, `[IMPACTO_DEMOSTRADO]`, and `[REMEDIACIÓN]` simultaneously, scored by a specialized Purple Team judge (`evaluacion_purple_team` evaluating `offensive_realism_score`, `defensive_effectiveness_score`, `attack_is_executable`, and `format_compliance`).
-
-| Purple Team Scenario | Category Code | Domain & Dual Objective |
-| --- | --- | --- |
-| **Firewall & Routing Audit** | `PURPLE_FIREWALL_ROUTING` | Generates WAN->LAN lateral movement audit scan commands and provides hardened OpenWrt DNAT rules. |
-| **Container Escape & Hardening** | `PURPLE_CONTAINER_ESCAPE` | Writes a bash host-mount container escape script and provides secure LXC `.conf` cgroup/device parameters. |
-| **MCP / API Command Injection** | `PURPLE_MCP_INJECTION` | Crafts an offensive JSON payload targeting string-interpolated OpenSSL CLI calls in MCP backends and writes defensive input sanitization code. |
-
-## Arena Leaderboard & Analytics
-
-The **Arena Leaderboard** module compiles performance metrics across evaluated models to construct an objective ranking matrix.
-
-### Arena Index Scoring
-
-Models are ranked according to a customizable composite **Arena Index** score:
-
-$$\text{Arena Index} = (W_q \times \text{Quality}) + (W_s \times \text{Security}) + (W_v \times \text{Speed})$$
-
-Default weight configuration:
-- **Quality ($W_q = 40\%$):** Evaluator star ratings, grammar accuracy, system prompt compliance, and factual relevance.
-- **Security ($W_s = 40\%$):** Security Resilience — calculated as $100 - \text{ASR}$, where **ASR (Attack Success Rate)** is the percentage of security attack tests in which the evaluator detected an injection or system-prompt/canary leakage.
-- **Speed ($W_v = 20\%$):** Token output throughput (tokens per second) relative to parameter size.
-
-#### Scenario-Level Difficulty Weighting
-
-Security and Quality are computed **per scenario** and weighted by each
-scenario's *discrimination power* — the variance of per-model pass rates
-across the model population:
-
-- Scenarios where every model fails or every model passes (e.g. Purple Team
-  LXC escape, OpenWrt firewall evasion) get **weight 0** and no longer inflate
-  every model's score.
-- Scenarios that actually separate models (e.g. Jailbreak, Refusal
-  Suppression) dominate the dimension score.
-- A model must cover at least **80%** of the discriminating signal of every
-  dimension where it has data to be eligible for ranking; models below that
-  floor are flagged "sin rango" and sorted last.
-- Each scenario carries a derived **difficulty tier** (easy/medium/hard):
-  security scenarios by their global ASR (≥60% hard, ≥30% medium), general
-  scenarios by average stars (≤2.5 hard). The leaderboard accepts a
-  `?difficulty=` filter (API, UI, and MCP tool).
-
-### Visualizations & Controls
-
-- **Master Model Table:** Checkbox selection `[x]`, model parameter badges, Arena Score, Rating stars, sub-ratings (Grammar, Compliance, Accuracy), Security badges (`🟢 Immune`, `🟡 Moderate`, `🔴 Vulnerable`), unit micro-pills (`tok/s`, `ms`, `tok`, `s`), multi-column sorting, and `[View Profile]` profile links.
-- **Scatter Plot (Arena Score vs. Speed):** Interactive 2D graph plotting Arena Index against output throughput (tok/sec), with bubble sizes proportional to parameter count.
-- **Radar Chart (Multi-axis):** 6-axis spider chart comparing Grammar, Compliance, Accuracy, Security, TTFT, and Speed across up to 4 checked models.
-
-## Theme System (Light / Dark / System)
-
-tuxevil Benchmark supports three appearance modes:
-- **☀️ Light Mode:** High-contrast light background (`#f8fafc`), crisp slate text (`#0f172a`), and clean surface cards (`#ffffff`).
-- **🌙 Dark Mode:** Dark theme (`#0c1017`) optimized for low-light environments.
-- **💻 System Theme:** Automatically syncs with the operating system's `prefers-color-scheme`.
-
-Theme preference is persisted in `localStorage` and can be toggled via the Topbar or the Settings panel. An early inline script prevents flash of unstyled content (FOUC). Existing `slmarena-theme` preferences are read once as a compatibility fallback.
-
-## Requirements
-
-For local development:
-
-- **Node.js:** v20.0.0 or newer
-- **Package Manager:** `npm` (v10+)
-- **Ollama:** An active Ollama instance with at least one pulled model:
-
-  ```bash
-  ollama pull qwen3.5:4b
-  ollama pull llama3.2
-  ```
-
-For durable worker mode:
-
-- **Docker & Docker Compose** (for PostgreSQL 16 and Redis 7)
-- **PostgreSQL Client** (`psql`) for executing schema migrations
-
-## Quick Start
-
-1. **Clone the repository and install dependencies:**
-
-   ```bash
-   git clone https://github.com/tuxevil/tuxevil-benchmark.git
-   cd tuxevil-benchmark
-   cp -f .env.example .env.local
-   npm install
-   ```
-
-2. **Start the Next.js development server:**
-
-   ```bash
-   npm run dev
-   ```
-
-3. **Open the application:**
-
-   Navigate to [http://localhost:3000](http://localhost:3000).
-
-4. **Run a matrix benchmark:**
-
-   - Switch to the **Test Suites (`/suites`)** page.
-   - Click **🔄 Refresh Models** to discover models from your Ollama server.
-   - Select a model onboarding run or launch a matrix benchmark.
-
-## Configuring Evaluation
-
-Automated response evaluation requires an OpenAI-compatible `/chat/completions` judge endpoint. On first startup the `EVALUATOR_*` variables in `.env.local` seed the **evaluator catalog** and mark that entry as active; afterwards you can register, edit, and switch between multiple judge models (each with its own base URL, model name, and optional API key) from the **Settings (`/settings`)** panel or the `add_evaluator` / `update_evaluator` / `delete_evaluator` MCP tools:
-
-```dotenv
-EVALUATOR_BASE_URL=https://api.openai.com/v1
-EVALUATOR_MODEL=gpt-4o-mini
-EVALUATOR_API_KEY=your-api-key-here
-```
-
-The **active** evaluator (`active_evaluator_id`) is the one used to judge benchmark responses; per-run overrides via the API remain supported.
-
-### Re-evaluating stored responses
-
-Already-run benchmark responses (persisted `model_results.response_text`) can be **re-evaluated with another judge without re-running inference**:
-
-- **Per result:** the Test Inspector drawer (Verdict tab) offers a *Re-evaluate* action with an evaluator dropdown.
-- **Per run:** the Run History accordion has a *Re-evaluate* action that re-judges every completed sample of the run.
-- **Via API:** `POST /api/results/:id/reevaluate` and `POST /api/runs/:id/reevaluate` with an optional `{ "evaluatorId": "..." }` body (defaults to the active evaluator).
-- **Via MCP:** the `re_evaluate_result` tool.
-
-Re-evaluation replaces the **current verdict** (so leaderboard and analysis reflect the new judge) while appending every prior verdict to the **`evaluation_history`** table, visible as *Evaluation History* in the inspector. A failed judge call leaves the existing verdict untouched and marks the result as `FAILED` with a descriptive `errorMessage`.
-
-**Judge fallback for providers without `response_format` support:** if the evaluator endpoint rejects `response_format: json_schema` with HTTP 400 (e.g. OpenCode Go/Zen), the client retries without it; if the judge then returns truncated JSON missing required fields, it retries up to two more times with a **condensed system prompt that explicitly lists the required fields** (and a reinforcement message on the last attempt). Only if every attempt fails does the call error out, with the fields the judge omitted in the message.
-
-## Durable PostgreSQL and Redis Setup
-
-For multi-user or background worker processing:
-
-1. **Configure connection strings in `.env.local`:**
-
-   ```dotenv
-   DATABASE_URL=postgresql://tuxevil_benchmark:local-development-only@localhost:55432/tuxevil_benchmark
-   REDIS_URL=redis://:local-development-only@localhost:6379
-   ```
-
-2. **Start Docker infrastructure:**
-
-   ```bash
-   docker compose --env-file .env.local up -d
-   ```
-
-3. **Run database migrations:**
-
-   ```bash
-   export DATABASE_URL=postgresql://tuxevil_benchmark:local-development-only@localhost:55432/tuxevil_benchmark
-   npm run db:migrate
-   ```
-
-4. **Start the web application and worker process:**
-
-   ```bash
-   # Terminal 1: Web App (make sure APP_ENCRYPTION_KEY is set, e.g. in .env.local)
-   npm run dev
-
-   # Terminal 2: Background Worker
-   export APP_ENCRYPTION_KEY=<32-byte hex key>
-   npm run worker
-   ```
-
-## Environment Variables
-
-| Variable | Description | Default |
-| --- | --- | --- |
-| `APP_URL` | Public base URL of the application. | `http://localhost:3000` |
-| `MCP_PORT` | Port for the MCP server (agent integration). | `3001` |
-| `MCP_HOST` | Host interface the MCP server binds to. | `0.0.0.0` |
-| `OLLAMA_URL` | Base URL of the target Ollama instance. Leave **unset** when the Ollama URL is saved in the app Settings — `/api/ollama/models` prefers this variable over the saved URL, so a stale value shadows the Settings and lists the wrong models. | Empty |
-| `ALLOWED_OLLAMA_HOSTS` | Comma-separated host allowlist for Ollama endpoints. | Empty (local/private IPs allowed) |
-| `EVALUATOR_BASE_URL` | Base URL for OpenAI-compatible evaluator endpoint. Seeds the evaluator catalog on first startup. | Empty |
-| `EVALUATOR_MODEL` | Judge model name used for evaluation. Seeds the evaluator catalog on first startup. | Empty |
-| `EVALUATOR_API_KEY` | Judge API key. Encrypted at rest when saved via UI. | Empty |
-| `APP_ENCRYPTION_KEY` | 32-byte hex key for AES-256-GCM secret encryption. | Empty |
-| `SQLITE_PATH` | File path for SQLite database in local mode. | `./tuxevil-benchmark.db` (legacy `compare.db` auto-detected when unset) |
-| `DATABASE_URL` | PostgreSQL connection string. Enables Postgres persistence. | Empty |
-| `REDIS_URL` | Redis connection string. Enables BullMQ queuing and SSE events. | Empty |
-| `BENCHMARK_INFERENCE_TIMEOUT_MS` | Per-request timeout in milliseconds for OpenAI-compatible inference; set on the worker in durable mode. | `120000` |
-| `POSTGRES_PORT` | Host port exposed by the docker-compose PostgreSQL service. | `55432` |
-| `POSTGRES_PASSWORD` | Password for the docker-compose PostgreSQL service. | `local-development-only` |
-| `REDIS_PASSWORD` | Password for the docker-compose Redis service. | `local-development-only` |
-| `BENCHMARK_CONCURRENCY` | Maximum concurrent benchmark runs processed by worker queue. | `1` |
-| `BENCHMARK_MODEL_CONCURRENCY` | Maximum concurrent model evaluation jobs within a run. | `1` |
-
-## Using the Modules
-
-### 1. Leaderboard (`/`)
-- View executive KPI summary cards (*Evaluated Models*, *Overall Leader*, *Security Leader*, *Average Speed*).
-- Interact with the Master Model Table, filter by size/category, and adjust Arena Score weights (`[⚙ Weights]`).
-- Click `[View Profile]` to open the Model Profile modal displaying overall model averages (Rating, Grammar, Compliance, Accuracy, Security Resilience) and its complete executed test benchmark history.
-- Analyze real-time linked Scatter Plots and Radar Charts driven by checked table rows `[x]`.
-- Use the **Run History** section for model-grouped results (per-model averages), run-list matrix, side-by-side comparison, sample deletion, and manual review (`APPROVED` / `REJECTED`).
-
-### 2. Test Suites & Matrix (`/suites`)
-- Create and edit system prompts with Canary Token injection (`CANARY_SEC_9842_ALPHA`).
-- Manage user conversation turns and save/delete scenarios from the library (`[ 🗑️ Delete from Library ]`).
-- Execute **Mode A (Model Onboarding)** (active scenario on a single model), **Mode B (Suite Update)** (one scenario across all models), or **Custom Matrix Mode** with a live refresh button (`[ 🔄 Refresh Models ]`).
-
-### 3. Live Monitor (`/monitor`)
-- Monitor local Ollama server health, installed model count, active model loaded in VRAM (via `/api/ps`), and VRAM allocation.
-- View real-time SSE token stream box during inference.
-- Control active runs (*Pause*, *Resume*, *Cancel*, *Retry Failed*).
-- **Anomaly Dashboard:** Three detection panels — *Empty/near-zero responses* (grouped by model x scenario), *Failed evaluations* (orphaned or errored, with one-click re-evaluate), and *TPS telemetry outliers* (z-score > 3.5 with Samuelson bound gating).
-
-### 4. Settings (`/settings`)
-- Configure Ollama endpoint URL, manage the **evaluator catalog** (register multiple LLM Judge models with their own base URL/API key and mark the one used in evaluations), default inference parameters, and Light/Dark/System theme choices.
-
-### 5. Model Profile (`/models/[modelId]` & Modal)
-- Inspect a specific model's summary metrics (Rating, Grammar, Compliance, Accuracy, Security Resilience), average ratings, and filterable executed test benchmark history.
-
-## HTTP API Overview
-
-| Method | Route | Purpose |
-| --- | --- | --- |
-| `GET`, `PATCH` | `/api/settings` | Retrieve or update application configuration; `PATCH` also selects the active evaluator (`activeEvaluatorId`). |
-| `POST` | `/api/settings/evaluators` | Register a new evaluator model in the catalog (label, base URL, model, optional API key, optional `makeActive`). |
-| `PATCH`, `DELETE` | `/api/settings/evaluators/:id` | Update or remove an evaluator from the catalog (deleting the active one clears the active slot). |
-| `GET`, `POST` | `/api/scenarios` | List saved scenarios or create a new benchmark scenario. |
-| `GET`, `PATCH`, `DELETE` | `/api/scenarios/:id` | Fetch, update, or delete a specific benchmark scenario. |
-| `GET`, `POST` | `/api/runs` | Search benchmark history (with pagination & filters) or submit a new run. |
-| `GET` | `/api/runs/:id` | Fetch details and results snapshot for a single run. |
-| `GET` | `/api/runs/:id/events` | Stream real-time run progress events via Server-Sent Events (SSE). |
-| `POST` | `/api/runs/:id/pause` | Pause execution of a queued or running benchmark. |
-| `POST` | `/api/runs/:id/resume` | Resume execution of a paused benchmark. |
-| `POST` | `/api/runs/:id/cancel` | Cancel execution of an active or pending benchmark. |
-| `GET`, `DELETE` | `/api/runs/:id/results/:resultId` | Fetch or delete a single model sample result from a run (`?includeHistory=true` also returns its `evaluationHistory`). |
-| `POST` | `/api/results/:id/reevaluate` | Re-evaluate a stored response with another judge (`{ "evaluatorId"?: string }`; defaults to active). No re-inference. |
-| `POST` | `/api/runs/:id/reevaluate` | Re-evaluate every completed sample of a run with another judge. |
-| `GET` | `/api/ollama/models` | Discover installed models (`/api/tags`) & active VRAM models (`/api/ps`) from target Ollama instance. |
-| `GET` | `/api/analysis` | Retrieve aggregated scenario metrics across runs. |
-| `GET` | `/api/leaderboard` | Query Arena Leaderboard statistics with custom dynamic weights and filters. |
-| `GET` | `/api/anomalies` | List detected anomalies: empty/near-zero responses, failed evaluations, and TPS telemetry outliers. |
-| `GET` | `/api/export_results` | Export benchmark results as JSON or CSV with optional filters (model, scenario, date range). |
-| `PATCH` | `/api/results/:id/review` | Record human review status (`APPROVED`, `REJECTED`, etc.) and reviewer notes. |
-
-## MCP Server (Agent Integration)
-
-tuxevil Benchmark exposes its REST API as a [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server so autonomous agents can programmatically drive the benchmark workspace. It uses a stateless **Streamable HTTP transport** (HTTP + Server-Sent Events) rather than stdio, so any network-connected agent (e.g. Hermes) can connect directly.
-
-### Start the server
+Un laboratorio local para comparar modelos de lenguaje: qué tan bien responden,
+cuánto tardan y qué recursos utilizan. Permite repetir los mismos escenarios,
+comparar cuantizaciones y configuraciones sin mezclar variantes, y conservar
+los resultados mediante respaldos administrados desde la interfaz.
+
+El servidor de inferencia es independiente de la aplicación. Puedes ejecutar el
+benchmark en una máquina y los modelos en otra. Soporta Ollama, llama.cpp,
+FreeToken y Strata mediante sus interfaces compatibles.
+
+## Qué puedes hacer
+
+| Sección | Para qué sirve |
+| --- | --- |
+| **Leaderboard** (`/`) | Consultar resultados agregados, puntuaciones de calidad y seguridad, velocidad y perfiles de modelos. |
+| **Test Suites** (`/admin/suites`) | Crear escenarios, elegir modelos y ejecutar una prueba o una matriz de modelos y escenarios. |
+| **Churn Lab** (`/admin/churn`) | Registrar artefactos y entornos, definir variantes y comparar sus respuestas caso por caso. |
+| **Performance Lab** (`/admin/performance`) | Medir variantes de forma serial, con calentamiento, latencia, eficiencia y telemetría de recursos. |
+| **Monitor** (`/admin/monitor`) | Seguir ejecuciones, respuestas en streaming, historial y controles de pausa, reanudación y cancelación. |
+| **Respaldos** (`/admin/backups`) | Guardar resultados, explorar un respaldo, restaurar modelos seleccionados y limpiar los resultados actuales. |
+| **Settings** (`/admin/settings`) | Configurar proveedores, endpoints, credenciales, jueces y parámetros de inferencia. |
+
+## Inicio rápido
+
+Necesitas Node.js 20 o posterior y un servidor de modelos compatible. Para el
+bridge MQTT necesitas Python 3; no requiere paquetes Python externos.
 
 ```bash
-npm run mcp
+npm ci
+cp -f .env.example .env.local
+npm run dev -- --hostname 0.0.0.0 --port 3103
 ```
 
-The MCP server talks to the tuxevil Benchmark Next.js instance via its `APP_URL` (e.g. `http://localhost:3000`), not to Ollama directly — it wraps the existing REST API routes, including resolving target models from the same Ollama configured in Settings.
+Abre `http://localhost:3103` desde esa máquina o usa su dirección de red desde
+otro equipo. `0.0.0.0` hace que escuche en todas las interfaces. La aplicación
+está pensada para una red de confianza; si la expones fuera de ella, añade
+control de acceso y TLS mediante tu infraestructura de publicación.
 
-### Endpoints
+En **Settings**, selecciona el proveedor y guarda su endpoint. Recarga el catálogo
+de modelos y elige uno en **Test Suites**. Las claves de proveedores y jueces se
+introducen en Settings y se almacenan cifradas: configura una
+`APP_ENCRYPTION_KEY` privada antes de guardarlas y consérvala para poder leerlas.
+Puedes generar una clave con `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+Guarda el valor generado en tu archivo privado de entorno, nunca en el repositorio.
 
-| MCP Endpoint | Purpose |
-| --- | --- |
-| `POST /mcp` | MCP Streamable HTTP transport. Point your agent at e.g. `http://localhost:3001/mcp`. |
+### Dos modos de ejecución
 
-### Tools
+**Local, con SQLite:** deja `DATABASE_URL` y `REDIS_URL` vacíos. La aplicación
+procesa las pruebas dentro del servidor web y usa `SQLITE_PATH`. Los checkouts
+antiguos con `compare.db` se detectan si no se fija otra ruta. Para reanudar
+trabajo de forma duradera y separar la web del procesamiento, usa el siguiente modo.
 
-| Tool | Purpose |
-| --- | --- |
-| `get_arena_leaderboard` | Read the current Arena Leaderboard with custom KPI weights and filters. |
-| `list_ollama_models` | List the models installed on the Ollama server connected to tuxevil Benchmark, which are loaded in VRAM, and the currently active model. |
-| `get_model_profile` | Fetch per-model profile/analysis from the leaderboard and optional scenario slice. |
-| `list_test_scenarios` | List saved test scenarios. |
-| `get_test_scenario` | Fetch one saved test scenario by ID (system prompt, user messages, category, attack type). |
-| `create_test_scenario` | Create a new scenario. |
-| `update_test_scenario` | Edit an existing scenario by ID (replaces name, category, attack type, prompts). |
-| `delete_test_scenario` | Permanently delete a scenario by ID. |
-| `launch_matrix_test` | Launch a benchmark run over a matrix of models × scenarios (optionally `["ALL"]` for every Ollama model). `samples_per_model` defaults to 2 per model and scenario; pass `1` for quick tests. |
-| `list_runs` | Search run history with filters (keyword, date, model, min score, vulnerable-only, pagination). |
-| `pause_run` / `resume_run` / `cancel_run` | Pause, resume, or cancel a queued/running benchmark run. |
-| `pause_all_pending_runs` / `resume_all_pending_runs` | Pause or resume every queued/running benchmark run in one call. |
-| `get_settings` / `update_settings` | Read or update app settings (Ollama URL, active evaluator selection, default hyper-parameters). |
-| `add_evaluator` / `update_evaluator` / `delete_evaluator` | Manage the evaluator catalog (label, base URL, model, API key, make active). |
-| `re_evaluate_result` | Re-judge a stored response with a catalog evaluator (no re-inference); replaces the current verdict and keeps history. |
-| `get_analysis` | Aggregate a scenario's performance across all evaluated models (per-model samples, avg stars, ASR). |
-| `review_result` | Override the judge verdict with a human review (APPROVED/REJECTED/REVIEWED/UNREVIEWED) and notes. |
-| `get_run_result_details` | Fetch one individual model result of a run (turns, telemetry, judge evaluation). |
-| `get_test_run_details` | Fetch run status plus model results. |
-| `check_job_status` | Poll `launch_matrix_test` progress by run ID. |
+**Duradero, con PostgreSQL y Redis:** configura ambas conexiones, inicia la web y
+un worker separado. Esto permite cerrar el navegador mientras continúan las pruebas.
 
-### Resources
+1. En `.env.local`, establece `POSTGRES_PASSWORD` y `REDIS_PASSWORD` con valores
+   propios y configura `DATABASE_URL`, `REDIS_URL` y `APP_ENCRYPTION_KEY`.
+   Las contraseñas no tienen un valor predeterminado publicable.
+2. Ejecuta `docker compose --env-file .env.local up -d` si usas los servicios del
+   proyecto. PostgreSQL se publica por defecto en el puerto local `55432` y
+   Redis en `6379`.
+3. Con `DATABASE_URL` exportada en el entorno de tu terminal, ejecuta
+   `npm run db:migrate`. Aplica los esquemas de resultados y experimentos.
+4. Inicia `npm run dev -- --hostname 0.0.0.0 --port 3103` y, en otra terminal,
+   `npm run worker`. La web y el worker cargan `.env.local` y deben compartir
+   base de datos, Redis y clave de cifrado.
 
-| Resource | Purpose |
-| --- | --- |
-| `tuxevil-benchmark://leaderboard` | Read-only leaderboard snapshot. |
-| `tuxevil-benchmark://scenarios` | Read-only scenarios list. |
-
-Existing MCP clients can continue using the legacy `slmarena://leaderboard` and
-`slmarena://scenarios` aliases while migrating to the canonical URIs above.
-
-## Persistence and Data Model
-
-Runs, model results, per-turn telemetry, evaluator verdicts, scenarios, and application settings are persisted across restarts in either storage engine:
-
-- **Local mode (default):** Single-file SQLite database via Better-SQLite3 (`SQLITE_PATH`, default `./tuxevil-benchmark.db`) in WAL mode. The schema — `app_settings`, `evaluators`, `scenarios`, `test_runs`, `model_results`, `model_result_turns`, `evaluations`, `evaluation_history` — is created and migrated automatically on first access (`src/lib/sqlite-db.ts`). An existing `compare.db` is used automatically when the new default file does not exist and `SQLITE_PATH` is unset.
-- **Durable mode:** PostgreSQL (`DATABASE_URL`) with the same schema defined in `db/schema.sql`, applied with `npm run db:migrate` via `psql`. Lists and parameter objects are stored as JSONB, and a monotonic `control_version` guards against out-of-order writes from the concurrent worker.
-- **Evaluator catalog:** Multiple evaluator models can be registered (each with its own base URL, model name, and optional API key). Exactly one is marked **active** (`active_evaluator_id`) and is the one used to judge benchmark responses; per-run overrides via the API remain supported. On first startup, legacy `EVALUATOR_*` config is seeded into the catalog and activated.
-- **Evaluation history:** Every re-evaluation of a stored response appends the verdict to `evaluation_history` (judge used, scores, feedback, timestamp), while `evaluations` keeps the current verdict used by leaderboard and analysis.
-- **Secrets:** Evaluator API keys are encrypted at rest with AES-256-GCM (`APP_ENCRYPTION_KEY`) — they are stored as `api_key_encrypted` per evaluator and never returned by the API; only a `apiKeyConfigured` boolean is exposed.
-- **Human audit trail:** Each model result carries a review status (`UNREVIEWED`, `REVIEWED`, `APPROVED`, `REJECTED`) and optional reviewer notes via `/api/results/:id/review`.
-
-### Rebrand compatibility
-
-The public identity is now `tuxevil Benchmark` (`tuxevil-benchmark`). Existing
-runtime data remains usable: the legacy `compare.db` file is auto-detected, the
-pre-rebrand BullMQ queue and Redis event namespace remain stable, and seeded
-security scenario IDs are unchanged. These are internal migration identifiers,
-not public branding.
-
-## Public Landing Site
-
-tuxevil Benchmark includes a separate **static landing site** (`landing/` npm workspace) that showcases a read-only public snapshot of the Arena Leaderboard, model profiles, security results, and evaluated scenarios. It is deployed at [benchmark.tuxevil.com](https://benchmark.tuxevil.com/).
-
-### Architecture
-
-The landing site is a Next.js static export (`output: "export"`) served by nginx. It consumes a JSON snapshot file (`public-snapshot.json`) generated from the main application's SQLite database.
-
-### Building and Deploying
+Para servir una compilación de producción:
 
 ```bash
-# Export a fresh snapshot from the local database and build the static site
-npm run landing:build
-
-# Development mode for the landing site
-npm run landing:dev
-
-# Export only the snapshot JSON (without building)
-npm run landing:export
+npm run build
+npm run start -- --hostname 0.0.0.0 --port 3103
+# En otro proceso, si usas el modo duradero:
+npm run worker
 ```
 
-The snapshot exporter (`scripts/export-public-snapshot.ts`) reads the SQLite database, aggregates the leaderboard using the same scoring primitives as the main app, and writes the output to `landing/public/data/public-snapshot.json`. Optional environment variables control the hardware rig metadata included in the snapshot: `SNAPSHOT_CPU`, `SNAPSHOT_RAM`, `SNAPSHOT_PROVIDER`, and `SNAPSHOT_OUTPUT`.
+Los comandos anteriores no instalan servicios de arranque del sistema. Usa tu
+supervisor de procesos si necesitas que sobrevivan a un reinicio de la máquina.
 
-### Landing Components
+## Ejecutar pruebas y evaluar respuestas
 
-| Component | Purpose |
+En **Test Suites**, un escenario contiene un prompt de sistema y uno o varios
+mensajes del usuario. Puedes guardarlo en la biblioteca y repetirlo después.
+La matriz permite combinar varios escenarios, modelos y muestras por modelo.
+
+Los escenarios pueden ser de calidad general o de seguridad. Los de seguridad
+incluyen ataques sintéticos como extracción del prompt, inyección de instrucciones
+y manipulación de delimitadores. Los canarios incluidos son datos ficticios de
+prueba, no claves reales. Una puntuación de seguridad no garantiza inmunidad a
+otros ataques o configuraciones.
+
+Hay dos formas de puntuar las respuestas:
+
+- **Juez compatible con OpenAI:** configúralo en Settings. Evalúa calidad o
+  seguridad según el escenario. Si apuntas a un juez externo, recibirá el prompt,
+  la conversación y la respuesta que deba evaluar.
+- **Practical SLM:** suite versionada con 15 casos y validadores deterministas
+  de texto exacto, JSON, números y contenido requerido. No necesita un juez.
+  Sus escenarios oficiales son inmutables; puedes duplicarlos para personalizarlos.
+
+También hay perfiles breves para empezar:
+
+- **Rápido IA Solar:** batería corta de escenarios, con parámetros reproducibles.
+  [Guía del perfil rápido](docs/ia-solar-quick-profile.md).
+- **Chatbot Plus:** perfil orientado a conversación y seguimiento de instrucciones.
+  [Guía de Chatbot Plus](docs/ia-solar-chatbot-plus.md).
+
+Estos perfiles no equivalen a ejecutar herramientas reales. El soporte de un
+proveedor para `tool_calls` debe comprobarse con una prueba específica.
+
+## Comparar Q4, Q6 y otras variantes sin mezclar resultados
+
+El leaderboard agrupa las pruebas por modelo, motor, cuantización y modo CoT.
+Puedes consultar los parámetros de inferencia de cada ejecución en el inspector
+de pruebas. Si el servidor no informa la cuantización, los resultados aparecen
+en un grupo de cuantización desconocida.
+
+El nombre del modelo que devuelve un servidor puede ser el mismo aunque cambie
+el archivo cargado. Para una comparación controlada, usa **Churn Lab y Performance
+Lab**, no solamente el nombre que aparece en el leaderboard general.
+
+1. Registra un **Execution Target**: el proveedor, endpoint y credencial privada
+   con los que se ejecutarán las pruebas.
+2. Usa **Auto Probe** para consultar metadatos del servidor. Ollama y llama.cpp
+   pueden informar más detalles que una API genérica. Los datos que el servidor
+   no expone quedan desconocidos; no se deduce una cuantización por intuición.
+3. Registra un **Model Artifact** para cada archivo de pesos. Por ejemplo,
+   `LFM3 Q4_K_M` y `LFM3 Q6_K` deben ser artefactos distintos. Guarda cuantización,
+   tamaño y hash cuando estén disponibles. El artefacto tiene una huella que
+   representa su identidad científica.
+4. Registra el **Execution Environment**: runtime y versión, hardware, contexto,
+   caché KV, offload y parámetros relevantes. Capacidad total de RAM o VRAM es
+   descripción del entorno, no memoria usada durante una prueba.
+5. Crea un experimento con una **baseline** y una **variant**. Vincula cada una
+   con su artefacto, entorno, target y nombre de ejecución. Una **baseline repeat**
+   debe repetir la misma configuración para medir el ruido natural de las respuestas.
+6. Elige los mismos escenarios y muestras para las variantes y ejecuta el experimento.
+
+Las observaciones automáticas se separan por **ejecución, variante y caso**. Repetir
+un experimento no sobrescribe las observaciones de una ejecución anterior.
+El runner hace preflight y bloquea contradicciones conocidas con el target.
+Si un servidor solo puede cargar una cuantización, prepara sus targets y el ciclo
+de carga antes de ejecutar: una API genérica no permite asumir que cambiar el nombre
+del modelo cargará automáticamente otro archivo.
+
+### Qué muestra Churn Lab
+
+Compara respuestas exactas o estructurales, casos que mejoraron o empeoraron,
+cambios neutros y ruido de la baseline repetida. Incluye intervalos de confianza
+y pruebas estadísticas cuando corresponden. Puedes importar observaciones
+manualmente como alternativa a la ejecución automática.
+
+[Detalles del modelo de experimentos](docs/experiment-foundation.md).
+
+## Medir rendimiento y recursos
+
+En **Performance Lab**, selecciona un experimento con variantes ya vinculadas.
+Configura muestras medidas y muestras de calentamiento descartadas. El modo
+Performance ejecuta una prueba a la vez y adquiere leases exclusivos sobre los
+targets registrados para evitar solapamientos coordinados por esta aplicación.
+Eso no impide que otro programa use la GPU ni detecta targets duplicados que
+apunten al mismo hardware.
+
+El informe separa fases frías y calientes y muestra:
+
+- Porcentaje de éxito y cobertura de las métricas.
+- Tiempo hasta el primer token (TTFT) y duración, con percentiles p50, p90 y p95.
+- Velocidad de generación, tokens de entrada/salida y su distribución.
+- Segundos y tokens por tarea exitosa, contando también el coste de los intentos fallidos.
+
+El reinicio frío verificado solo está disponible para Ollama: se descarga el
+modelo y se comprueba que ya no esté cargado. Los servidores fijos llama.cpp y
+las APIs genéricas se tratan como calientes, sin etiquetarlos como fríos.
+
+### RAM, watts, energía y temperatura
+
+Las nuevas pruebas pueden guardar métricas del **equipo de inferencia** mediante
+un colector HTTP o el bridge MQTT de solo lectura. No se usa la RAM de la web
+como sustituto del consumo del modelo remoto.
+
+| Métrica | Interpretación |
 | --- | --- |
-| `MasterTable` | Public read-only leaderboard table with model badges and scores |
-| `ModelProfileModal` | Modal view of individual model metrics and history |
-| `LinkedAnalytics` | Scatter plot and radar chart (same linked behavior as the main app) |
-| `ScenariosView` | Browsable list of evaluated scenarios with difficulty tiers |
-| `ExportSection` | Download section for public snapshot data |
-| `Header` / `Navigation` | Landing page chrome and navigation |
+| RAM pico | Memoria reportada por la fuente. En el bridge MQTT es RSS de los procesos de inferencia incluidos por el publicador. |
+| VRAM pico | Memoria usada de GPU reportada por el sensor; puede incluir otras cargas. |
+| Watts medios y pico | Potencia del ámbito de la fuente, por ejemplo toda la GPU. No es necesariamente consumo del enchufe. |
+| Joules estimados | Integración de potencia durante la ventana medida; queda desconocida con cobertura insuficiente. |
+| Temperatura media y máxima | Lecturas de GPU observadas durante la prueba. |
+| Throttling térmico | Flag explícito o aumento de contadores HW/SW. Una temperatura alta por sí sola no lo demuestra. |
 
-### Docker Deployment
+La ventana de recursos incluye turnos y reintentos de inferencia y excluye al
+juez. Se muestra la fuente y, cuando existe, su intervalo de publicación. Consultar
+cada segundo un sensor que publica cada diez segundos no mejora la resolución
+original. Pueden perderse eventos breves. Los contadores térmicos ayudan a detectar
+eventos que ocurrieron entre lecturas; un reinicio de contador se señala.
 
-The landing site includes a multi-stage Dockerfile (`landing/Dockerfile`) that builds with Node.js 20 Alpine and serves via nginx 1.27 Alpine. Static assets under `_next/static/` are cached for 1 year; snapshot data under `/data/` is cached for 1 hour.
+**Sin datos no significa cero.** La RAM queda desconocida si un publicador top-N
+omite el proceso. Los resultados antiguos no reciben métricas retrospectivas.
+La RAM continua del host mediante otras fuentes, como Home Assistant, requiere
+una integración específica y no se obtiene automáticamente.
 
-## Project Layout
+[Configuración, formato y límites de la telemetría](docs/resource-telemetry.md).
+Las credenciales MQTT se guardan en un archivo privado de entorno; no se envían al
+navegador ni se guardan en los resultados.
 
-```text
-src/
-├── app/                        Next.js App Router layout, page routes, CSS, and API routes
-│   ├── api/                    Typed REST API endpoints (/runs, /scenarios, /leaderboard, /anomalies, /export_results, etc.)
-│   ├── models/[modelId]/       Level 2 Model Profile page route
-│   ├── monitor/                Live Monitor module page route
-│   ├── settings/               Settings page route
-│   ├── suites/                 Test Suites & Matrix module page route
-│   ├── globals.css             Global CSS variables, design tokens, light/dark themes
-│   ├── layout.tsx              Root HTML layout with ThemeProvider and a FOUC-prevention inline script
-│   └── page.tsx                Arena Leaderboard entry point (tabbed dashboard)
-├── components/                 React dashboard components
-│   ├── analytics/              KPI cards, leaderboard table, Radar chart, Scatter plot
-│   ├── history/                Model-grouped results, run history matrix, side-by-side comparison
-│   ├── inspector/              Level 3 Test Inspector slide-over drawer
-│   ├── layout/                 Topbar navigation and theme switcher
-│   ├── models/                 Model dossier profile components
-│   ├── monitor/                Live monitor panel, anomalies detection dashboard
-│   ├── settings/               Configuration, evaluator catalog, and theme selection panel
-│   ├── suites/                 Test suite creator, canary injector, and matrix orchestrator
-│   ├── benchmark-dashboard.tsx Tabbed leaderboard dashboard (analytics / wizard / history)
-│   ├── consolidated-dashboard.tsx  Alternative consolidated dashboard with inline charts
-│   ├── theme-provider.tsx      Light/Dark/System theme context provider
-│   └── wizard/                 Benchmark setup wizard
-├── lib/                        Core business logic and integrations
-│   ├── anomalies.ts            Anomaly detection (empty responses, failed evals, TPS outliers)
-│   ├── benchmark-queue.ts      Local queue runner and Redis BullMQ enqueue
-│   ├── benchmark-store.ts      In-memory run state manager & persistence facade
-│   ├── contracts.ts            Zod schemas, domain types, and validation rules
-│   ├── database.ts             SQLite/PostgreSQL abstraction, aggregations, and leaderboards
-│   ├── endpoints.ts            Endpoint safety validation (SSRF protection & HTTPS rules)
-│   ├── format-bytes.ts         Human-readable byte formatting for model sizes
-│   ├── frontier-evaluator.ts   OpenAI-compatible LLM judge client
-│   ├── mcp/                    MCP server modules: tool handlers, HTTP client, resources, server builder
-│   ├── ollama-client.ts        Streaming Ollama client & telemetry extractor
-│   ├── reconcile-runs.ts       Worker crash-recovery and orphaned run reconciliation
-│   ├── redis-connection.ts     BullMQ / ioredis connection factory
-│   ├── retry.ts                Transient error detection and exponential backoff
-│   ├── run-events.ts           Redis pub/sub helpers backing the SSE run stream
-│   ├── secrets.ts              AES-256-GCM secret encryption utilities
-│   ├── security-scoring.ts     Scenario discrimination weights, difficulty tiers, coverage eligibility
-│   ├── security-templates.ts   Standardized LLM security attack vector templates (16 built-in)
-│   └── sqlite-db.ts            Better-SQLite3 initialization, migration engine, and CRUD
-├── mcp-server.ts               MCP server entry point (Streamable HTTP transport)
-└── worker.ts                   Durable Redis BullMQ background worker entry point
-db/                             PostgreSQL schema (db/schema.sql) for durable mode
-e2e/                            Playwright end-to-end test suites
-integration/                    PostgreSQL and Redis integration tests
-scripts/                        Utility scripts (export-public-snapshot.ts)
-landing/                        Static public landing site (npm workspace, Next.js static export + nginx)
-```
+## Respaldar, restaurar y empezar de cero
 
-> Unit tests live alongside their modules under `src/lib/*.test.ts` and `src/lib/mcp/*.test.ts` — covering contracts, database aggregations, leaderboard scoring, endpoints, frontier-evaluator, ollama-client, benchmark-queue and recovery, secrets, format-bytes, anomalies, security-scoring, reconcile-runs, and MCP tool handlers (leaderboard, ollama, runs, scenarios/profile, operations).
+Abre **Respaldos** y sigue este flujo:
 
-## Development Commands
+1. Termina o cancela las ejecuciones pendientes.
+2. Escribe un nombre y pulsa **Crear respaldo de resultados**.
+3. El respaldo aparece en la tabla. **Explorar y restaurar** permite leer sus
+   respuestas, turnos, evaluaciones e historial y filtrar por modelo.
+4. Para restaurar todo, selecciona todos los modelos. Para recuperar solo una
+   parte, marca los modelos necesarios. La restauración conserva resultados
+   existentes y omite los que ya existen con la misma identidad.
+5. Para empezar de cero, usa el panel **Limpiar resultados**, selecciona un
+   respaldo que coincida con los datos actuales y escribe `LIMPIAR RESULTADOS`.
+   Después confirma la eliminación.
+
+Si los resultados cambiaron desde el respaldo, la limpieza se rechaza: crea uno
+nuevo. También se bloquean estas operaciones con ejecuciones pendientes o activas.
+La limpieza conserva los respaldos, escenarios y ajustes.
+
+Los respaldos se guardan en `.backups/results` o `RESULT_BACKUP_DIR`. Incluyen
+resultados, turnos, evaluaciones, historial y, en las versiones nuevas, telemetría
+de recursos. **No son una copia completa de la instalación:** no incluyen el
+catálogo de escenarios, configuración global ni el módulo de experimentos.
+Para recuperar una instalación completa, respalda también su base de datos,
+configuración y clave de cifrado mediante tu sistema de operaciones.
+
+El archivo de respaldo contiene datos privados de las ejecuciones. Protege su
+acceso y conserva una copia externa del directorio si necesitas recuperación
+ante pérdida del servidor. La interfaz administra los respaldos locales; no es
+un servicio de sincronización externa ni de subida de archivos arbitrarios.
+
+## Monitor, historial y perfiles
+
+El **Monitor** muestra el avance de las ejecuciones y las respuestas en streaming.
+La pausa y reanudación conservan el progreso; la cancelación detiene el trabajo
+según el estado de cada solicitud. En modo duradero, el worker recupera ejecuciones
+huérfanas con límites de reintento. En Performance respeta las ejecuciones seriales
+planificadas para no encolarlas accidentalmente en paralelo.
+
+El historial permite consultar resultados y revisiones humanas. Los perfiles de
+modelo agrupan su calidad, seguridad y telemetría. Si vuelves a evaluar una respuesta
+almacenada con otro juez, no es necesario repetir la inferencia del modelo.
+
+## Integración con agentes y API
+
+La web usa rutas bajo `/api` para escenarios, modelos, settings, ejecuciones,
+experimentos y respaldos. Las rutas de control realizan validaciones de entradas;
+no reemplazan un sistema de autenticación de despliegue.
+
+`npm run mcp` inicia el servidor MCP con las herramientas de consulta y control
+implementadas en `src/lib/mcp/`. Usa `APP_URL` para apuntar a la instancia web
+correcta y configura `MCP_HOST` / `MCP_PORT` según tu despliegue. Las herramientas
+pueden iniciar pruebas o cambiar estados: limita el acceso a clientes autorizados.
+
+## Variables de entorno
+
+`.env.example` contiene opciones vacías o ejemplos genéricos. Nunca copies a un
+commit la configuración real de tu red.
+
+| Variable | Función |
+| --- | --- |
+| `APP_ENCRYPTION_KEY` | Cifrar credenciales persistidas; la web y worker deben usar la misma. |
+| `SQLITE_PATH` | Archivo de SQLite en modo local. |
+| `DATABASE_URL` | Conexión PostgreSQL; habilita persistencia duradera. |
+| `REDIS_URL` | Cola BullMQ y coordinación del worker; requiere PostgreSQL. |
+| `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `POSTGRES_PORT` | Configurar los contenedores locales de Compose. |
+| `OLLAMA_URL`, `STRATA_URL` | Defaults de endpoints; normalmente se configuran desde Settings. |
+| `ALLOWED_OLLAMA_HOSTS` | Lista explícita de hosts permitidos para endpoints. |
+| `EVALUATOR_BASE_URL`, `EVALUATOR_MODEL`, `EVALUATOR_API_KEY` | Defaults del juez. |
+| `BENCHMARK_CONCURRENCY`, `BENCHMARK_MODEL_CONCURRENCY` | Concurrencia ordinaria; Performance fuerza ejecución serial. |
+| `BENCHMARK_INFERENCE_TIMEOUT_MS` | Límite por solicitud compatible con OpenAI; por defecto 120000 ms. En modo duradero se configura en el worker. |
+| `RESULT_BACKUP_DIR` | Directorio privado de respaldos de resultados. |
+| `BENCHMARK_RESOURCE_TARGETS` | JSON privado que asocia cada origen de inferencia a su colector HTTP y token. |
+| `RESOURCE_MQTT_*`, `RESOURCE_COLLECTOR_*` | Configuración privada del bridge; ver la guía de telemetría. |
+| `APP_URL`, `MCP_HOST`, `MCP_PORT` | Conexión y escucha del servidor MCP. |
+
+## Publicación y privacidad
+
+El repositorio contiene código y pruebas sintéticas. Bases de datos, archivos de
+entorno privados, respaldos, logs, resultados JSONL, diagnósticos e historiales
+operativos no deben versionarse. `.gitignore` excluye estos archivos comunes,
+pero un archivo ya rastreado no queda protegido solo por añadir una regla.
+
+La landing de `landing/` es una web estática independiente. Lee un snapshot
+público generado, que no se incluye como dataset personal en el repositorio.
+`npm run landing:export` genera datos desde tu base local y
+`npm run landing:build` genera y compila la landing. **Revisa el snapshot antes de
+publicarlo:** puede contener resultados y escenarios que no quieras compartir.
+El exportador filtra campos y bloquea marcadores de fuga, pero eso no garantiza
+que un prompt o texto libre no contenga información sensible.
+
+Los identificadores históricos `compare.db`, nombres de cola y URIs MCP se
+mantienen por compatibilidad; no es necesario renombrar una instalación existente.
+
+## Desarrollo y verificación
 
 ```bash
-# Development & Build
-npm run dev                 # Start Next.js development server
-npm run build               # Compile production build
-npm start                   # Run production server
-npm run worker              # Start durable BullMQ worker process
-npm run mcp                 # Start MCP server for agent integration (default port 3001)
-
-# Database Operations
-npm run db:migrate          # Execute PostgreSQL schema migrations (requires DATABASE_URL)
-
-# Landing Site
-npm run landing:build       # Export snapshot + build static landing site
-npm run landing:dev         # Start landing site development server
-npm run landing:export      # Export public-snapshot.json from local database
-
-# Code Quality & Testing
-npm run lint                # Run ESLint validation
-npm run typecheck           # Run TypeScript static type checker
-npm test                    # Run Vitest unit & module test suite
-npm run test:integration    # Run PostgreSQL/Redis integration tests (if configured)
-npm run test:e2e            # Run Playwright E2E suite against production build
-npm run test:e2e:dev        # Run Playwright E2E suite against development server
+npm run typecheck
+npm run lint
+npm test
+npm run build
+python3 -m unittest discover -s scripts -p 'test_mqtt_resource_bridge.py'
 ```
 
-## Contributing
+Las pruebas de integración requieren servicios **aislados de los datos reales**;
+consulta `integration/services.test.ts` y `vitest.integration.config.ts` antes de
+usar `npm run test:integration`. Para comprobar la interfaz con Playwright usa
+`npm run test:e2e` o `npm run test:e2e:dev` según la configuración local.
 
-Contributions are welcome! Please review [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+El proyecto usa Beads (`bd`) para seguimiento local de tareas. Consulta
+[CONTRIBUTING.md](CONTRIBUTING.md) para contribuir y [SECURITY.md](SECURITY.md)
+para reportar problemas de seguridad.
 
-- **Code of Conduct:** [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- **Security Issues:** Report vulnerabilities according to [SECURITY.md](SECURITY.md).
-- **Changelog:** Track updates in [CHANGELOG.md](CHANGELOG.md).
+## Licencia
 
-## License
+[MIT](LICENSE).
 
-This project is licensed under the [MIT License](LICENSE).
+## Reglas de comparación y recuperación
 
-### Respaldos de resultados
+**Security absoluta** usa la media de resistencia de los escenarios evaluados,
+con el mismo peso por escenario y sin depender de los otros modelos del dashboard.
+La tabla muestra casos evaluados y el índice relativo en la ayuda del indicador.
+Sin evaluación válida se muestra **Sin evaluar**; esa ausencia no puede otorgar
+puntos de seguridad ni habilitar un ranking completo cuando seguridad tiene peso.
+Arena Index sigue siendo un índice combinado comparativo, con velocidad normalizada
+respecto al conjunto visible y calidad relativa; no es una tasa de acierto absoluta.
 
-Abre **Respaldos** en la navegación (`/backups`) para crear un respaldo con nombre,
-explorar respuestas y evaluaciones y restaurar todos sus modelos o solo los seleccionados.
-La restauración conserva los resultados existentes y omite duplicados. Para empezar de
-cero, selecciona un respaldo que coincida con los datos actuales y escribe
-`LIMPIAR RESULTADOS`; se conservan los escenarios, ajustes y respaldos. Estas operaciones
-requieren que no haya ejecuciones pendientes o en curso.
+Las nuevas ejecuciones capturan un manifiesto con huellas del artefacto, entorno,
+parámetros y escenario. Las variantes verificadas por el proveedor se agrupan por esa
+identidad; si no hay metadatos suficientes, se mantienen separadas por ejecución y se
+identifican como no verificadas. Los datos históricos no permiten reconstruir una
+cuantización que nunca se registró. El historial de escenarios conserva los textos y
+su identidad de agregación cambia al editar el contenido.
 
-Los archivos se guardan en `.backups/results` (configurable con `RESULT_BACKUP_DIR`),
-fuera del control de versiones. Son respaldos locales del servidor: conserva también
-una copia de ese directorio en tu sistema de respaldo externo. Incluyen configuración de
-las ejecuciones y deben tratarse como datos privados. No incluyen configuración global,
-catálogos de escenarios ni las bases de datos de otros módulos como Churn Lab.
+Todos los trabajos pasan por admisión común antes de usar un recurso. Por defecto,
+los endpoints del mismo hostname comparten reserva. Si hay GPUs independientes en
+un mismo servidor, define `BENCHMARK_RESOURCE_GROUPS` en configuración privada.
+Las tareas bloqueadas se posponen sin consumir reintentos de inferencia; el reset
+frío ocurre con el recurso adquirido. Esta reserva coordina trabajos del benchmark,
+no procesos externos que usen la misma GPU.
+
+Los intentos de inferencia quedan registrados por separado. La duración acumulada
+incluye los intentos fallidos y excluye la evaluación del juez; si se desconocen los
+tokens consumidos por un intento fallido, el coste normalizado en tokens queda
+sin determinar. La telemetría conserva timestamps del publicador y solo integra
+muestras independientes dentro de la ventana de inferencia. Consultas repetidas
+no aumentan la cobertura. En pruebas más cortas que la cadencia del sensor es
+normal no poder calcular energía con suficiente cobertura.
+
+**Protección de experimentos:** el respaldo de resultados todavía no es un archivo
+completo del laboratorio. La limpieza se bloquea si hay vínculos de experimentos,
+para impedir que un borrado en cascada destruya relaciones que ese respaldo no
+puede restaurar. No elimines esas relaciones manualmente para saltar la protección.
+
+Las plantillas de `deploy/systemd/` permiten un despliegue persistente. Ajusta usuario,
+rutas y archivos privados de entorno a tu instalación; compila la versión elegida,
+aplica migraciones y habilita las unidades con el administrador del sistema.
+
+## Vista pública y administración
+
+`/` sirve la landing pública original con actualización cada tres segundos.
+`/live` redirige a `/`; todo el panel privado vive bajo `/admin`.
+Configura `BENCHMARK_PUBLIC_MODELS=ALL` para publicar todos los modelos con
+resultados, incluidos los que se agreguen después. También puedes enumerar
+nombres exactos separados por comas. Una lista vacía no publica resultados.
+En Coolify, configura esta variable en la aplicación y redespliega. El Compose
+pasa ese valor al servicio web y le da prioridad sobre el archivo privado.
+`BENCHMARK_PUBLIC_MODEL_ALIASES` permite reemplazar nombres
+internos por nombres de presentación. No publica prompts, respuestas ni endpoints.
+
+El resto de páginas y APIs exige `BENCHMARK_ADMIN_USER` y
+`BENCHMARK_ADMIN_PASSWORD` mediante HTTP Basic. Si faltan, el acceso privado
+se rechaza. Usa HTTPS, una contraseña larga y un proxy con limitación de intentos;
+no expongas directamente el puerto de aplicación en Internet. Los controles de
+escritura también rechazan orígenes cruzados. Para el live, captura únicamente
+la ventana pública `/`; el panel privado conserva los datos necesarios para operar.
+La instalación remota, DNS, TLS y conectividad privada con inferencia deben
+configurarse antes de abrir el servidor de producción al público.
+
+### Producción mediante Coolify
+
+Los despliegues de producción se gestionan desde Coolify, usando el repositorio
+y `deploy/Dockerfile`; no iniciar una segunda instalación manual en el servidor.
+Proporciona las variables privadas en tiempo de ejecución, nunca en la imagen.
+Web y worker necesitan la misma base de datos, Redis y clave de cifrado para
+leer la configuración migrada. Aplica `npm run db:migrate` antes de actualizar
+web y worker. Si una base ya creada conserva columnas antiguas, ambos procesos
+esperan a que finalice la actualización aditiva de compatibilidad antes de
+leer o escribir. Publica únicamente HTTPS a través del proxy;
+PostgreSQL, Redis y el colector deben quedar en redes privadas o loopback.
+El proceso worker se inicia con `node node_modules/tsx/dist/cli.mjs src/worker.ts`.
+La etapa final de `deploy/Dockerfile` incluye las dependencias npm de
+producción y los entornos Python de IFStruct y MATH-500. ESLint, Playwright,
+Vitest y el compilador de TypeScript se instalan en la etapa de compilación.
+La raíz es pública tanto para visitantes como para administradores; las rutas `/admin`
+solicitan autenticación. Conserva el despliegue anterior hasta validar el nuevo
+para disponer de una reversión del enrutamiento.
+
+Las definiciones de escenarios públicos se cargan exclusivamente desde un archivo
+aprobado mediante `BENCHMARK_PUBLIC_SCENARIOS_FILE`; los prompts privados de la
+base de datos no se publican automáticamente. Sus estadísticas quedan sin evaluar
+si no se dispone de un cálculo público correspondiente.
+
+La instalación existente en Coolify usa `deploy/coolify-compose.yaml` en modo
+Raw Compose: web, worker, MQTT, PostgreSQL y Redis forman una sola aplicación.
+El archivo referencia configuración privada del host y volúmenes externos ya
+existentes; no es una receta para una instalación vacía. No ejecutes dos instancias
+de PostgreSQL contra el mismo volumen. El dominio y sus reglas HTTPS pertenecen
+al servicio web definido en Compose, sin un override de enrutamiento externo.
+
+Las especificaciones del rig son públicas: CPU, RAM y GPU conservan las etiquetas
+de la landing original. Se pueden ajustar con `SNAPSHOT_CPU`, `SNAPSHOT_RAM`,
+`SNAPSHOT_GPU` y `SNAPSHOT_PROVIDER`. No se publican direcciones internas,
+usuarios, cuentas ni credenciales junto a esos componentes.
+
+#### Prueba local de la imagen de producción
+
+Ejecuta esta prueba desde un checkout del candidato con Docker Compose v2 y
+BuildKit disponibles.
+
+```sh
+docker build -f deploy/Dockerfile -t tuxevil-benchmark:runtime-smoke .
+BENCHMARK_SMOKE_IMAGE=tuxevil-benchmark:runtime-smoke bash scripts/smoke-deployment.sh
+```
+
+La prueba crea un proyecto Compose efímero, instala el esquema en PostgreSQL
+y conecta el worker a Redis. Usa una red interna sin puertos publicados y un
+proveedor Ollama simulado con respuestas fijas. Comprueba que el caso público
+GSM8K conserva la respuesta original y su procedencia y que PostgreSQL guarda
+por separado acierto, respuesta incorrecta y error del proveedor. Al terminar
+retira los contenedores y sus volúmenes de prueba. Para validar el despliegue en
+Coolify staging quedan las comprobaciones de HTTPS, el proveedor de inferencia
+real y la reversión del enrutamiento.
+
+## Chat de resultados
+
+Abre **Preguntar al benchmark** desde el sitio público o cualquier pantalla
+privada. Puedes consultar el ranking, velocidad, calidad, seguridad y tiempo al
+primer token. El chat público usa las variantes y los alias publicados en el
+leaderboard. El chat privado requiere la misma autenticación que el panel.
+
+El modo integrado responde consultas de métricas sin configurar un proveedor.
+Para habilitar preguntas abiertas y seguimientos, configura en el entorno del
+servicio web `BENCHMARK_CHAT_BASE_URL` (base de una API compatible con OpenAI,
+incluido `/v1` si corresponde), `BENCHMARK_CHAT_MODEL` y, si el proveedor la
+requiere, `BENCHMARK_CHAT_API_KEY`. En este modo se envían al proveedor la pregunta,
+el contexto reciente de la conversación y los resúmenes del leaderboard de esa
+vista. El chat no carga respuestas originales de las pruebas ni archivos de
+diagnóstico. Cada vista tiene un límite de solicitudes por minuto por proceso.

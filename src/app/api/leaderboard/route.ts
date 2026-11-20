@@ -1,7 +1,8 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { aggregateLeaderboard } from "@/lib/database";
 
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   const url = new URL(request.url);
   const category = url.searchParams.get("category")?.trim() || "ALL";
   const paramRange = url.searchParams.get("paramRange")?.trim() || "All";
@@ -26,7 +27,12 @@ export async function GET(request: Request) {
       : "ALL",
     reasoningEffort,
     weights,
+    includeVram: true,
   });
 
   return NextResponse.json(leaderboardData);
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
 }

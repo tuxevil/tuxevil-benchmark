@@ -1,0 +1,18 @@
+[Unit]
+Description=tuxevil Benchmark web
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=benchmark
+WorkingDirectory=/srv/tuxevil-benchmark
+EnvironmentFile=/etc/tuxevil-benchmark/application.env
+ExecStart=/usr/bin/env node /srv/tuxevil-benchmark/node_modules/next/dist/bin/next start --hostname 0.0.0.0 --port 3103
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

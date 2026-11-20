@@ -1,7 +1,5 @@
 import { defineConfig } from "vitest/config";
 import { fileURLToPath } from "node:url";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 export default defineConfig({
   resolve: {
@@ -12,8 +10,6 @@ export default defineConfig({
   test: {
     environment: "node",
     exclude: ["**/node_modules/**", "**/e2e/**", "**/integration/**", "**/.{git,cache,output,temp}/**"],
-    env: {
-      SQLITE_PATH: join(tmpdir(), `tuxevil-benchmark-test-${process.pid}.db`),
-    },
+    setupFiles: ["./vitest.setup.ts"],
   },
 });

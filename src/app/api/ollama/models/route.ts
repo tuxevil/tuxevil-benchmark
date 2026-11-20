@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { httpUrlSchema } from "@/lib/contracts";
 import { validateOllamaEndpoint } from "@/lib/endpoints";
@@ -12,7 +13,7 @@ type OllamaPsResponse = {
   models?: Array<{ name: string; size_vram?: number }>;
 };
 
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   let defaultUrl = "http://127.0.0.1:11434";
   try {
     const saved = sqliteLoadSettings();
@@ -84,4 +85,8 @@ export async function GET(request: NextRequest) {
     const message = error instanceof Error ? error.message : "Unknown connection error.";
     return NextResponse.json({ error: `Could not reach Ollama: ${message}` }, { status: 502 });
   }
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
 }

@@ -50,7 +50,7 @@ describe("model artifact fingerprint", () => {
 describe("execution environment fingerprint", () => {
   it("ignores label and arbitrary metadata", () => {
     const a = executionEnvironmentInputSchema.parse({
-      label: "beast",
+      label: "example-host",
       runtime: "llama.cpp",
       runtimeCommit: "abc123",
       gpuModels: ["GPU B", "GPU A"],

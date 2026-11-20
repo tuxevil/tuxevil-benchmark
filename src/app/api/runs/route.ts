@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { enqueueBenchmark } from "@/lib/benchmark-queue";
 import { benchmarkStore } from "@/lib/benchmark-store";
@@ -5,7 +6,7 @@ import { createRunSchema } from "@/lib/contracts";
 import { validateProviderEndpoint } from "@/lib/endpoints";
 import { hasDatabase, listPersistedHistory } from "@/lib/database";
 
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   const url = new URL(request.url);
   const score = Number(url.searchParams.get("score"));
   const page = Number(url.searchParams.get("page"));
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
   return NextResponse.json(benchmarkStore.listRuns(filters));
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   await benchmarkStore.hydrate();
   let body: unknown;
   try {
@@ -56,4 +57,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 503 });
   }
   return NextResponse.json({ run }, { status: 202 });
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
+}
+
+export async function POST(...args: Parameters<typeof handlePOST>) {
+ const denied=await requireAdmin("POST"); if(denied)return denied; return handlePOST(...args);
 }

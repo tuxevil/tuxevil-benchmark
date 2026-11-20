@@ -1,12 +1,13 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { experimentInputSchema } from "@/lib/experiment-records";
 import { createExperiment, listExperiments } from "@/lib/experiment-store";
 
-export async function GET() {
+async function handleGET() {
   return NextResponse.json({ experiments: await listExperiments() });
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   let body: unknown;
   try {
     body = await request.json();
@@ -23,4 +24,12 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ experiment: await createExperiment(parsed.data) }, { status: 201 });
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
+}
+
+export async function POST(...args: Parameters<typeof handlePOST>) {
+ const denied=await requireAdmin("POST"); if(denied)return denied; return handlePOST(...args);
 }

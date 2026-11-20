@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { exportResults, type ExportRow } from "@/lib/database";
 
@@ -58,7 +59,7 @@ function toCsv(rows: ExportRow[]): string {
   return lines.join("\r\n");
 }
 
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   const url = new URL(request.url);
   const format = (url.searchParams.get("format")?.trim() || "json").toLowerCase();
   if (format !== "csv" && format !== "json") {
@@ -105,4 +106,8 @@ export async function GET(request: Request) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
 }

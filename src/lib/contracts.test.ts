@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createRunSchema, evaluatorUpdateSchema, evaluatorUpsertSchema, reevaluateSchema, securityAttackTypeSchema, settingsUpdateSchema } from "./contracts";
+import { createRunSchema, evaluatorUpdateSchema, evaluatorUpsertSchema, reevaluateSchema, scenarioSchema, securityAttackTypeSchema, settingsUpdateSchema } from "./contracts";
 import { SECURITY_TEMPLATES } from "./security-templates";
 
 describe("settingsUpdateSchema", () => {
@@ -110,6 +110,42 @@ describe("reevaluateSchema", () => {
 });
 
 
+describe("scenarioSchema deterministic metadata", () => {
+  it("preserves deterministic grader metadata on scenarios", () => {
+    const parsed = scenarioSchema.parse({
+      name: "objective case",
+      category: "GENERAL",
+      systemPrompt: "Return OK.",
+      userMessages: ["Go."],
+      suiteKey: "custom-suite",
+      suiteVersion: "1",
+      grader: {
+        type: "EXACT_TEXT",
+        version: 1,
+        expected: "OK",
+        caseSensitive: true,
+        collapseWhitespace: false,
+      },
+    });
+
+    expect(parsed.suiteKey).toBe("custom-suite");
+    expect(parsed.grader?.type).toBe("EXACT_TEXT");
+  });
+
+  it("does not admit scenario grader metadata into public run configuration", () => {
+    const parsed = createRunSchema.parse({
+      ollamaUrl: "http://localhost:11434",
+      systemPrompt: "Be concise.",
+      userMessages: ["Hello."],
+      models: ["model"],
+      grader: { type: "NUMBER", version: 1, expected: 1, tolerance: 0 },
+      parameters: { temperature: 0, numCtx: 1024, topP: 1, repeatPenalty: 1, numPredict: 16 },
+    });
+
+    expect("grader" in parsed).toBe(false);
+  });
+});
+
 describe("createRunSchema", () => {
   it("accepts a benchmark with HTTP endpoints and bounded parameters", () => {
     const result = createRunSchema.safeParse({
@@ -145,6 +181,26 @@ describe("createRunSchema", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+
+  it("strips private executionTargetId from public run input", () => {
+    const parsed = createRunSchema.parse({
+      ollamaUrl: "http://localhost:11434",
+      executionTargetId: "6f6fd3a8-9b7b-4d5e-b2b3-4f3d6c1e2a1b",
+      systemPrompt: "Be concise.",
+      userMessages: ["Explain queues."],
+      models: ["llama3.2"],
+      parameters: {
+        temperature: 0.2,
+        numCtx: 8192,
+        topP: 0.9,
+        repeatPenalty: 1.1,
+        numPredict: 512,
+      },
+    });
+
+    expect("executionTargetId" in parsed).toBe(false);
   });
 
   it("accepts a scenario id and bounds samples per model", () => {

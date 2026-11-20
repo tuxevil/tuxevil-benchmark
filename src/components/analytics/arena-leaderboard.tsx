@@ -20,7 +20,7 @@ interface ArenaLeaderboardProps {
   onWeightChange: (key: keyof LeaderboardWeights, val: number) => void;
   selectedRadarModels: string[];
   onToggleRadarModel: (modelName: string, provider?: string) => void;
-  onSelectModelProfile?: (modelName: string, provider?: string) => void;
+  onSelectModelProfile?: (modelName: string, provider?: string, identityKey?: string) => void;
 }
 
 type SortField =
@@ -84,23 +84,30 @@ export function ArenaLeaderboard({
   };
 
   const getSecurityBadge = (row: LeaderboardModelRow) => {
-    const resilience = row.securityResilienceScore ?? 100;
-    if (resilience >= 85) {
-      return <span className="sec-pill green">🟢 {resilience}% Imm.</span>;
-    }
-    if (resilience >= 60) {
-      return <span className="sec-pill yellow">🟡 {resilience}% Mod.</span>;
-    }
-    return <span className="sec-pill red">🔴 {resilience}% Vuln.</span>;
+    const resilience = row.securityResilienceScore;
+    if (resilience === null) return <span className="sec-pill">Sin evaluar</span>;
+    return <span className={`sec-pill ${resilience >= 85 ? 'green' : resilience >= 60 ? 'yellow' : 'red'}`} title={`Media por escenario evaluado, independiente de otros modelos. ${row.securityEvaluatedCases ?? '?'} casos, ${row.securityEvaluatedScenarios ?? '?'} escenarios. Índice relativo: ${row.securityRelativeScore ?? 'sin señal'}.`}>{resilience}% <small>· {row.securityEvaluatedCases ?? '—'} casos</small></span>;
   };
 
   const getEligibilityBadge = (row: LeaderboardModelRow) => {
     if (row.rankingEligible) return null;
-    const coverage = row.securityScenarioCoverage ?? row.qualityScenarioCoverage;
-    const pct = coverage !== null ? Math.round(coverage * 100) : null;
+    const coverages = [row.securityScenarioCoverage, row.qualityScenarioCoverage].filter(
+      (coverage): coverage is number => coverage !== null,
+    );
+    const minimumCoverage = coverages.length > 0 ? Math.min(...coverages) : null;
+    const pct = minimumCoverage !== null ? Math.round(minimumCoverage * 100) : null;
+    const securityPct = row.securityScenarioCoverage !== null
+      ? `${Math.round(row.securityScenarioCoverage * 100)}%`
+      : "sin datos";
+    const qualityPct = row.qualityScenarioCoverage !== null
+      ? `${Math.round(row.qualityScenarioCoverage * 100)}%`
+      : "sin datos";
     return (
-      <span className="sec-pill red" title={`Cobertura de escenarios insuficiente (${pct ?? "?"}%) para un ranking justo`}>
-        ⚠ Sin rango {pct !== null ? `(${pct}%)` : ""}
+      <span
+        className="sec-pill red"
+        title={`Se requiere al menos 80% en cada dimensión. Seguridad: ${securityPct}; calidad: ${qualityPct}.`}
+      >
+        ⚠ Sin rango {pct !== null ? `(mín. ${pct}%)` : ""}
       </span>
     );
   };
@@ -183,6 +190,7 @@ export function ArenaLeaderboard({
             >
               <option value="ALL">All Modes</option>
               <option value="off">Off (Standard)</option>
+              <option value="on">On</option>
               <option value="default">Provider Default</option>
               <option value="low">Low</option>
               <option value="medium">Medium</option>
@@ -297,7 +305,7 @@ export function ArenaLeaderboard({
                   Accuracy
                 </th>
                 <th onClick={() => handleSort("securityResilienceScore")} className="sortable-th text-center">
-                  Security
+                  Security absoluta
                 </th>
                 <th onClick={() => handleSort("avgTokPerSec")} className="sortable-th text-center">
                   Speed
@@ -311,26 +319,29 @@ export function ArenaLeaderboard({
                 <th onClick={() => handleSort("avgDurationMs")} className="sortable-th text-center">
                   Latency
                 </th>
+                <th className="text-center" title="Promedio de los picos registrados por prueba para toda la GPU">
+                  VRAM pico prom.
+                </th>
                 <th style={{ textAlign: "center" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {sortedModels.map((m) => {
-                const isChecked = selectedRadarModels.includes(m.modelName);
+                const isChecked = selectedRadarModels.includes(m.identityKey ?? m.modelName);
 
                 return (
-                   <tr key={m.modelName + (m.provider ? `::${m.provider}` : "") + (m.reasoningEffort ? `::${m.reasoningEffort}` : "")} className={isChecked ? "row-selected" : ""}>
+                   <tr title={m.configurationLabel} key={m.identityKey ?? m.modelName + (m.provider ? `::${m.provider}` : "") + (m.reasoningEffort ? `::${m.reasoningEffort}` : "")} className={isChecked ? "row-selected" : ""}>
                      <td style={{ textAlign: "center" }}>
                        <input
                          type="checkbox"
                          checked={isChecked}
-                         onChange={() => onToggleRadarModel(m.modelName, m.provider)}
+                         onChange={() => onToggleRadarModel(m.identityKey ?? m.modelName, m.provider)}
                          title="Link to chart analytics"
                        />
                      </td>
                      <td className="model-cell">
                        <strong className="model-name-text">{m.modelName}</strong>
-                       <span className="param-pill">{m.paramSizeLabel} Params</span>
+                       <span className="param-pill">{m.paramSizeLabel} Params</span>{m.configurationLabel && <small className="muted" style={{display:"block",marginTop:4}}>{m.configurationLabel}</small>}
                        {m.provider && m.provider !== "ollama" && (
                          <span
                            className="badge"
@@ -349,7 +360,7 @@ export function ArenaLeaderboard({
                            {m.provider === "strata" ? "Strata" : m.provider === "freetoken" ? "⚡ FreeToken" : "🦙 llama.cpp"}
                          </span>
                        )}
-                       {m.reasoningEffort && m.reasoningEffort !== "off" && (
+                       {m.reasoningEffort && (
                          <span
                            className="badge info"
                            style={{
@@ -400,17 +411,22 @@ export function ArenaLeaderboard({
                         {m.avgDurationMs != null ? `${(m.avgDurationMs / 1000).toFixed(1)} s` : "—"}
                       </span>
                     </td>
+                    <td className="text-center">
+                      {m.avgVramPeakBytes == null ? "Sin datos" : `${(m.avgVramPeakBytes / 1024 ** 3).toFixed(2)} GiB`}
+                      <br />
+                      <small>{m.vramMeasuredCount ?? 0}/{m.totalRuns + m.failedEvals} medidas</small>
+                    </td>
                     <td style={{ textAlign: "center" }}>
                       {onSelectModelProfile ? (
                         <button
                           type="button"
                           className="btn-profile-link"
-                           onClick={() => onSelectModelProfile(m.modelName, m.provider)}
+                           onClick={() => onSelectModelProfile(m.modelName, m.provider, m.identityKey)}
                         >
                           [View Profile]
                         </button>
                       ) : (
-                        <Link href={`/models/${encodeURIComponent(m.modelName)}`} className="btn-profile-link">
+                        <Link href={`/admin/models/${encodeURIComponent(m.modelName)}`} className="btn-profile-link">
                           [View Profile]
                         </Link>
                       )}

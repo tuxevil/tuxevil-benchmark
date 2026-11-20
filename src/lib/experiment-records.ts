@@ -20,7 +20,7 @@ export const experimentInputSchema = z.object({
   suiteKey: nullableText(255),
   suiteVersion: nullableText(255),
   scenarioVersion: nullableText(255),
-  samplingSnapshot: z.record(z.unknown()).default({}),
+  samplingSnapshot: z.record(z.string(), z.unknown()).default({}),
   notes: z.string().max(20_000).default(""),
 });
 
@@ -39,12 +39,20 @@ export const experimentVariantInputSchema = z.object({
   role: experimentVariantRoleSchema,
   modelArtifactId: z.string().uuid(),
   executionEnvironmentId: z.string().uuid(),
-  inferenceParameters: z.record(z.unknown()).default({}),
+  executionTargetId: z.string().uuid().nullable().default(null),
+  executionModelName: nullableText(255),
+  inferenceParameters: z.record(z.string(), z.unknown()).default({}),
   promptVersion: nullableText(255),
   reasoningMode: nullableText(64),
   parentVariantId: z.string().uuid().nullable().default(null),
 });
 
+export const experimentVariantBindingSchema = z.object({
+  executionTargetId: z.string().uuid().nullable(),
+  executionModelName: z.string().trim().min(1).max(255).nullable(),
+});
+
+export type ExperimentVariantBindingInput = z.input<typeof experimentVariantBindingSchema>;
 export type ExperimentVariantInput = z.input<typeof experimentVariantInputSchema>;
 export type ExperimentVariantData = z.output<typeof experimentVariantInputSchema>;
 

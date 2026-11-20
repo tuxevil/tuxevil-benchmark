@@ -67,13 +67,13 @@ describe("discoverProviderModels", () => {
     vi.stubGlobal("fetch", fetchMock);
     const result = await discoverProviderModels({
       provider: "strata",
-      endpoint: "http://10.128.128.254:8081/v1",
+      endpoint: "http://127.0.0.1:8081/v1",
       apiKey: "test-strata-key",
     });
     expect(result.provider).toBe("strata");
     expect(result.models[0].name).toBe("qwen3.8-flash-next-iq3_xxs");
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-      "http://10.128.128.254:8081/v1/models",
+      "http://127.0.0.1:8081/v1/models",
       expect.objectContaining({ headers: expect.objectContaining({ authorization: "Bearer test-strata-key" }) }),
     );
   });

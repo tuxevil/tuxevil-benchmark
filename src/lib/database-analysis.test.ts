@@ -151,7 +151,7 @@ describe("aggregateScenarioAnalysis", () => {
     await persistRun(makeRun({ scenarioId: OTHER_SCENARIO_ID }));
 
     const result = await aggregateScenarioAnalysis({ scenarioId: "2787b2a8", systemPrompt: "", userMessages: [] });
-    expect(result.scenarioKey).toBe(`scenario:${SCENARIO_ID}`);
+    expect(result.scenarioKey).toMatch(new RegExp(`^scenario:${SCENARIO_ID}:content:[a-f0-9]{64}$`));
     expect(result.runs).toBe(2);
     expect(result.models[0].modelName).toBe("qwen3:4b");
     expect(result.models[0].averageStars).toBe(5);
@@ -162,7 +162,7 @@ describe("aggregateScenarioAnalysis", () => {
     await persistRun(makeRun({ scenarioId: null }));
 
     const result = await aggregateScenarioAnalysis({ scenarioId: SCENARIO_ID, systemPrompt: "", userMessages: [] });
-    expect(result.scenarioKey).toBe(`scenario:${SCENARIO_ID}`);
+    expect(result.scenarioKey).toMatch(new RegExp(`^scenario:${SCENARIO_ID}:content:[a-f0-9]{64}$`));
     expect(result.runs).toBe(1);
   });
 

@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: tuxevil_benchmark
       POSTGRES_USER: tuxevil_benchmark
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-55432}:5432"
     volumes:
@@ -12,7 +12,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-local-development-only}"]
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"]
     ports:
       - "127.0.0.1:6379:6379"
     volumes:

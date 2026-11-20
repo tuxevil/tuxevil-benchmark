@@ -1,0 +1,18 @@
+[Unit]
+Description=tuxevil Benchmark MQTT telemetry bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=benchmark
+WorkingDirectory=/srv/tuxevil-benchmark
+EnvironmentFile=/etc/tuxevil-benchmark/telemetry.env
+ExecStart=/usr/bin/python3 /srv/tuxevil-benchmark/scripts/mqtt-resource-bridge.py
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

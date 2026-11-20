@@ -1,7 +1,21 @@
+import { createToolSandboxHandler, findToolSandboxCase, TOOL_SANDBOX_MAX_ACTIONS } from "@/lib/toolsandbox-upstream";
+import { BFCL_MEMORY_CASE, BFCL_MEMORY_MAX_ACTIONS, BFCL_MEMORY_RECALL_TURN, createBfclMemory } from "@/lib/bfcl-v4-memory-kv";
+import { BFCL_MULTITURN_MAX_ACTIONS, createBfclFileSystem, findBfclMultiturnCase } from "@/lib/bfcl-v3-multiturn";
+import { createSimulatedDevice, runSimulatedDeviceTool, STATEFUL_CASE, STATEFUL_MAX_ACTIONS } from "@/lib/stateful-tool-sandbox";
+import { findBfclV3Case } from "@/lib/bfcl-v3-pilot";
+import { checkFixtureCall, findNativeToolFixture } from "@/lib/native-tool-fixtures";
+import type { OllamaChatMessage, OpenAIChatMessage } from "@/lib/providers/chat-tools";
+import { acquireRunAdmission, ResourceBusyError } from "@/lib/execution-admission";
+import { recordInferenceAttempt, type InferenceAttempt } from "@/lib/inference-attempts";
+import { captureRunManifest } from "@/lib/capture-run-manifest";
+import { startResourceMeasurement } from "@/lib/resource-telemetry";
+import { saveResourceMeasurement } from "@/lib/resource-measurement-store";
+import { appendResultDiagnosticEvent, type DiagnosticSeverity, type DiagnosticStage } from "@/lib/result-diagnostic-store";
+import { sanitizeDiagnosticText } from "@/lib/diagnostic-safety";
 import { evaluateModelResponse, resolveEvaluationMode } from "@/lib/frontier-evaluator";
 import { benchmarkStore } from "@/lib/benchmark-store";
-import { streamOllamaChat } from "@/lib/ollama-client";
-import { streamOpenAICompatibleChat } from "@/lib/providers/openai-client";
+import { streamOllamaChat, type OllamaChatResult } from "@/lib/ollama-client";
+import { streamOpenAICompatibleChat, type OpenAIChatResult } from "@/lib/providers/openai-client";
 import { retryTransient, isTransient } from "@/lib/retry";
 import type { Queue as BullQueue } from "bullmq";
 import { redisConnection } from "@/lib/redis-connection";
@@ -13,9 +27,31 @@ const pendingJobs: QueueJob[] = [];
 let activeJobs = 0;
 let redisQueue: BullQueue<{ runId: string }> | null = null;
 
+async function recordRunDiagnostic(
+  runId: string,
+  event: string,
+  payload: Record<string, unknown> = {},
+  severity: DiagnosticSeverity = "info",
+) {
+  const run = benchmarkStore.getStoredRun(runId);
+  if (!run) return;
+  const results = await Promise.allSettled(run.results.map((result) => appendResultDiagnosticEvent({
+    resultId: result.id,
+    stage: "run",
+    event,
+    severity,
+    payload: { runId, model: result.modelName, ...payload },
+  })));
+  if (results.some((result) => result.status === "rejected")) {
+    console.warn("[tuxevil-benchmark] Could not persist one or more run diagnostic events", { runId, event });
+  }
+}
+
 export async function enqueueBenchmark(runId: string) {
+  await recordRunDiagnostic(runId, "queue_enqueue_requested", { queue: process.env.REDIS_URL ? "redis" : "in_memory" });
   if (process.env.REDIS_URL) {
     if (!process.env.DATABASE_URL) {
+      await recordRunDiagnostic(runId, "queue_enqueue_failed", { reason: "Redis requiere persistencia en base de datos." }, "error");
       throw new Error("REDIS_URL requires DATABASE_URL so workers can recover run state.");
     }
     const { Queue } = await import("bullmq");
@@ -23,17 +59,28 @@ export async function enqueueBenchmark(runId: string) {
       redisQueue = new Queue(LEGACY_QUEUE_NAME, { connection: redisConnection() });
       redisQueue.on("error", (error) => console.error("[tuxevil-benchmark] benchmark queue error", error));
     }
-    await redisQueue.add("benchmark", { runId }, {
-      attempts: 3,
-      backoff: { type: "exponential", delay: 1_000 },
-      jobId: `benchmark-${runId}`,
-      removeOnComplete: { age: 86_400 },
-      removeOnFail: { age: 604_800 },
-    });
+    try {
+      await redisQueue.add("benchmark", { runId }, {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 1_000 },
+        jobId: `benchmark-${runId}`,
+        removeOnComplete: { age: 86_400 },
+        removeOnFail: { age: 604_800 },
+      });
+      await recordRunDiagnostic(runId, "queue_enqueued", { queue: "redis", jobId: `benchmark-${runId}` });
+    } catch (error) {
+      await recordRunDiagnostic(runId, "queue_enqueue_failed", {
+        queue: "redis",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+        errorMessage: error instanceof Error ? sanitizeDiagnosticText(error.message) : "No se pudo agregar el trabajo a la cola.",
+      }, "error");
+      throw error;
+    }
     return;
   }
 
   pendingJobs.push({ runId, execute: () => executeBenchmark(runId) });
+  await recordRunDiagnostic(runId, "queue_enqueued", { queue: "in_memory", pendingJobs: pendingJobs.length });
   drainQueue();
 }
 
@@ -45,7 +92,16 @@ async function drainQueue() {
     activeJobs += 1;
     void job.execute()
       .catch((error) => {
+        if (error instanceof ResourceBusyError) {
+          void recordRunDiagnostic(job.runId, "queue_resource_busy_retry", { delayMs: 1000 }, "warning");
+          setTimeout(() => { pendingJobs.push(job); void drainQueue(); },1000);
+          return;
+        }
         const message = error instanceof Error ? error.message : "Benchmark worker failed.";
+        void recordRunDiagnostic(job.runId, "queue_worker_failed", {
+          errorType: error instanceof Error ? error.name : "UnknownError",
+          errorMessage: sanitizeDiagnosticText(message),
+        }, "error");
         const run = benchmarkStore.getStoredRun(job.runId);
         if (run && !["COMPLETED", "FAILED", "CANCELLED"].includes(run.status)) {
           benchmarkStore.updateRun(job.runId, {
@@ -62,7 +118,7 @@ async function drainQueue() {
   }
 }
 
-async function executeBenchmark(runId: string) {
+async function executeBenchmarkAdmitted(runId: string) {
   await benchmarkStore.hydrate();
   let run = benchmarkStore.getStoredRun(runId);
   if (!run) {
@@ -70,11 +126,25 @@ async function executeBenchmark(runId: string) {
     await benchmarkStore.refreshRun(runId);
     run = benchmarkStore.getStoredRun(runId);
   }
-  if (!run || ["CANCELLED", "COMPLETED", "FAILED"].includes(run.status)) return;
+  if (!run) return;
+  if (["CANCELLED", "COMPLETED", "FAILED"].includes(run.status)) {
+    await recordRunDiagnostic(runId, "worker_skipped_terminal_run", { status: run.status }, "warning");
+    return;
+  }
 
   benchmarkStore.updateRun(runId, { status: "RUNNING", startedAt: new Date().toISOString() });
+  await recordRunDiagnostic(runId, "worker_started", { modelResults: run.results.length });
 
-  const modelConcurrency = Math.max(1, Number(process.env.BENCHMARK_MODEL_CONCURRENCY ?? 1));
+  let modelConcurrency = Math.max(1, Number(process.env.BENCHMARK_MODEL_CONCURRENCY ?? 1));
+  try {
+    const { isTestRunInPerformanceExecution } = await import("@/lib/experiment-execution-store");
+    if (await isTestRunInPerformanceExecution(runId)) modelConcurrency = 1;
+  } catch (error) {
+    console.error("[tuxevil-benchmark] could not resolve performance sample concurrency", {
+      runId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
   await runWithConcurrency(run.results, modelConcurrency, async (result) => {
     if (await waitUntilRunnable(runId)) await executeModel(runId, result.id);
   });
@@ -82,14 +152,37 @@ async function executeBenchmark(runId: string) {
   await benchmarkStore.flush(runId);
   await benchmarkStore.refreshRun(runId);
   const finishedRun = benchmarkStore.getStoredRun(runId);
-  if (!finishedRun || finishedRun.status === "CANCELLED") return;
-  if (!(await waitUntilRunnable(runId))) return;
+  if (!finishedRun) return;
+  if (finishedRun.status === "CANCELLED") {
+    await recordRunDiagnostic(runId, "worker_cancelled", { modelResults: finishedRun.results.length }, "warning");
+    return;
+  }
+  if (!(await waitUntilRunnable(runId))) {
+    await recordRunDiagnostic(runId, "worker_paused", { modelResults: finishedRun.results.length }, "warning");
+    return;
+  }
 
   const hasFailures = finishedRun.results.some((result) => result.status === "FAILED");
   benchmarkStore.updateRun(runId, {
     status: hasFailures ? "FAILED" : "COMPLETED",
     finishedAt: new Date().toISOString(),
   });
+  await benchmarkStore.flush(runId);
+  await recordRunDiagnostic(runId, "worker_finished", {
+    status: hasFailures ? "FAILED" : "COMPLETED",
+    modelResults: finishedRun.results.length,
+    failedResults: finishedRun.results.filter((result) => result.status === "FAILED").length,
+  }, hasFailures ? "warning" : "info");
+
+  try {
+    const { reconcileExperimentExecutionsForTestRun } = await import("@/lib/experiment-runner");
+    await reconcileExperimentExecutionsForTestRun(runId);
+  } catch (error) {
+    console.error("[tuxevil-benchmark] experiment reconciliation after run completion failed", {
+      runId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 async function executeModel(runId: string, resultId: string) {
@@ -97,6 +190,30 @@ async function executeModel(runId: string, resultId: string) {
   if (!run) return;
   const result = run.results.find((item) => item.id === resultId);
   if (!result) return;
+  const executionId = crypto.randomUUID();
+  const executionStartedAt = Date.now();
+  const recordDiagnostic = async (
+    stage: DiagnosticStage,
+    event: string,
+    payload: Record<string, unknown> = {},
+    severity: DiagnosticSeverity = "info",
+  ) => {
+    try {
+      await appendResultDiagnosticEvent({
+        resultId,
+        stage,
+        event,
+        severity,
+        payload: { executionId, ...payload },
+      });
+    } catch (error) {
+      console.warn("[tuxevil-benchmark] Could not persist a diagnostic event", {
+        resultId,
+        event,
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+    }
+  };
 
   benchmarkStore.updateResult(runId, resultId, {
     status: "INFERRING",
@@ -111,6 +228,45 @@ async function executeModel(runId: string, resultId: string) {
     totalDurationMs: null,
     errorMessage: null,
   });
+  await recordDiagnostic("result", "execution_started", {
+    runId,
+    model: result.modelName,
+    provider: run.provider ?? "ollama",
+    parameters: run.parameters,
+    evaluatorModel: run.evaluatorModel ?? null,
+    applicationCommit: process.env.NEXT_PUBLIC_COMMIT_SHA ?? null,
+  });
+
+  const attempts: InferenceAttempt[] = [];
+  let capturedManifest: import("./run-identity").RunManifest | undefined;
+  let stopResources: (() => Promise<import("@/lib/resource-telemetry").ResourceMeasurement>) | undefined;
+  async function finishResources() {
+    if (!stopResources) return;
+    const stop = stopResources; stopResources = undefined;
+    try {
+      const measurement = await stop();
+      await saveResourceMeasurement(resultId, { ...measurement, attempts, inferenceDurationMs: attempts.reduce((sum,a)=>sum+a.durationMs,0), manifest: capturedManifest });
+      await recordDiagnostic("resources", "measurement_completed", {
+        durationMs: measurement.durationMs,
+        samples: measurement.samples,
+        errors: measurement.errors,
+        ramPeakBytes: measurement.ramPeakBytes,
+        vramPeakBytes: measurement.vramPeakBytes,
+        wattsMean: measurement.wattsMean,
+        wattsPeak: measurement.wattsPeak,
+        gpuTemperaturePeakC: measurement.gpuTemperaturePeakC,
+        thermalThrottlingDetected: measurement.thermalThrottlingDetected,
+        powerCoveragePct: measurement.powerCoveragePct,
+        unavailableReason: measurement.unavailableReason,
+      });
+    } catch (error) {
+      await recordDiagnostic("resources", "measurement_persist_failed", {
+        errorType: error instanceof Error ? error.name : "UnknownError",
+        errorMessage: error instanceof Error ? sanitizeDiagnosticText(error.message) : "No se pudo guardar la telemetría.",
+      }, "warning");
+      console.warn("Resource telemetry unavailable", error instanceof Error ? error.name : "UnknownError");
+    }
+  }
 
   const turnTelemetry = [] as Array<{
     ttftMs: number | null;
@@ -120,9 +276,26 @@ async function executeModel(runId: string, resultId: string) {
     evalDurationMs: number | null;
   }>;
 
+  const fixture = findNativeToolFixture(run.scenarioId);
+  const stateful = run.scenarioId === STATEFUL_CASE.scenarioId;
+  const upstreamSandbox = findToolSandboxCase(run.scenarioId ?? "");
+  const bfclMultiturn = findBfclMultiturnCase(run.scenarioId);
+  const memoryCase = run.scenarioId === BFCL_MEMORY_CASE.scenarioId;
+  let memory = memoryCase ? createBfclMemory() : null;
+  const scriptedTools = Boolean(bfclMultiturn || memoryCase);
+  const staticTools = memoryCase ? BFCL_MEMORY_CASE.tools
+    : upstreamSandbox ? upstreamSandbox.tools : stateful ? STATEFUL_CASE.tools : fixture ? [fixture.tool] : findBfclV3Case(run.scenarioId)?.tools;
+  const device = stateful ? createSimulatedDevice() : null;
+  const statefulHandler = bfclMultiturn ? createBfclFileSystem(bfclMultiturn).invoke
+    : upstreamSandbox ? createToolSandboxHandler(upstreamSandbox.sourceCaseId, run.cancelController.signal) : device ? (name: string, args: unknown) => runSimulatedDeviceTool(device, name, args) : null;
+  const maxActions = upstreamSandbox ? TOOL_SANDBOX_MAX_ACTIONS : memoryCase ? BFCL_MEMORY_MAX_ACTIONS : bfclMultiturn ? BFCL_MULTITURN_MAX_ACTIONS : STATEFUL_MAX_ACTIONS;
   const conversation: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-    { role: "system", content: run.systemPrompt },
+    ...(run.systemPrompt ? [{ role: "system" as const, content: run.systemPrompt }] : []),
   ];
+
+  const ollamaHistory: OllamaChatMessage[] = [...conversation];
+  const openAIHistory: OpenAIChatMessage[] = [...conversation];
+  let stepOrder = 0;
 
   try {
     for (const [index, userMessage] of run.userMessages.entries()) {
@@ -131,30 +304,77 @@ async function executeModel(runId: string, resultId: string) {
       const activeRun = benchmarkStore.getStoredRun(runId);
       if (!activeRun) return;
 
-      conversation.push({ role: "user", content: userMessage });
+      if (memory && index === BFCL_MEMORY_RECALL_TURN) {
+        const snapshot = memory.snapshot();
+        memory = createBfclMemory(snapshot);
+        ollamaHistory.splice(run.systemPrompt ? 1 : 0);
+        openAIHistory.splice(run.systemPrompt ? 1 : 0);
+      }
+      const toolHandler = memory?.invoke ?? statefulHandler;
+      const tools = bfclMultiturn?.turnTools[index] ?? staticTools;
+      const userTurn = { role: "user" as const, content: userMessage };
+      conversation.push(userTurn);
+      if (toolHandler) {
+        ollamaHistory.push(userTurn);
+        openAIHistory.push(userTurn);
+      }
 
       let partialResponse = "";
       let lastStreamUpdate = 0;
       const provider = activeRun.provider ?? "ollama";
-      const endpoint = activeRun.providerUrl || activeRun.ollamaUrl;
-      const apiKey =
-        provider === "freetoken"
-          ? await benchmarkStore.getFreetokenApiKey()
-          : provider === "strata"
-            ? await benchmarkStore.getStrataApiKey()
-            : provider === "llamacpp"
+      let endpoint = activeRun.providerUrl || activeRun.ollamaUrl;
+      let apiKey: string | null = null;
+      if (activeRun.executionTargetId) {
+        const { getExecutionTargetConnection } = await import("@/lib/execution-target-store");
+        const target = await getExecutionTargetConnection(activeRun.executionTargetId);
+        if (!target) throw new Error("Execution target not found for benchmark run.");
+        if (target.provider !== provider) {
+          throw new Error(`Execution target provider mismatch: expected ${provider}, got ${target.provider}.`);
+        }
+        endpoint = target.endpoint;
+        apiKey = target.apiKey;
+      } else {
+        apiKey =
+          provider === "freetoken"
+            ? await benchmarkStore.getFreetokenApiKey()
+            : provider === "strata"
+              ? await benchmarkStore.getStrataApiKey()
+              : provider === "llamacpp"
               ? await benchmarkStore.getLlamacppApiKey()
               : null;
+      }
 
-      const response = await retryTransient(
-        () =>
-          provider === "ollama"
+      if (!stopResources) {
+        capturedManifest = await captureRunManifest(activeRun, result, endpoint, apiKey);
+        benchmarkStore.updateResult(runId, resultId, { manifest: capturedManifest });
+        await recordDiagnostic(
+          "provider",
+          "metadata_captured",
+          {
+            manifest: capturedManifest,
+            parameters: activeRun.parameters,
+            verification: capturedManifest.verification,
+          },
+          capturedManifest.diagnostics?.probe.status === "failed" ? "warning" : "info",
+        );
+        stopResources = await startResourceMeasurement(endpoint);
+        await recordDiagnostic("resources", "measurement_started", { model: result.modelName });
+      }
+      const infer = (
+        ollamaMessages: OllamaChatMessage[],
+        openAIMessages: OpenAIChatMessage[],
+      ) => retryTransient(
+        () => recordInferenceAttempt<OllamaChatResult | OpenAIChatResult>(
+          attempts,
+          () => provider === "ollama"
             ? streamOllamaChat({
                 endpoint,
                 model: result.modelName,
-                messages: conversation,
+                messages: ollamaMessages,
+                tools,
                 parameters: activeRun.parameters,
                 signal: activeRun.cancelController.signal,
+                apiKey,
                 onToken: (token) => {
                   partialResponse += token;
                   const now = performance.now();
@@ -167,7 +387,8 @@ async function executeModel(runId: string, resultId: string) {
             : streamOpenAICompatibleChat({
                 endpoint,
                 model: result.modelName,
-                messages: conversation,
+                messages: openAIMessages,
+                tools,
                 parameters: activeRun.parameters,
                 apiKey,
                 provider,
@@ -182,40 +403,151 @@ async function executeModel(runId: string, resultId: string) {
                   }
                 },
               }),
+          async () => {
+            partialResponse = "";
+            benchmarkStore.updateStreamingResponse(runId, resultId, "");
+            await recordDiagnostic("inference", "attempt_started", { turn: stepOrder + 1, attempt: attempts.length + 1 });
+          },
+          async (attempt, error) => recordDiagnostic(
+            "inference",
+            attempt.status === "COMPLETED" ? "attempt_completed" : "attempt_failed",
+            {
+              turn: stepOrder + 1,
+              attempt: attempts.length,
+              startedAt: attempt.startedAt,
+              durationMs: attempt.durationMs,
+              status: attempt.status,
+              errorType: attempt.errorType,
+              errorMessage: error instanceof Error ? sanitizeDiagnosticText(error.message) : null,
+              inputTokens: attempt.inputTokens,
+              outputTokens: attempt.outputTokens,
+            },
+            attempt.status === "FAILED" ? "warning" : "info",
+          ),
+        ),
         activeRun.cancelController.signal,
       );
 
-      turnTelemetry.push({
-        ttftMs: response.ttftMs,
-        outputTokens: response.outputTokens,
-        inputTokens: response.inputTokens,
-        totalDurationMs: response.totalDurationMs,
-        evalDurationMs: response.evalDurationMs,
-      });
+      const recordTurn = async (
+        response: OllamaChatResult | OpenAIChatResult,
+        stepOrder: number,
+        ollamaContinuation?: OllamaChatMessage[],
+      ) => {
+        await recordDiagnostic("inference", "turn_completed", {
+          turn: stepOrder,
+          ttftMs: response.ttftMs,
+          firstVisibleTokenMs: response.firstVisibleTokenMs,
+          prefillRate: response.prefillRate,
+          decodeRate: response.decodeRate,
+          ...("requestedThinking" in response && { requestedThinking: response.requestedThinking }),
+          ...("reasoningTokens" in response && { reasoningTokens: response.reasoningTokens }),
+          durationMs: response.totalDurationMs,
+          inputTokens: response.inputTokens,
+          outputTokens: response.outputTokens,
+          finishReason: response.finishReason,
+          truncated: response.truncated,
+        });
 
+        turnTelemetry.push({
+          ttftMs: response.ttftMs,
+          outputTokens: response.outputTokens,
+          inputTokens: response.inputTokens,
+          totalDurationMs: response.totalDurationMs,
+          evalDurationMs: response.evalDurationMs,
+        });
+
+        const turnThinking = response.thinking?.trim() || null;
+
+        benchmarkStore.addTurn(runId, resultId, {
+          id: crypto.randomUUID(),
+          stepOrder,
+          userMessage,
+          responseText: response.responseText,
+          thinking: turnThinking,
+          finishReason: response.finishReason,
+          truncated: response.truncated,
+          ttftMs: response.ttftMs,
+          inputTokens: response.inputTokens,
+          outputTokens: response.outputTokens,
+          tokPerSec: response.tokPerSec,
+          totalDurationMs: response.totalDurationMs,
+          wireDiagnostics: "wireDiagnostics" in response ? (response.wireDiagnostics as import("@/lib/providers/openai-client").WireDiagnostics | null) : null,
+          protocolDiagnostics: "protocolDiagnostics" in response ? (response.protocolDiagnostics as import("@/lib/providers/openai-client").ProtocolDiagnostics | null) : null,
+          toolCalls: response.toolCalls?.length ? response.toolCalls : null,
+          requestBody: "requestBody" in response ? (response.requestBody as Record<string, unknown> | null) : ollamaContinuation ? { messages: ollamaContinuation, tools } : null,
+        });
+      };
+
+      let response = await infer(toolHandler ? ollamaHistory.slice() : conversation, toolHandler ? openAIHistory.slice() : conversation);
+      await recordTurn(response, ++stepOrder, scriptedTools ? ollamaHistory.slice() : undefined);
+      if (fixture && !response.truncated && checkFixtureCall(fixture, response.toolCalls) === "VALID") {
+        if (!(await waitUntilRunnable(runId))) return;
+        const content = JSON.stringify(fixture.result);
+        if ("protocolDiagnostics" in response) {
+          const toolCall = response.toolCalls[0];
+          response = await infer([], [
+            ...conversation,
+            { role: "assistant", content: response.responseText || null, tool_calls: response.toolCalls },
+            { role: "tool", content, tool_call_id: toolCall.id },
+          ]);
+          await recordTurn(response, ++stepOrder);
+        } else {
+          const continuation: OllamaChatMessage[] = [
+            ...conversation,
+            { role: "assistant", content: response.responseText, tool_calls: response.toolCalls },
+            { role: "tool", content, tool_name: fixture.name,
+              ...(response.toolCalls[0].id && { tool_call_id: response.toolCalls[0].id }) },
+          ];
+          response = await infer(continuation, []);
+          await recordTurn(response, ++stepOrder, continuation);
+        }
+      } else if (toolHandler) {
+        let actions = 0;
+        while (!response.truncated && response.toolCalls.length > 0) {
+          const calls = response.toolCalls;
+          if (actions + calls.length > maxActions || (!scriptedTools && calls.length !== 1)
+            || calls.some((call) => typeof call?.function?.name !== "string" || !call.function.name)
+            || ("protocolDiagnostics" in response && (response.toolCalls.some((call) => !call.id)
+              || new Set(response.toolCalls.map((call) => call.id)).size !== calls.length))) break;
+          if (!(await waitUntilRunnable(runId))) return;
+          actions += calls.length;
+          const results: string[] = [];
+          for (const { function: call } of calls) {
+            results.push(JSON.stringify(await toolHandler(call.name, call.arguments, index)));
+            if (run.cancelController.signal.aborted) return;
+          }
+          if ("protocolDiagnostics" in response) {
+            openAIHistory.push(
+              { role: "assistant", content: response.responseText || null, tool_calls: response.toolCalls },
+              ...response.toolCalls.map((call, index) => ({ role: "tool" as const, content: results[index], tool_call_id: call.id })),
+            );
+          } else {
+            ollamaHistory.push(
+              { role: "assistant", content: response.responseText, tool_calls: response.toolCalls },
+              ...response.toolCalls.map((call, index) => ({
+                role: "tool" as const, content: results[index], tool_name: call.function.name,
+                ...(call.id && { tool_call_id: call.id }),
+              })),
+            );
+          }
+          response = await infer(ollamaHistory.slice(), openAIHistory.slice());
+          await recordTurn(response, ++stepOrder, ollamaHistory.slice());
+        }
+        if (scriptedTools && response.truncated) break;
+        if (response.toolCalls.length === 0) {
+          const assistant = { role: "assistant" as const, content: response.responseText };
+          ollamaHistory.push(assistant);
+          openAIHistory.push(assistant);
+        } else if (scriptedTools) {
+          // An unfinished call batch cannot be added to the provider history.
+          break;
+        }
+      }
       const turnResponse = response.responseText.trim();
       const turnThinking = response.thinking?.trim() || null;
 
-      benchmarkStore.addTurn(runId, resultId, {
-        id: crypto.randomUUID(),
-        stepOrder: index + 1,
-        userMessage,
-        responseText: response.responseText,
-        thinking: turnThinking,
-        finishReason: response.finishReason,
-        truncated: response.truncated,
-        ttftMs: response.ttftMs,
-        inputTokens: response.inputTokens,
-        outputTokens: response.outputTokens,
-        tokPerSec: response.tokPerSec,
-        totalDurationMs: response.totalDurationMs,
-        wireDiagnostics: "wireDiagnostics" in response ? (response.wireDiagnostics as import("@/lib/providers/openai-client").WireDiagnostics | null) : null,
-        protocolDiagnostics: "protocolDiagnostics" in response ? (response.protocolDiagnostics as import("@/lib/providers/openai-client").ProtocolDiagnostics | null) : null,
-        requestBody: "requestBody" in response ? (response.requestBody as Record<string, unknown> | null) : null,
-      });
-
       // If this turn failed to produce visible content, fail the turn and stop conversation
-      if (turnResponse.length === 0) {
+      if (!tools && turnResponse.length === 0) {
         const errorReason = turnThinking ? "NO_FINAL_ANSWER" : "EMPTY_RESPONSE";
         console.warn(`[tuxevil-benchmark] [Inference Failed] ${runId}/${resultId} turn ${index + 1}: ${errorReason}.`);
         benchmarkStore.updateResult(runId, resultId, {
@@ -235,11 +567,12 @@ async function executeModel(runId: string, resultId: string) {
       });
     }
 
+    await finishResources();
     const inferredResult = benchmarkStore.getStoredRun(runId)?.results.find((item) => item.id === resultId);
     const responseText = inferredResult?.responseText ?? "";
     const lastTurn = inferredResult?.turns[inferredResult.turns.length - 1];
 
-    if (responseText.trim().length === 0) {
+    if (!bfclMultiturn && !staticTools && responseText.trim().length === 0) {
       const errorReason = lastTurn?.thinking ? "NO_FINAL_ANSWER" : "EMPTY_RESPONSE";
       console.warn(`[tuxevil-benchmark] [Inference Failed] ${runId}/${resultId}: ${errorReason}.`);
       benchmarkStore.updateResult(runId, resultId, {
@@ -255,6 +588,7 @@ async function executeModel(runId: string, resultId: string) {
     const totals = aggregateTelemetry(turnTelemetry);
     benchmarkStore.updateResult(runId, resultId, {
       ...totals,
+      totalDurationMs: roundedAttemptDurationMs(attempts),
       finishReason: lastTurn?.finishReason ?? null,
       truncated: lastTurn?.truncated ?? false,
     });
@@ -266,32 +600,64 @@ async function executeModel(runId: string, resultId: string) {
     benchmarkStore.updateResult(runId, resultId, { status: "EVALUATING", evalStatus: latestRun.evaluator ? "RUNNING" : "SKIPPED" });
 
     if (latestRun.evaluator) {
+      const evaluationStarted = performance.now();
+      let evaluationAttempt = 0;
+      await recordDiagnostic("evaluation", "started", { model: latestRun.evaluator.model });
       try {
         const current = benchmarkStore.getStoredRun(runId);
         const currentResult = current?.results.find((item) => item.id === resultId);
         const evaluation = await retryTransient(
-          () => evaluateModelResponse({
-            config: latestRun.evaluator!,
-            systemPrompt: latestRun.systemPrompt,
-            userMessages: latestRun.userMessages,
-            transcript: currentResult?.turns.flatMap((t) => [
-              { role: "user" as const, content: t.userMessage },
-              { role: "assistant" as const, content: t.responseText },
-            ]),
-            thinkingText: currentResult?.turns.map((t) => t.thinking).filter(Boolean).join("\n\n"),
-            responseText: currentResult?.responseText ?? "",
-            modelName: result.modelName,
-            signal: latestRun.cancelController.signal,
-            mode: resolveEvaluationMode(latestRun.category, latestRun.attackType),
-          }),
+          async () => {
+            const attempt = ++evaluationAttempt;
+            const attemptStarted = performance.now();
+            await recordDiagnostic("evaluation", "attempt_started", { attempt, model: latestRun.evaluator!.model });
+            try {
+              const value = await evaluateModelResponse({
+                config: latestRun.evaluator!,
+                systemPrompt: latestRun.systemPrompt,
+                userMessages: latestRun.userMessages,
+                transcript: currentResult?.turns.flatMap((t) => [
+                  { role: "user" as const, content: t.userMessage },
+                  { role: "assistant" as const, content: t.responseText },
+                ]),
+                thinkingText: currentResult?.turns.map((t) => t.thinking).filter(Boolean).join("\n\n"),
+                responseText: currentResult?.responseText ?? "",
+                modelName: result.modelName,
+                signal: latestRun.cancelController.signal,
+                mode: resolveEvaluationMode(latestRun.category, latestRun.attackType),
+              });
+              await recordDiagnostic("evaluation", "attempt_completed", { attempt, durationMs: performance.now() - attemptStarted });
+              return value;
+            } catch (error) {
+              await recordDiagnostic("evaluation", "attempt_failed", {
+                attempt,
+                durationMs: performance.now() - attemptStarted,
+                errorType: error instanceof Error ? error.name : "UnknownError",
+                errorMessage: error instanceof Error ? sanitizeDiagnosticText(error.message) : "Error desconocido del evaluador.",
+              }, "warning");
+              throw error;
+            }
+          },
           latestRun.cancelController.signal,
           3,
           isTransient,
         );
         benchmarkStore.setEvaluation(runId, resultId, evaluation);
         benchmarkStore.updateResult(runId, resultId, { evalStatus: "COMPLETED", status: "COMPLETED", errorMessage: null });
+        await recordDiagnostic("evaluation", "completed", {
+          durationMs: performance.now() - evaluationStarted,
+          scoreStars: evaluation.scoreStars,
+          securityScore: evaluation.securityScore,
+          injectionSuccessful: evaluation.injectionSuccessful,
+          systemLeakageDetected: evaluation.systemLeakageDetected,
+        });
       } catch (error) {
         if (latestRun.cancelController.signal.aborted) return;
+        await recordDiagnostic("evaluation", "failed", {
+          durationMs: performance.now() - evaluationStarted,
+          errorType: error instanceof Error ? error.name : "UnknownError",
+          errorMessage: error instanceof Error ? sanitizeDiagnosticText(error.message) : "No se pudo completar la evaluación.",
+        }, "error");
     console.error("[tuxevil-benchmark] [Evaluation Failed]", {
           runId,
           resultId,
@@ -306,13 +672,20 @@ async function executeModel(runId: string, resultId: string) {
       }
     } else {
       benchmarkStore.updateResult(runId, resultId, { status: "COMPLETED", evalStatus: "SKIPPED" });
+      await recordDiagnostic("evaluation", "skipped", { reason: "No había evaluador configurado para esta prueba." }, "warning");
     }
   } catch (error) {
     const currentRun = benchmarkStore.getStoredRun(runId) ?? run;
     if (currentRun.cancelController.signal.aborted || currentRun.status === "CANCELLED") {
       benchmarkStore.updateResult(runId, resultId, { status: "CANCELLED" });
+      await recordDiagnostic("result", "execution_cancelled", { attempts: attempts.length }, "warning");
       return;
     }
+
+    await recordDiagnostic("inference", "failed", {
+      errorType: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: error instanceof Error ? sanitizeDiagnosticText(error.message) : "Error de inferencia desconocido.",
+    }, "error");
 
     console.error("[tuxevil-benchmark] [Inference Failed]", {
       runId,
@@ -325,6 +698,24 @@ async function executeModel(runId: string, resultId: string) {
       evalStatus: "FAILED",
       errorMessage: error instanceof Error ? error.message : "Unknown inference error.",
     });
+  } finally {
+    if (attempts.length) benchmarkStore.updateResult(runId, resultId, { totalDurationMs: roundedAttemptDurationMs(attempts) });
+    await finishResources();
+    const finalRun = benchmarkStore.getStoredRun(runId);
+    const finalResult = finalRun?.results.find((item) => item.id === resultId);
+    await recordDiagnostic(
+      "result",
+      "execution_finished",
+      {
+        status: finalResult?.status ?? "UNKNOWN",
+        evaluationStatus: finalResult?.evalStatus ?? "UNKNOWN",
+        attempts: attempts.length,
+        inferenceDurationMs: roundedAttemptDurationMs(attempts),
+        elapsedMs: Date.now() - executionStartedAt,
+        errorMessage: finalResult?.errorMessage ? sanitizeDiagnosticText(finalResult.errorMessage) : null,
+      },
+      finalResult?.status === "FAILED" || finalResult?.evalStatus === "FAILED" ? "error" : "info",
+    );
   }
 }
 
@@ -358,6 +749,28 @@ function sumNullable(values: Array<number | null>) {
   return values.reduce<number>((total, value) => total + (value ?? 0), 0);
 }
 
+function roundedAttemptDurationMs(attempts: InferenceAttempt[]) {
+  return Math.round(attempts.reduce((total, attempt) => total + attempt.durationMs, 0));
+}
+
+async function executeBenchmark(runId: string) {
+  await benchmarkStore.hydrate();
+  let run = benchmarkStore.getStoredRun(runId);
+  if (!run) { await benchmarkStore.refreshRun(runId); run = benchmarkStore.getStoredRun(runId); }
+  if (!run || ['COMPLETED','CANCELLED','FAILED'].includes(run.status)) return;
+  const release = await acquireRunAdmission(run);
+  try {
+    const { preparePerformanceRun } = await import('@/lib/experiment-runner');
+    await preparePerformanceRun(runId);
+    await executeBenchmarkAdmitted(runId);
+  } catch (error) {
+    benchmarkStore.updateRun(runId,{status:'FAILED',finishedAt:new Date().toISOString(),errorMessage:error instanceof Error?error.message:'Execution failed'});
+    await benchmarkStore.flush(runId);
+    const { reconcileExperimentExecutionsForTestRun } = await import("@/lib/experiment-runner");
+    await reconcileExperimentExecutionsForTestRun(runId);
+    throw error;
+  } finally { await release(); }
+}
 export { executeBenchmark };
 
 async function runWithConcurrency<T>(items: T[], concurrency: number, operation: (item: T) => Promise<void>) {

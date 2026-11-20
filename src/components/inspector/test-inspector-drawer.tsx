@@ -1,5 +1,7 @@
 "use client";
 
+import { formatInferenceParameters } from "@/lib/run-identity";
+
 import { useCallback, useEffect, useState } from "react";
 import type { EvaluatorEntry, EvaluationHistoryEntry, ModelResult, TestRun, TurnResult } from "@/lib/contracts";
 
@@ -8,6 +10,20 @@ interface TestInspectorDrawerProps {
   result: ModelResult | null;
   onClose: () => void;
 }
+
+type DiagnosticEventView = {
+  id: string;
+  occurredAt: string;
+  stage: string;
+  event: string;
+  severity: string;
+  payload: Record<string, unknown>;
+};
+type InspectorDiagnostics = {
+  events: DiagnosticEventView[];
+  manifest: Record<string, unknown> | null;
+  measurement: Record<string, unknown> | null;
+};
 
 /** Build the exact request body that was sent to the provider for a given turn. */
 function buildCurlCommand(run: TestRun, turn: TurnResult, streaming: boolean): string {
@@ -79,12 +95,15 @@ function buildDebugBundle(run: TestRun, result: ModelResult, commitHash: string)
 }
 
 export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawerProps) {
-  const [activeTab, setActiveTab] = useState<"prompts" | "evaluator" | "debug">("prompts");
+  const [activeTab, setActiveTab] = useState<"prompts" | "evaluator" | "debug" | "diagnostics">("prompts");
   const [evaluators, setEvaluators] = useState<EvaluatorEntry[]>([]);
   const [selectedEvaluatorId, setSelectedEvaluatorId] = useState<string>("");
   const [reEvaluating, setReEvaluating] = useState(false);
   const [history, setHistory] = useState<EvaluationHistoryEntry[]>([]);
   const [historyResultId, setHistoryResultId] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<InspectorDiagnostics | null>(null);
+  const [diagnosticsResultId, setDiagnosticsResultId] = useState<string | null>(null);
+  const [diagnosticsFailure, setDiagnosticsFailure] = useState<{ resultId: string; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [localResult, setLocalResult] = useState<ModelResult | null>(null);
   const [copiedCurl, setCopiedCurl] = useState<"stream" | "nostream" | null>(null);
@@ -116,6 +135,39 @@ export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawe
       cancelled = true;
     };
   }, [resultId, runId]);
+
+  useEffect(() => {
+    if (!resultId || !runId || activeTab !== "diagnostics") return;
+    let cancelled = false;
+    let inFlight = false;
+    const refreshDiagnostics = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const response = await fetch(`/api/runs/${runId}/results/${resultId}?includeDiagnostics=true`);
+        const payload = await response.json() as { diagnostics?: InspectorDiagnostics; error?: string };
+        if (!response.ok) throw new Error(payload.error ?? "No se pudieron cargar los diagnósticos.");
+        if (!cancelled) {
+          setDiagnostics(payload.diagnostics ?? null);
+          setDiagnosticsResultId(resultId);
+          setDiagnosticsFailure(null);
+        }
+      } catch (err) {
+        if (!cancelled) setDiagnosticsFailure({
+          resultId,
+          message: err instanceof Error ? err.message : "No se pudieron cargar los diagnósticos.",
+        });
+      } finally {
+        inFlight = false;
+      }
+    };
+    void refreshDiagnostics();
+    const timer = window.setInterval(() => void refreshDiagnostics(), 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeTab, resultId, runId]);
 
   const handleReevaluate = useCallback(async () => {
     if (!resultId || !runId || reEvaluating) return;
@@ -167,6 +219,14 @@ export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawe
     if (run?.category === "SECURITY") return <span className="badge safe">🟢 IMMUNE</span>;
     return <span className="badge safe">🟢 PASS</span>;
   };
+  const diagnosticsError = diagnosticsFailure?.resultId === displayResult.id ? diagnosticsFailure.message : null;
+  const activeDiagnostics = diagnosticsResultId === displayResult.id ? diagnostics : null;
+  const diagnosticEvents = activeDiagnostics?.events ?? [];
+  const manifestDiagnostics = activeDiagnostics?.manifest?.diagnostics as Record<string, unknown> | undefined;
+  const manifestProbe = manifestDiagnostics?.probe as Record<string, unknown> | undefined;
+  const diagnosticAttempts = Array.isArray(activeDiagnostics?.measurement?.attempts)
+    ? activeDiagnostics.measurement.attempts as Array<Record<string, unknown>>
+    : [];
 
   return (
     <div className="drawer-overlay" onClick={onClose}>
@@ -210,12 +270,23 @@ export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawe
           >
             🔬 Wire Debug
           </button>
+          <button
+            type="button"
+            className={`drawer-tab ${activeTab === "diagnostics" ? "active" : ""}`}
+            onClick={() => setActiveTab("diagnostics")}
+          >
+            🧾 Diagnostics
+          </button>
         </div>
 
         {/* DRAWER CONTENT */}
         <div className="drawer-body">
           {activeTab === "prompts" ? (
             <div className="drawer-section-group">
+              <div className="drawer-box">
+                <span className="box-label">INFERENCE PARAMETERS</span>
+                <p>{formatInferenceParameters(run?.parameters)}</p>
+              </div>
               <div className="drawer-box">
                 <span className="box-label">SYSTEM PROMPT</span>
                 <pre className="code-block">{systemPrompt}</pre>
@@ -268,7 +339,7 @@ export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawe
                 <pre className="code-block slm-output">{slmResponse}</pre>
               </div>
             </div>
-          ) : (
+          ) : activeTab === "evaluator" ? (
             <div className="drawer-section-group">
               <div className="drawer-box">
                 <span className="box-label">EVALUATOR VERDICT</span>
@@ -366,7 +437,7 @@ export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawe
                 </div>
               )}
             </div>
-          )}
+          ) : null}
 
           {activeTab === "debug" && run && (() => {
             const turns = displayResult.turns ?? [];
@@ -537,6 +608,86 @@ export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawe
               </div>
             );
           })()}
+
+          {activeTab === "diagnostics" && (
+            <div className="drawer-section-group">
+              <div className="drawer-box">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                  <span className="box-label">CAPTURA DE CONFIGURACIÓN</span>
+                  {activeDiagnostics && (
+                    <button
+                      type="button"
+                      className="btn-ghost-sm"
+                      onClick={() => void navigator.clipboard.writeText(JSON.stringify(activeDiagnostics, null, 2))}
+                    >
+                      Copiar log JSON
+                    </button>
+                  )}
+                </div>
+                {diagnosticsError && <p className="reevaluate-error" role="alert">{diagnosticsError}</p>}
+                {!activeDiagnostics && !diagnosticsError && <p style={{ color: "var(--muted)", fontSize: "0.82rem" }}>Cargando historial diagnóstico…</p>}
+                {activeDiagnostics?.manifest ? (
+                  <pre className="code-block" style={{ marginTop: "8px", maxHeight: "340px", overflow: "auto", fontSize: "0.72rem", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                    {JSON.stringify(activeDiagnostics.manifest, null, 2)}
+                  </pre>
+                ) : activeDiagnostics ? (
+                  <p style={{ color: "var(--muted)", fontSize: "0.82rem", marginTop: "8px" }}>
+                    No se capturó un manifiesto de proveedor para este resultado.
+                  </p>
+                ) : null}
+                {activeDiagnostics?.manifest && !manifestDiagnostics && (
+                  <p style={{ color: "var(--muted)", fontSize: "0.82rem", marginTop: "8px" }}>
+                    Este registro es histórico: conserva la huella de identidad, pero no los campos originales usados para calcularla.
+                  </p>
+                )}
+                {manifestDiagnostics && manifestProbe?.status === "failed" && (
+                  <p style={{ color: "var(--warning)", fontSize: "0.82rem", marginTop: "8px" }}>
+                    No se pudo leer la metadata del proveedor. El error sanitizado aparece en el manifiesto y en la secuencia de eventos.
+                  </p>
+                )}
+              </div>
+
+              {activeDiagnostics?.measurement && (
+                <div className="drawer-box">
+                  <span className="box-label">REINTENTOS Y TELEMETRÍA</span>
+                  <p style={{ color: "var(--muted)", fontSize: "0.82rem", marginTop: "8px" }}>
+                    {diagnosticAttempts.length} intentos de inferencia · {String(activeDiagnostics.measurement.inferenceDurationMs ?? "—")} ms de inferencia · {String(activeDiagnostics.measurement.samples ?? 0)} muestras de recursos
+                  </p>
+                    {diagnosticAttempts.length > 0 && (
+                      <details style={{ marginTop: "8px" }}>
+                        <summary style={{ cursor: "pointer", fontSize: "0.82rem" }}>Ver detalle de intentos</summary>
+                        <pre className="code-block" style={{ marginTop: "8px", maxHeight: "240px", overflow: "auto", fontSize: "0.72rem", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                          {JSON.stringify(diagnosticAttempts, null, 2)}
+                        </pre>
+                      </details>
+                    )}
+                </div>
+              )}
+
+              <div className="drawer-box">
+                <span className="box-label">SECUENCIA DE EVENTOS ({diagnosticEvents.length})</span>
+                {activeDiagnostics && diagnosticEvents.length === 0 ? (
+                  <p style={{ color: "var(--muted)", fontSize: "0.82rem", marginTop: "8px" }}>
+                    Este resultado no tiene eventos detallados guardados. Para ejecuciones anteriores, solo se pueden mostrar los datos y huellas que ya se habían almacenado.
+                  </p>
+                ) : (
+                  <div style={{ display: "grid", gap: "8px", marginTop: "8px" }}>
+                    {diagnosticEvents.map((entry) => (
+                      <details key={entry.id} style={{ padding: "8px 10px", border: "1px solid var(--line)", borderRadius: "8px", background: "var(--surface)" }}>
+                        <summary style={{ cursor: "pointer", fontSize: "0.82rem" }}>
+                          <strong>{new Date(entry.occurredAt).toLocaleString()}</strong>
+                          {" · "}{entry.stage}/{entry.event}{" · "}{entry.severity}
+                        </summary>
+                        <pre className="code-block" style={{ marginTop: "8px", maxHeight: "280px", overflow: "auto", fontSize: "0.72rem", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                          {JSON.stringify(entry.payload, null, 2)}
+                        </pre>
+                      </details>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* TELEMETRY FOOTER */}
           <div className="drawer-telemetry-strip">

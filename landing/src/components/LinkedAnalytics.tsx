@@ -131,7 +131,7 @@ function ScatterPlot({ models }: { models: PublicModelSummary[] }) {
             Rating: <span className="mono star">{hovered.avg_stars} ★</span>
           </div>
           <div>
-            Security: <span className="mono danger">{hovered.security_resilience_score}%</span>
+            Security: <span className="mono danger">{hovered.security_resilience_score < 0 ? "Sin evaluar" : `${hovered.security_resilience_score}%`}</span>
           </div>
           <div>
             Arena: <span className="mono highlight">{hovered.arena_score}/100</span>
@@ -319,7 +319,7 @@ export function LinkedAnalytics({ models }: LinkedAnalyticsProps) {
             <h3>Multi-Axis Performance Radar</h3>
             <p>Grammar · Compliance · Accuracy · Security · TTFT (inverse) · Speed</p>
           </div>
-          <RadarChart models={models} />
+          <RadarChart models={models.filter(m => m.security_resilience_score >= 0)} />
         </div>
       </div>
     </section>

@@ -1,3 +1,4 @@
+import { parsePersistedParameters } from "@/lib/persisted-parameters";
 import Database from "better-sqlite3";
 import type {
   BenchmarkParameters,
@@ -13,6 +14,7 @@ import type {
 
 type SqlRow = Record<string, unknown>;
 import { decryptSecret, encryptSecret } from "@/lib/secrets";
+import { parseDeterministicGrader } from "@/lib/deterministic-grader";
 import { CURRENT_SQLITE_FILENAME, LEGACY_SQLITE_FILENAME } from "@/lib/legacy-identifiers";
 import path from "node:path";
 import { existsSync } from "node:fs";
@@ -28,12 +30,19 @@ export function getSqliteDb(): Database.Database {
     dbInstance = new Database(dbPath);
     dbInstance.pragma("journal_mode = WAL");
     dbInstance.pragma("foreign_keys = ON");
-    initSqliteTables(dbInstance);
+    try {
+      dbInstance.transaction(() => initSqliteTables(dbInstance!)).immediate();
+    } catch (error) {
+      dbInstance.close();
+      dbInstance = null;
+      throw error;
+    }
   }
   return dbInstance;
 }
 
 function initSqliteTables(db: Database.Database) {
+  db.exec(`CREATE TABLE IF NOT EXISTS result_resource_measurements (model_result_id TEXT PRIMARY KEY REFERENCES model_results(id) ON DELETE CASCADE, payload_json TEXT NOT NULL)`);
   db.exec(`
     CREATE TABLE IF NOT EXISTS app_settings (
       id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -70,6 +79,9 @@ function initSqliteTables(db: Database.Database) {
       attack_type TEXT,
       system_prompt TEXT NOT NULL,
       user_messages TEXT NOT NULL,
+      suite_key TEXT,
+      suite_version TEXT,
+      grader_json TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -87,6 +99,7 @@ function initSqliteTables(db: Database.Database) {
       ollama_url TEXT NOT NULL,
       provider TEXT DEFAULT 'ollama',
       provider_url TEXT,
+      execution_target_id TEXT,
       user_messages TEXT NOT NULL,
       selected_models TEXT NOT NULL,
       parameters TEXT NOT NULL,
@@ -205,6 +218,9 @@ function initSqliteTables(db: Database.Database) {
   if (!runColumns.some((column) => column.name === "provider_url")) {
     migrationDb.exec("ALTER TABLE test_runs ADD COLUMN provider_url TEXT");
   }
+  if (!runColumns.some((column) => column.name === "execution_target_id")) {
+    migrationDb.exec("ALTER TABLE test_runs ADD COLUMN execution_target_id TEXT");
+  }
 
   const scenarioColumns = migrationDb.prepare("PRAGMA table_info(scenarios)").all() as SqlRow[];
   if (!scenarioColumns.some((column) => column.name === "category")) {
@@ -212,6 +228,15 @@ function initSqliteTables(db: Database.Database) {
   }
   if (!scenarioColumns.some((column) => column.name === "attack_type")) {
     migrationDb.exec("ALTER TABLE scenarios ADD COLUMN attack_type TEXT");
+  }
+  if (!scenarioColumns.some((column) => column.name === "suite_key")) {
+    migrationDb.exec("ALTER TABLE scenarios ADD COLUMN suite_key TEXT");
+  }
+  if (!scenarioColumns.some((column) => column.name === "suite_version")) {
+    migrationDb.exec("ALTER TABLE scenarios ADD COLUMN suite_version TEXT");
+  }
+  if (!scenarioColumns.some((column) => column.name === "grader_json")) {
+    migrationDb.exec("ALTER TABLE scenarios ADD COLUMN grader_json TEXT");
   }
 
   const evalColumns = migrationDb.prepare("PRAGMA table_info(evaluations)").all() as SqlRow[];
@@ -311,6 +336,9 @@ function initSqliteTables(db: Database.Database) {
   }
   if (!turnCols.some((column) => column.name === "protocol_diagnostics")) {
     migrationDb.exec("ALTER TABLE model_result_turns ADD COLUMN protocol_diagnostics TEXT");
+  }
+  if (!turnCols.some((column) => column.name === "tool_calls")) {
+    migrationDb.exec("ALTER TABLE model_result_turns ADD COLUMN tool_calls TEXT");
   }
   if (!turnCols.some((column) => column.name === "request_body")) {
     migrationDb.exec("ALTER TABLE model_result_turns ADD COLUMN request_body TEXT");
@@ -417,14 +445,17 @@ function initSqliteTables(db: Database.Database) {
 export function sqlitePersistScenario(scenario: Scenario) {
   const db = getSqliteDb();
   db.prepare(`
-    INSERT INTO scenarios (id, name, category, attack_type, system_prompt, user_messages, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO scenarios (id, name, category, attack_type, system_prompt, user_messages, suite_key, suite_version, grader_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       category = excluded.category,
       attack_type = excluded.attack_type,
       system_prompt = excluded.system_prompt,
       user_messages = excluded.user_messages,
+      suite_key = excluded.suite_key,
+      suite_version = excluded.suite_version,
+      grader_json = excluded.grader_json,
       updated_at = excluded.updated_at
   `).run(
     scenario.id,
@@ -433,6 +464,9 @@ export function sqlitePersistScenario(scenario: Scenario) {
     scenario.attackType ?? null,
     scenario.systemPrompt,
     JSON.stringify(scenario.userMessages),
+    scenario.suiteKey ?? null,
+    scenario.suiteVersion ?? null,
+    scenario.grader ? JSON.stringify(scenario.grader) : null,
     scenario.createdAt,
     scenario.updatedAt,
   );
@@ -617,19 +651,7 @@ export function sqliteLoadSettings(): {
   const evaluators = sqliteListEvaluators();
   const activeEvaluatorId = row.active_evaluator_id ? String(row.active_evaluator_id) : null;
   const active = evaluators.find((evaluator) => evaluator.id === activeEvaluatorId) ?? null;
-  let params: BenchmarkParameters = { temperature: 0.2, numCtx: 8192, topP: 0.9, repeatPenalty: 1.1, numPredict: 4096 };
-  if (row.parameters_json) {
-    try {
-      const parsed = JSON.parse(String(row.parameters_json));
-      params = {
-        temperature: Number(parsed.temperature ?? params.temperature),
-        numCtx: Number(parsed.numCtx ?? params.numCtx),
-        topP: Number(parsed.topP ?? params.topP),
-        repeatPenalty: Number(parsed.repeatPenalty ?? params.repeatPenalty),
-        numPredict: Number(parsed.numPredict ?? params.numPredict),
-      };
-    } catch {}
-  }
+  const params = parsePersistedParameters(row.parameters_json);
 
   let freetokenApiKey: string | null = null;
   if (row.freetoken_api_key_encrypted) {
@@ -659,7 +681,7 @@ export function sqliteLoadSettings(): {
     llamacppUrl: String(row.llamacpp_url || "http://localhost:8080"),
     llamacppApiKey,
     llamacppApiKeyConfigured: Boolean(row.llamacpp_api_key_encrypted),
-    strataUrl: String(row.strata_url || "http://10.128.128.254:8081/v1"),
+    strataUrl: String(row.strata_url || "http://127.0.0.1:8081/v1"),
     strataApiKey,
     strataApiKeyConfigured: Boolean(row.strata_api_key_encrypted),
     activeProvider: (String(row.active_provider || "ollama") as import("@/lib/contracts").ModelProvider),
@@ -735,7 +757,7 @@ export function sqlitePersistSettings(settings: {
     freetokenEncrypted,
     settings.llamacppUrl ?? (existing?.llamacpp_url ? String(existing.llamacpp_url) : "http://localhost:8080"),
     llamacppEncrypted,
-    settings.strataUrl ?? (existing?.strata_url ? String(existing.strata_url) : "http://10.128.128.254:8081/v1"),
+    settings.strataUrl ?? (existing?.strata_url ? String(existing.strata_url) : "http://127.0.0.1:8081/v1"),
     strataEncrypted,
     settings.activeProvider ?? (existing?.active_provider ? String(existing.active_provider) : "ollama"),
     active?.baseUrl ?? null,
@@ -762,8 +784,8 @@ export function sqlitePersistRun(
 
   const transaction = db.transaction(() => {
     db.prepare(`
-      INSERT INTO test_runs (id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, user_messages, selected_models, parameters, evaluator_config, created_at, updated_at, started_at, finished_at, error_message)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO test_runs (id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, execution_target_id, user_messages, selected_models, parameters, evaluator_config, created_at, updated_at, started_at, finished_at, error_message)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         category = excluded.category,
         attack_type = excluded.attack_type,
@@ -776,6 +798,7 @@ export function sqlitePersistRun(
         ollama_url = excluded.ollama_url,
         provider = excluded.provider,
         provider_url = excluded.provider_url,
+        execution_target_id = excluded.execution_target_id,
         user_messages = excluded.user_messages,
         selected_models = excluded.selected_models,
         parameters = excluded.parameters,
@@ -797,6 +820,7 @@ export function sqlitePersistRun(
       config.ollamaUrl,
       run.provider ?? config.provider ?? "ollama",
       run.providerUrl ?? config.providerUrl ?? config.ollamaUrl,
+      run.executionTargetId ?? null,
       JSON.stringify(run.userMessages),
       JSON.stringify(run.models),
       JSON.stringify(run.parameters),
@@ -851,9 +875,9 @@ export function sqlitePersistRun(
           INSERT INTO model_result_turns (
             id, model_result_id, step_order, user_message, response_text, thinking,
             input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms,
-            finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body
+            finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body, tool_calls
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const turn of result.turns) {
           insertTurn.run(
@@ -873,6 +897,7 @@ export function sqlitePersistRun(
             turn.wireDiagnostics ? JSON.stringify(turn.wireDiagnostics) : null,
             turn.protocolDiagnostics ? JSON.stringify(turn.protocolDiagnostics) : null,
             turn.requestBody ? JSON.stringify(turn.requestBody) : null,
+            turn.toolCalls ? JSON.stringify(turn.toolCalls) : null,
           );
         }
       }
@@ -985,6 +1010,7 @@ export function sqliteLoadState(targetRunId?: string) {
       totalDurationMs: row.total_duration_ms !== null ? Number(row.total_duration_ms) : null,
       wireDiagnostics: row.wire_diagnostics ? JSON.parse(String(row.wire_diagnostics)) : null,
       protocolDiagnostics: row.protocol_diagnostics ? JSON.parse(String(row.protocol_diagnostics)) : null,
+      toolCalls: row.tool_calls ? JSON.parse(String(row.tool_calls)) : null,
       requestBody: row.request_body ? JSON.parse(String(row.request_body)) : null,
     });
     turnsByResult.set(key, list);
@@ -1012,6 +1038,12 @@ export function sqliteLoadState(targetRunId?: string) {
     });
   }
 
+  const manifestRows = db.prepare("SELECT model_result_id,json_extract(payload_json,'$.manifest') AS manifest FROM result_resource_measurements WHERE json_extract(payload_json,'$.manifest') IS NOT NULL").all() as {model_result_id:string;manifest:string}[];
+  const diagnosticTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='result_diagnostic_events'").get();
+  const diagnosticManifestRows = diagnosticTableExists
+    ? db.prepare("SELECT model_result_id,json_extract(payload_json,'$.manifest') AS manifest FROM result_diagnostic_events WHERE event='metadata_captured' AND json_extract(payload_json,'$.manifest') IS NOT NULL ORDER BY occurred_at,id").all() as {model_result_id:string;manifest:string}[]
+    : [];
+  const manifests = new Map([...diagnosticManifestRows, ...manifestRows].map(row => [row.model_result_id, JSON.parse(row.manifest)]));
   const resultsByRun = new Map<string, ModelResult[]>();
   for (const row of resultRows) {
     const rowId = String(row.id);
@@ -1019,6 +1051,7 @@ export function sqliteLoadState(targetRunId?: string) {
     const evaluation = evalsByResult.get(rowId) || null;
       const result: ModelResult = {
         id: rowId,
+        manifest: manifests.get(rowId),
         modelName: String(row.model_name),
         sampleIndex: Number(row.sample_index ?? 0),
         status: row.status as ModelResult["status"],
@@ -1079,6 +1112,7 @@ export function sqliteLoadState(targetRunId?: string) {
       errorMessage: row.error_message ? String(row.error_message) : null,
       provider: (row.provider as import("@/lib/contracts").ModelProvider) || "ollama",
       providerUrl: row.provider_url ? String(row.provider_url) : String(row.ollama_url),
+      executionTargetId: row.execution_target_id ? String(row.execution_target_id) : null,
     };
     return {
       run,
@@ -1098,6 +1132,9 @@ export function sqliteLoadState(targetRunId?: string) {
     attackType: (row.attack_type as Scenario["attackType"]) || null,
     systemPrompt: String(row.system_prompt),
     userMessages: JSON.parse(String(row.user_messages)),
+    suiteKey: row.suite_key ? String(row.suite_key) : null,
+    suiteVersion: row.suite_version ? String(row.suite_version) : null,
+    grader: parseDeterministicGrader(row.grader_json),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   }));

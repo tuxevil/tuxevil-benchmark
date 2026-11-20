@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { executionEnvironmentInputSchema } from "@/lib/experiment-metadata";
 import {
@@ -5,11 +6,11 @@ import {
   upsertExecutionEnvironment,
 } from "@/lib/experiment-metadata-store";
 
-export async function GET() {
+async function handleGET() {
   return NextResponse.json({ environments: await listExecutionEnvironments() });
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   let body: unknown;
   try {
     body = await request.json();
@@ -29,4 +30,12 @@ export async function POST(request: Request) {
     { environment: await upsertExecutionEnvironment(parsed.data) },
     { status: 201 },
   );
+}
+
+export async function GET(...args: Parameters<typeof handleGET>) {
+ const denied=await requireAdmin("GET"); if(denied)return denied; return handleGET(...args);
+}
+
+export async function POST(...args: Parameters<typeof handlePOST>) {
+ const denied=await requireAdmin("POST"); if(denied)return denied; return handlePOST(...args);
 }

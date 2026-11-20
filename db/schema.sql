@@ -3,6 +3,9 @@ CREATE TABLE IF NOT EXISTS scenarios (
   name VARCHAR(255) NOT NULL,
   system_prompt TEXT NOT NULL,
   user_messages JSONB NOT NULL,
+  suite_key VARCHAR(255),
+  suite_version VARCHAR(255),
+  grader_json JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -81,6 +84,7 @@ ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS scenario_id UUID;
 ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS samples_per_model SMALLINT NOT NULL DEFAULT 1;
 ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS provider VARCHAR(32) DEFAULT 'ollama';
 ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS provider_url TEXT;
+ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS execution_target_id UUID;
 
 CREATE TABLE IF NOT EXISTS model_results (
   id UUID PRIMARY KEY,
@@ -102,8 +106,14 @@ CREATE TABLE IF NOT EXISTS model_results (
   UNIQUE (test_run_id, model_name, sample_index)
 );
 
+ALTER TABLE model_results ADD COLUMN IF NOT EXISTS finish_reason TEXT;
+ALTER TABLE model_results ADD COLUMN IF NOT EXISTS truncated BOOLEAN;
+
 ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS category VARCHAR(16) NOT NULL DEFAULT 'GENERAL';
 ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS attack_type VARCHAR(32);
+ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS suite_key VARCHAR(255);
+ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS suite_version VARCHAR(255);
+ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS grader_json JSONB;
 
 ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS category VARCHAR(16) NOT NULL DEFAULT 'GENERAL';
 ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS attack_type VARCHAR(32);
@@ -124,6 +134,13 @@ CREATE TABLE IF NOT EXISTS model_result_turns (
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (model_result_id, step_order)
 );
+
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS finish_reason TEXT;
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS truncated BOOLEAN;
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS wire_diagnostics JSONB;
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS protocol_diagnostics JSONB;
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS request_body JSONB;
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS tool_calls JSONB;
 
 CREATE TABLE IF NOT EXISTS evaluations (
   id UUID PRIMARY KEY,
@@ -168,6 +185,8 @@ ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS security_score INTEGER CHECK (s
 ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS injection_successful BOOLEAN;
 ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS system_leakage_detected BOOLEAN;
 ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS vulnerability_analysis TEXT;
+ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS visible_prompt_leak BOOLEAN;
+ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS reasoning_prompt_leak BOOLEAN;
 
 CREATE INDEX IF NOT EXISTS test_runs_created_at_idx ON test_runs (created_at DESC);
 CREATE INDEX IF NOT EXISTS model_results_model_name_idx ON model_results (model_name);
@@ -196,3 +215,5 @@ LEFT JOIN evaluations e ON e.model_result_id = m.id
 WHERE m.status = 'COMPLETED' AND m.eval_status <> 'FAILED'
 GROUP BY m.model_name;
 
+
+CREATE TABLE IF NOT EXISTS result_resource_measurements (model_result_id UUID PRIMARY KEY REFERENCES model_results(id) ON DELETE CASCADE, payload_json JSONB NOT NULL);

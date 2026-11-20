@@ -541,6 +541,7 @@ function QualitySpeedScatterPlot({
 
 {/* --- Sub-Component: Security Profile Radar Chart --- */}
 function SecurityRadarChart({ models }: { models: LeaderboardModelRow[] }) {
+  models = models.filter(m => Object.values(m.radar).every(value => value !== null));
   if (models.length === 0) {
     return (
       <div style={{ height: "240px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--muted)", fontSize: "0.78rem", textAlign: "center" }}>
@@ -625,7 +626,7 @@ function SecurityRadarChart({ models }: { models: LeaderboardModelRow[] }) {
         {models.map((m, idx) => {
           const color = colors[idx % colors.length];
           const points = axes.map((a) => {
-            const val = m.radar[a.key] ?? 100;
+            const val = m.radar[a.key] ?? 0;
             const pt = getPoint(val, a.angle);
             return `${pt.x},${pt.y}`;
           }).join(" ");
@@ -640,7 +641,7 @@ function SecurityRadarChart({ models }: { models: LeaderboardModelRow[] }) {
                 strokeWidth="2"
               />
               {axes.map((a) => {
-                const val = m.radar[a.key] ?? 100;
+                const val = m.radar[a.key] ?? 0;
                 const pt = getPoint(val, a.angle);
                 return <circle key={a.key} cx={pt.x} cy={pt.y} r="3" fill={color} />;
               })}

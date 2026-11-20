@@ -152,14 +152,14 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("renders the arena dashboard and displays top model winner", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/admin");
   await expect(page.getByText("tuxevil Benchmark")).toBeVisible();
   await expect(page.getByText("Overall Leader")).toBeVisible();
   await expect(page.locator(".winner-name", { hasText: "llama3.2" }).first()).toBeVisible();
 });
 
 test("supports scenario saving and adding conversation turns in test suite editor", async ({ page }) => {
-  await page.goto("/suites");
+  await page.goto("/admin/suites");
 
   // Save scenario
   await page.getByPlaceholder("e.g. Delimiter Hijacking Test v1").fill("Smoke test");
@@ -186,7 +186,7 @@ test("launches µTuxbot Chatbot Plus as the recommended one-click profile", asyn
       },
     });
   });
-  await page.goto("/suites");
+  await page.goto("/admin/suites");
   await expect(page.locator("#ia-solar-profile")).toHaveValue("chatbot");
   await expect(page.locator("#ia-solar-model")).toHaveValue("llama3.2");
   await expect(page.getByText(/20 casos · 26 turnos/)).toBeVisible();
@@ -210,7 +210,7 @@ test("launches IA Solar quick profile in one click and routes to Monitor", async
       },
     });
   });
-  await page.goto("/suites");
+  await page.goto("/admin/suites");
   await page.locator("#ia-solar-profile").selectOption("quick");
   await expect(page.locator("#ia-solar-profile")).toHaveValue("quick");
   await expect(page.locator("#ia-solar-model")).toHaveValue("llama3.2");
@@ -221,7 +221,7 @@ test("launches IA Solar quick profile in one click and routes to Monitor", async
 });
 
 test("preserves historic full-suite onboarding mode", async ({ page }) => {
-  await page.goto("/suites");
+  await page.goto("/admin/suites");
   await page.locator("#ia-solar-profile").selectOption("full");
   await expect(page.locator("#ia-solar-model")).toHaveValue("llama3.2");
   await page.getByRole("button", { name: /Ejecutar batería completa/ }).click();
@@ -230,7 +230,7 @@ test("preserves historic full-suite onboarding mode", async ({ page }) => {
 });
 
 test("displays executed runs and detailed inspection on the monitor page", async ({ page }) => {
-  await page.goto("/monitor");
+  await page.goto("/admin/monitor");
 
   await expect(page.getByText("Queue History & Executed Runs")).toBeVisible();
   await expect(page.locator("tr", { hasText: "llama3.2" }).first()).toBeVisible();
@@ -240,7 +240,7 @@ test("displays executed runs and detailed inspection on the monitor page", async
 });
 
 test("saves global settings in settings page", async ({ page }) => {
-  await page.goto("/settings");
+  await page.goto("/admin/settings");
   await page.getByPlaceholder("https://api.openai.com/v1").fill("https://judge.example/v1");
   await page.getByPlaceholder("gpt-4o-mini, openrouter/auto...").fill("judge");
   await page.getByPlaceholder("sk-...").fill("sk-test-123");
@@ -297,13 +297,328 @@ function createRun(status: string, resultPatch: Record<string, unknown> = {}) {
 
 
 test("Churn Lab renders the experiment workbench", async ({ page }) => {
-  await page.goto("/churn");
+  await page.goto("/admin/churn");
 
   await expect(page.getByRole("heading", { name: "Churn Lab" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Execution Targets & Auto Probe" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Model Artifact" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Execution Environment" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Experiment Builder" })).toBeVisible();
   await expect(page.getByText("Quant / weights")).toBeVisible();
+  const reasoningModes = page.getByRole("combobox", { name: "Reasoning mode", exact: true });
+  await expect(reasoningModes).toHaveCount(2);
+  await reasoningModes.last().selectOption("on");
+  await expect(reasoningModes.last()).toHaveValue("on");
   await expect(page.getByText("Observation Import")).toBeVisible();
   await expect(page.getByText("Paired Comparison")).toBeVisible();
+});
+
+
+test("Churn Lab exposes automatic Experiment Runner for a selected experiment", async ({ page }) => {
+  const updatedAt = new Date().toISOString();
+  await page.route(/\/api\/experiments\/artifacts$/, async (route) => {
+    await route.fulfill({ json: { artifacts: [] } });
+  });
+  await page.route(/\/api\/experiments\/environments$/, async (route) => {
+    await route.fulfill({ json: { environments: [] } });
+  });
+  await page.route(/\/api\/experiments\/targets$/, async (route) => {
+    await route.fulfill({
+      json: {
+        targets: [{
+          id: "11111111-1111-4111-8111-111111111111",
+          label: "local llama",
+          provider: "llamacpp",
+          endpoint: "http://127.0.0.1:8080",
+          apiKeyConfigured: false,
+          updatedAt,
+        }],
+      },
+    });
+  });
+  await page.route(/\/api\/scenarios\?includePublicBenchmarks=true$/, async (route) => {
+    await route.fulfill({
+      json: {
+        scenarios: [{
+          id: "22222222-2222-4222-8222-222222222222",
+          name: "Deterministic smoke case",
+          category: "GENERAL",
+          attackType: null,
+          suiteKey: "practical-slm",
+          suiteVersion: "1.0.0",
+          grader: { type: "EXACT_TEXT", version: 1, expected: "OK", caseSensitive: true, collapseWhitespace: false },
+        }, ...[0, 659].map((index) => ({
+          id: `gsm8k-${index}`,
+          name: `GSM8K · tuxevil-lite · test:${index}`,
+          category: "GENERAL",
+          suiteKey: "gsm8k-tuxevil-lite",
+          suiteVersion: "1.0.0",
+        }))],
+      },
+    });
+  });
+  await page.route(/\/api\/experiments$/, async (route) => {
+    await route.fulfill({
+      json: {
+        experiments: [{
+          id: "33333333-3333-4333-8333-333333333333",
+          name: "Runner smoke",
+          factorUnderTest: "MODEL_WEIGHTS",
+          status: "DRAFT",
+          validityStatus: "UNCHECKED",
+          baselineVariantId: "44444444-4444-4444-8444-444444444444",
+          suiteKey: null,
+          notes: "",
+          updatedAt,
+        }],
+      },
+    });
+  });
+  await page.route(/\/api\/experiments\/33333333-3333-4333-8333-333333333333$/, async (route) => {
+    await route.fulfill({
+      json: {
+        experiment: {
+          id: "33333333-3333-4333-8333-333333333333",
+          name: "Runner smoke",
+          factorUnderTest: "MODEL_WEIGHTS",
+          status: "DRAFT",
+          validityStatus: "UNCHECKED",
+          baselineVariantId: "44444444-4444-4444-8444-444444444444",
+          suiteKey: null,
+          notes: "",
+          updatedAt,
+        },
+        variants: [
+          {
+            id: "44444444-4444-4444-8444-444444444444",
+            experimentId: "33333333-3333-4333-8333-333333333333",
+            name: "baseline",
+            role: "BASELINE",
+            modelArtifactId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            executionEnvironmentId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            executionTargetId: null,
+            executionModelName: null,
+            inferenceParameters: {},
+            reasoningMode: null,
+          },
+          {
+            id: "55555555-5555-4555-8555-555555555555",
+            experimentId: "33333333-3333-4333-8333-333333333333",
+            name: "variant",
+            role: "VARIANT",
+            modelArtifactId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            executionEnvironmentId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            executionTargetId: null,
+            executionModelName: null,
+            inferenceParameters: {},
+            reasoningMode: null,
+          },
+        ],
+      },
+    });
+  });
+
+  await page.goto("/admin/churn");
+  const runner = page.locator(".churn-runner");
+  await expect(runner.getByRole("heading", { name: "Experiment Runner" })).toBeVisible();
+  await expect(runner.getByText("Deterministic smoke case")).toBeVisible();
+  await expect(runner.getByRole("button", { name: "Select Practical SLM" })).toBeVisible();
+  await expect(runner.getByText(/Practical SLM 1\.0\.0 · objective/)).toBeVisible();
+  await expect(runner.getByText("baseline", { exact: true })).toBeVisible();
+  await expect(runner.getByText("variant", { exact: true })).toBeVisible();
+  await runner.getByRole("button", { name: "Select GSM8K tuxevil-lite" }).click();
+  await expect(runner.getByRole("button", { name: "Run 2 scenarios" })).toBeVisible();
+  await runner.getByRole("checkbox", { name: /test:659/ }).uncheck();
+  await expect(runner.getByRole("button", { name: "Run 1 scenario", exact: true })).toBeVisible();
+});
+
+test("lists public benchmark provenance and protects opt-in scenarios", async ({ request, baseURL }) => {
+  const external = await fetch(new URL("/api/scenarios?includePublicBenchmarks=true", baseURL));
+  expect(external.status).toBe(401);
+
+  const catalog = await request.get("/api/experiments/benchmarks");
+  expect(catalog.ok()).toBeTruthy();
+  const { benchmarks: [suite, nativeTools, bfcl, mgsm, ifeval, ifstruct, math500, ptBr, stateful, irrelevance, multiturn, missFunc, memory, toolsandbox, toolsandboxState] } = await catalog.json();
+  expect(toolsandbox).toMatchObject({
+    id: "toolsandbox-upstream-wifi-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
+    grader: { type: "TOOL_SANDBOX_UPSTREAM_MILESTONES" },
+    cases: [{ sourceCaseId: "wifi_off" }],
+  });
+  expect(toolsandboxState).toMatchObject({
+    id: "toolsandbox-upstream-state-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
+    grader: { type: "TOOL_SANDBOX_UPSTREAM_STATE", version: 1, clock: "2024-03-20T12:00:00Z" },
+    cases: [
+      { sourceCaseId: "add_contact_with_name_and_phone_number" },
+      { sourceCaseId: "add_reminder_content_and_date_and_time" },
+    ],
+  });
+  expect(memory).toMatchObject({
+    id: "bfcl-v4-memory-kv-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
+    dataset: { split: "memory", caseCount: 155, license: "Apache-2.0" },
+    cases: [{ sourceCaseId: "memory_138-notetaker-8", prerequisiteId: "memory_prereq_32-notetaker-0" }],
+  });
+  expect(missFunc).toMatchObject({
+    id: "bfcl-v3-miss-func-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
+    dataset: { split: "multi_turn_miss_func", license: "Apache-2.0", caseCount: 200 },
+    cases: [{ sourceCaseId: "multi_turn_miss_func_12" }],
+  });
+  expect(multiturn).toMatchObject({
+    id: "bfcl-v3-multiturn-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
+    dataset: { split: "multi_turn_base, multi_turn_miss_param", license: "Apache-2.0", caseCount: 400 },
+  });
+  expect(multiturn.cases.map((entry: { sourceCaseId: string }) => entry.sourceCaseId))
+    .toEqual(["multi_turn_base_12", "multi_turn_miss_param_12"]);
+  expect(irrelevance).toMatchObject({
+    id: "bfcl-v3-irrelevance-tuxevil-lite", modality: "native-tools", officiallyComparable: false,
+    dataset: { split: "irrelevance", license: "Apache-2.0", caseCount: 240 },
+  });
+  expect(irrelevance.cases.map((entry: { sourceCaseId: string }) => entry.sourceCaseId))
+    .toEqual(["irrelevance_0", "irrelevance_3", "irrelevance_5"]);
+  expect(stateful).toMatchObject({
+    id: "toolsandbox-local-adapted", modality: "stateful-tools", officiallyComparable: false,
+  });
+  expect(stateful.cases).toHaveLength(1);
+  expect(ptBr).toMatchObject({
+    id: "practical-pt-br", language: "pt-BR", officiallyComparable: false,
+    dataset: { split: "synthetic", license: "MIT", caseCount: 6 },
+  });
+  expect(ptBr.cases).toHaveLength(6);
+  expect(math500).toMatchObject({
+    id: "math500-tuxevil-lite", officiallyComparable: false,
+    grader: { type: "MATH_VERIFY_BOXED", upstreamVersion: "0.9.0" }, dataset: { caseCount: 500 },
+  });
+  expect(math500.cases.map((entry: { level: number }) => entry.level)).toEqual([5, 4, 5, 5]);
+  expect(ifstruct).toMatchObject({
+    id: "ifstruct-tuxevil-lite", officiallyComparable: false,
+    grader: { type: "IFSTRUCT_UPSTREAM" }, dataset: { caseCount: 2000 },
+  });
+  expect(ifstruct.cases.map((entry: { outputFormat: string }) => entry.outputFormat)).toEqual(["json", "json", "yaml", "yaml"]);
+  expect(ifeval).toMatchObject({
+    id: "ifeval-tuxevil-lite", officiallyComparable: false, systemPrompt: "",
+    dataset: { license: "Apache-2.0", caseCount: 541 },
+  });
+  expect(ifeval.cases.map((entry: { sourceCaseId: string }) => entry.sourceCaseId))
+    .toEqual(["1001", "2015", "2314", "1325"]);
+  expect(mgsm).toMatchObject({
+    id: "mgsm-es-tuxevil-lite", language: "es", officiallyComparable: false,
+    dataset: { license: "CC-BY-4.0", caseCount: 250 },
+  });
+  expect(mgsm.cases.map((entry: { sourceCaseId: string }) => entry.sourceCaseId))
+    .toEqual(["es:test:0", "es:test:124", "es:test:230"]);
+  expect(suite.cases[0].scenarioId).toBe("58d9a0a0-6730-4d22-8f78-23a7c164753c");
+  expect(bfcl).toMatchObject({ id: "bfcl-v3-tuxevil-lite", modality: "native-tools", officiallyComparable: false });
+  expect(bfcl.cases.map((entry: { category: string }) => entry.category))
+    .toEqual(["simple", "multiple", "parallel", "parallel_multiple"]);
+  expect(nativeTools).toMatchObject({ id: "native-tool-smoke-es", modality: "native-tools", officiallyComparable: false });
+  expect(nativeTools.cases.map((entry: { sourceCaseId: string }) => entry.sourceCaseId))
+    .toEqual(["calculator-es", "battery-soc-es"]);
+  expect(suite).toMatchObject({
+    id: "gsm8k-tuxevil-lite",
+    version: "1.0.0",
+    officiallyComparable: false,
+    dataset: { split: "test", license: "MIT" },
+  });
+
+  const ordinary = await request.get("/api/scenarios");
+  expect(ordinary.ok()).toBeTruthy();
+  expect((await ordinary.json()).scenarios).not.toEqual(expect.arrayContaining([
+    expect.objectContaining({ suiteKey: suite.id }),
+  ]));
+
+  const included = await request.get("/api/scenarios?includePublicBenchmarks=true");
+  expect(included.ok()).toBeTruthy();
+  const selected = (await included.json()).scenarios.find((item: { id: string }) => item.id === suite.cases[0].scenarioId);
+  expect(selected).toMatchObject({ suiteKey: suite.id, grader: { type: "GSM8K" } });
+  expect((await request.patch(`/api/scenarios/${selected.id}`, { data: selected })).status()).toBe(409);
+  expect((await request.delete(`/api/scenarios/${selected.id}`)).status()).toBe(409);
+  expect((await request.post("/api/scenarios", { data: selected })).status()).toBe(409);
+});
+
+
+test("Performance Lab renders isolated Practical SLM execution controls", async ({ page }) => {
+  const experimentId = "33333333-3333-4333-8333-333333333333";
+  const targetId = "11111111-1111-4111-8111-111111111111";
+  const scenarioId = "22222222-2222-4222-8222-222222222222";
+
+  await page.route(/\/api\/experiments$/, async (route) => {
+    await route.fulfill({
+      json: {
+        experiments: [{
+          id: experimentId,
+          name: "Qwen vs Bonsai",
+          factorUnderTest: "MODEL",
+          status: "READY",
+          validityStatus: "UNCHECKED",
+        }],
+      },
+    });
+  });
+  await page.route(/\/api\/scenarios$/, async (route) => {
+    await route.fulfill({
+      json: {
+        scenarios: [{
+          id: scenarioId,
+          name: "Practical SLM · Reasoning · Multiplication",
+          category: "GENERAL",
+          attackType: null,
+          suiteKey: "practical-slm",
+          suiteVersion: "1.0.0",
+          grader: { type: "NUMBER", version: 1, expected: 391, tolerance: 0 },
+        }],
+      },
+    });
+  });
+  await page.route(/\/api\/experiments\/targets$/, async (route) => {
+    await route.fulfill({
+      json: {
+        targets: [{
+          id: targetId,
+          label: "example-host llama.cpp",
+          provider: "llamacpp",
+          endpoint: "http://127.0.0.1:8080",
+          apiKeyConfigured: false,
+        }],
+      },
+    });
+  });
+  await page.route(new RegExp(`/api/experiments/${experimentId}$`), async (route) => {
+    await route.fulfill({
+      json: {
+        experiment: {
+          id: experimentId,
+          name: "Qwen vs Bonsai",
+          factorUnderTest: "MODEL",
+          status: "READY",
+          validityStatus: "UNCHECKED",
+          baselineVariantId: "44444444-4444-4444-8444-444444444444",
+        },
+        variants: [
+          {
+            id: "44444444-4444-4444-8444-444444444444",
+            name: "Qwen IQ3",
+            role: "BASELINE",
+            executionTargetId: targetId,
+            executionModelName: "qwen.gguf",
+          },
+          {
+            id: "55555555-5555-4555-8555-555555555555",
+            name: "Bonsai PQ2",
+            role: "VARIANT",
+            executionTargetId: targetId,
+            executionModelName: "bonsai.gguf",
+          },
+        ],
+      },
+    });
+  });
+
+  await page.goto("/admin/performance");
+
+  await expect(page.getByRole("heading", { name: "Performance Lab" })).toBeVisible();
+  await expect(page.getByText("seconds / successful task")).toBeVisible();
+  await expect(page.getByText("Reasoning · Multiplication")).toBeVisible();
+  await expect(page.getByText("Qwen IQ3")).toBeVisible();
+  await expect(page.getByText("Bonsai PQ2")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run isolated performance benchmark" })).toBeEnabled();
+  await expect(page.getByLabel("Verified cold sample")).toBeDisabled();
 });

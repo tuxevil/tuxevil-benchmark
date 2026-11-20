@@ -1,0 +1,29 @@
+# Optional override for deploy/coolify-compose.yaml.
+services:
+  web:
+    environment:
+      TOOL_SANDBOX_SOCKET: /toolsandbox/grader.sock
+    volumes:
+      - toolsandbox_socket:/toolsandbox:ro
+  worker:
+    environment:
+      TOOL_SANDBOX_SOCKET: /toolsandbox/grader.sock
+    volumes:
+      - toolsandbox_socket:/toolsandbox:ro
+  toolsandbox:
+    build:
+      context: scripts/toolsandbox
+    command: ["serve"]
+    restart: unless-stopped
+    network_mode: none
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=8m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    cpus: 1
+    mem_limit: 512m
+    pids_limit: 64
+    volumes:
+      - toolsandbox_socket:/socket
+volumes:
+  toolsandbox_socket: {}
