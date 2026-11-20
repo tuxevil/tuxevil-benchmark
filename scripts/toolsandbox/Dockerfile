@@ -6,6 +6,6 @@ RUN python -m pip install --no-cache-dir -r /tmp/requirements.txt \
     && rm -f /tmp/toolsandbox.tar.gz \
     && install -d -m 0770 -o 65534 -g 65534 /socket
 COPY grade.py /opt/toolsandbox/grade.py
-ENV POLARS_MAX_THREADS=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+ENV TZ=UTC POLARS_MAX_THREADS=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
 USER 65534:65534
 ENTRYPOINT ["python", "-I", "-B", "/opt/toolsandbox/grade.py"]

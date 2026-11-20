@@ -1,4 +1,4 @@
-import { TOOL_SANDBOX_CASE, TOOL_SANDBOX_REVISION, TOOL_SANDBOX_SUITE, TOOL_SANDBOX_VERSION } from "@/lib/toolsandbox-upstream";
+import { TOOL_SANDBOX_CASE, TOOL_SANDBOX_REVISION, TOOL_SANDBOX_STATE_CASES, TOOL_SANDBOX_STATE_CLOCK, TOOL_SANDBOX_STATE_SUITE, TOOL_SANDBOX_SUITE, TOOL_SANDBOX_VERSION } from "@/lib/toolsandbox-upstream";
 import { BFCL_MEMORY_CASE, BFCL_MEMORY_SUITE, BFCL_MEMORY_SYSTEM, BFCL_MEMORY_VERSION } from "@/lib/bfcl-v4-memory-kv";
 import {
   BFCL_MISS_FUNC_CASES, BFCL_MISS_FUNC_SUITE, BFCL_MULTITURN_CASES, BFCL_MULTITURN_SUITE, BFCL_MULTITURN_SYSTEM, BFCL_MULTITURN_VERSION,
@@ -432,6 +432,28 @@ export const PUBLIC_BENCHMARKS = [{
     scenarioId: TOOL_SANDBOX_CASE.scenarioId, sourceCaseId: TOOL_SANDBOX_CASE.sourceCaseId,
     caseVersion: 1, contentSha256: TOOL_SANDBOX_CASE.contentSha256,
   }],
+}, {
+  id: TOOL_SANDBOX_STATE_SUITE,
+  version: TOOL_SANDBOX_VERSION,
+  language: "en",
+  modality: "stateful-tools",
+  officiallyComparable: false,
+  dataset: {
+    project: "ToolSandbox",
+    revision: TOOL_SANDBOX_REVISION,
+    url: `https://github.com/apple-aiml-research/ToolSandbox/tree/${TOOL_SANDBOX_REVISION}/tool_sandbox/scenarios`,
+    split: "add_contact_with_name_and_phone_number,add_reminder_content_and_date_and_time",
+    license: "MIT",
+    caseCount: TOOL_SANDBOX_STATE_CASES.length,
+  },
+  grader: {
+    type: "TOOL_SANDBOX_UPSTREAM_STATE", version: 1, upstreamRevision: TOOL_SANDBOX_REVISION, clock: TOOL_SANDBOX_STATE_CLOCK,
+  },
+  systemPrompt: TOOL_SANDBOX_STATE_CASES[0].systemPrompt,
+  caseIdsSha256: caseHash(TOOL_SANDBOX_STATE_CASES.map(({ sourceCaseId }) => sourceCaseId)),
+  cases: TOOL_SANDBOX_STATE_CASES.map(({ scenarioId, sourceCaseId, contentSha256 }) => ({
+    scenarioId, sourceCaseId, caseVersion: 1, contentSha256,
+  })),
 }] as const;
 
 export const PUBLIC_BENCHMARK_SCENARIOS: Array<Omit<Scenario, "createdAt" | "updatedAt">> = [
@@ -449,6 +471,7 @@ export const PUBLIC_BENCHMARK_SCENARIOS: Array<Omit<Scenario, "createdAt" | "upd
   ...BFCL_MISS_FUNC_CASES.map(({ scenario }) => scenario),
   BFCL_MEMORY_CASE.scenario,
   TOOL_SANDBOX_CASE.scenario,
+  ...TOOL_SANDBOX_STATE_CASES.map(({ scenario }) => scenario),
 ];
 
 export function isPublicBenchmarkSuite(key?: string | null) {

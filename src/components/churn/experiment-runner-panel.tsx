@@ -156,6 +156,7 @@ export function ExperimentRunnerPanel({
     { key: "bfcl-v3-miss-func-tuxevil-lite", label: "BFCL V3 Missing Function tuxevil-lite" },
     { key: "bfcl-v4-memory-kv-tuxevil-lite", label: "BFCL V4 Memory KV tuxevil-lite" },
     { key: "toolsandbox-upstream-wifi-tuxevil-lite", label: "ToolSandbox wifi_off tuxevil-lite" },
+    { key: "toolsandbox-upstream-state-tuxevil-lite", label: "ToolSandbox contacts and reminders tuxevil-lite" },
     { key: "mgsm-es-tuxevil-lite", label: "MGSM ES tuxevil-lite" },
     { key: "ifeval-tuxevil-lite", label: "IFEval tuxevil-lite" },
     { key: "ifstruct-tuxevil-lite", label: "IFStruct tuxevil-lite" },

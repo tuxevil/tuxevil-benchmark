@@ -1,4 +1,4 @@
-import { TOOL_SANDBOX_CASE } from "@/lib/toolsandbox-upstream";
+import { TOOL_SANDBOX_CASE, TOOL_SANDBOX_STATE_CASES } from "@/lib/toolsandbox-upstream";
 import { BFCL_MEMORY_CASE, BFCL_MEMORY_SYSTEM } from "@/lib/bfcl-v4-memory-kv";
 import { BFCL_MISS_FUNC_CASES, BFCL_MULTITURN_CASES, BFCL_MULTITURN_SYSTEM, BFCL_TOOL_RESTORATION_PROMPT } from "@/lib/bfcl-v3-multiturn";
 import { STATEFUL_CASE, STATEFUL_SYSTEM } from "@/lib/stateful-tool-sandbox";
@@ -21,6 +21,13 @@ it("runs public cases through provider transports and persists scored and techni
   vi.stubEnv("SQLITE_PATH", join(tmp, "pilot.db"));
   vi.stubEnv("DATABASE_URL", undefined);
   vi.stubEnv("REDIS_URL", undefined);
+
+  const [contactCase, reminderCase] = TOOL_SANDBOX_STATE_CASES;
+  const reminderTimestamp = Date.UTC(2024, 2, 22, 17) / 1000;
+  const contactName = "Stephen Sondheim";
+  const phoneNumber = "+19876543210";
+  const confirmation = `${contactName} has been added to your contact`;
+  const idFixture = "42516c7b-d46e-5bc0-b918-4126ae033090";
 
   const unexpectedCalls = [{ function: { name: "add_numbers", arguments: { a: 17, b: 25 } } }];
   const chatRequests: Array<{ model: string; tools?: ChatTool[]; messages: Array<{ role: string; content: string }> }> = [];
@@ -64,6 +71,38 @@ it("runs public cases through provider transports and persists scored and techni
         ? { tool_calls: [{ function: { name: "set_wifi_status", arguments: { on: false } } }] }
         : { content: "Wifi is turned off" };
       response.end(JSON.stringify({ message, done: true, done_reason: body.model === "truncated" ? "length" : "stop" }));
+      return;
+    }
+    if (body.messages[0].content === contactCase.systemPrompt) {
+      const history = body.messages as Array<{ role: string; content: string }>;
+      const feedback = history.filter(({ role }) => role === "tool");
+      const isContact = history.find(({ role }) => role === "user")?.content === contactCase.scenario.userMessages[0];
+      const truncated = body.model === "truncated";
+      let call;
+      if (!truncated && isContact && body.model === "correct" && feedback.length === 0) {
+        call = { name: "add_contact", arguments: { name: contactName, phone_number: phoneNumber } };
+      } else if (!truncated && !isContact && feedback.length === 0) {
+        call = { name: "datetime_info_to_timestamp", arguments: { year: 2024, month: 3, day: 22, hour: 17, minute: 0, second: 0 } };
+      } else if (!truncated && !isContact && feedback.length === 1) {
+        const timestamp = JSON.parse(feedback[0].content);
+        call = { name: "add_reminder", arguments: { content: "Buy chocolate milk", reminder_timestamp: timestamp + (body.model === "correct" ? 0 : 3600) } };
+      }
+      const content = isContact ? confirmation : "The reminder is set.";
+      if (openAICompatible) {
+        const delta = call ? { tool_calls: [{
+          index: 0, id: `action-${feedback.length}`, type: "function",
+          function: { name: call.name, arguments: JSON.stringify(call.arguments) },
+        }] } : { content };
+        response.writeHead(200, { "Content-Type": "text/event-stream" });
+        response.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`);
+        response.write(`data: ${JSON.stringify({
+          choices: [{ index: 0, delta: {}, finish_reason: call ? "tool_calls" : "stop" }],
+        })}\n\n`);
+        response.end("data: [DONE]\n\n");
+      } else {
+        const message = call ? { tool_calls: [{ function: call }] } : { content };
+        response.end(JSON.stringify({ message, done: true, done_reason: truncated ? "length" : "stop" }));
+      }
       return;
     }
     if (body.messages[0].content === STATEFUL_SYSTEM) {
@@ -216,13 +255,31 @@ it("runs public cases through provider transports and persists scored and techni
 
   const testSocket = process.env.TOOL_SANDBOX_TEST_SOCKET;
   const sandboxGrader = testSocket ? null : createServer(async (req, res) => {
-    if (req.url !== "/grade" || req.method !== "POST") {
+    if ((req.url !== "/grade" && req.url !== "/step") || req.method !== "POST") {
       res.writeHead(404).end();
       return;
     }
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
-    const { actions, finalMessage } = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    const payload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    if (payload.caseId) {
+      const actions = payload.actions as Array<{ name: string; args: Record<string, unknown> }>;
+      if (req.url === "/step") {
+        const result = actions.at(-1)?.name === "datetime_info_to_timestamp" ? reminderTimestamp : idFixture;
+        res.end(JSON.stringify({ result }));
+        return;
+      }
+      const reached = payload.caseId === contactCase.sourceCaseId
+        ? actions.some(({ name, args }) => name === "add_contact" && args.name === contactName && args.phone_number === phoneNumber)
+        : actions.some(({ name }) => name === "datetime_info_to_timestamp")
+          && actions.some(({ name, args }) => name === "add_reminder" && args.reminder_timestamp === reminderTimestamp);
+      res.end(JSON.stringify({
+        passed: reached, stateGoalReached: reached, similarity: reached ? 1 : 0,
+        milestones: reached ? [1, 1] : [0, 0], actions: actions.length, failedActions: 0,
+      }));
+      return;
+    }
+    const { actions, finalMessage } = payload;
     const wifiEnabled = actions.at(-1) !== false;
     const confirmation = finalMessage === "Wifi is turned off" ? 1 : 0;
     res.end(JSON.stringify({
@@ -613,6 +670,43 @@ it("runs public cases through provider transports and persists scored and techni
       expect(items[0].metadata.deterministicGrade).toMatchObject({ details: { wifiEnabled: false, milestones: [1, 1] } });
       expect(items[1].metadata.deterministicGrade).toMatchObject({ details: { wifiEnabled: true } });
     }, { timeout: 8_000 });
+
+    const stateRun = await startExperimentExecution(experiment.id, {
+      scenarioIds: TOOL_SANDBOX_STATE_CASES.map(({ scenarioId }) => scenarioId), successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(experiment.id, stateRun.execution.id);
+      const items = variants.map((variant) => report.publicBenchmarkResults?.find((item) => item.variantId === variant.id));
+      expect(items.map((item) => item?.observations.map(({ metadata }) => metadata.outcome))).toEqual([
+        ["PASS", "PASS"], ["WRONG_ANSWER", "WRONG_ANSWER"], ["TRUNCATED", "TRUNCATED"], ["PROVIDER_ERROR", "PROVIDER_ERROR"],
+      ]);
+      for (const observation of items[0]?.observations ?? []) {
+        expect(observation.metadata.deterministicGrade).toMatchObject({ details: { stateGoalReached: true, milestones: [1, 1] } });
+      }
+    }, { timeout: 10_000 });
+
+    const openAiState = await startExperimentExecution(openAIExperiment.id, {
+      scenarioIds: [reminderCase.scenarioId], successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(openAIExperiment.id, openAiState.execution.id);
+      expect(report.publicBenchmarkResults?.map(({ observations }) => observations[0].metadata.outcome)).toEqual(["PASS", "PASS"]);
+    }, { timeout: 8_000 });
+    const savedReminder = await loadPersistedState(openAiState.runs[0].testRunId);
+    expect(savedReminder?.runs[0].run.results[0].turns[1].requestBody?.messages).toEqual(expect.arrayContaining([
+      { role: "tool", tool_call_id: "action-0", content: String(reminderTimestamp) },
+    ]));
+
+    vi.stubEnv("TOOL_SANDBOX_SOCKET", join(tmp, "unreachable.sock"));
+    const offlineState = await startExperimentExecution(experiment.id, {
+      scenarioIds: [contactCase.scenarioId], successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(experiment.id, offlineState.execution.id);
+      const baseline = report.publicBenchmarkResults?.find(({ variantId }) => variantId === variants[0].id);
+      expect(baseline?.observations[0].metadata.outcome).toBe("GRADER_ERROR");
+      expect(baseline?.accuracy).toBeNull();
+    }, { timeout: 5_000 });
 
   } finally {
     sandboxGrader?.close();

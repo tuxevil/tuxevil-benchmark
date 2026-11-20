@@ -1,3 +1,4 @@
+import { TOOL_SANDBOX_UNAVAILABLE } from "@/lib/toolsandbox-upstream";
 import { BFCL_MEMORY_CASE, gradeBfclMemory } from "@/lib/bfcl-v4-memory-kv";
 import { findBfclMultiturnCase, gradeBfclMultiturn } from "@/lib/bfcl-v3-multiturn";
 import { gradeSimulatedDevice, STATEFUL_CASE } from "@/lib/stateful-tool-sandbox";
@@ -24,6 +25,7 @@ export function gradePublicBenchmarkResult(
   }
   if (result.status === "FAILED") {
     const message = result.errorMessage ?? "";
+    if (message === TOOL_SANDBOX_UNAVAILABLE) return { outcome: "GRADER_ERROR", grade: null };
     if (message === "NO_FINAL_ANSWER" || message === "EMPTY_RESPONSE") {
       return { outcome: "NO_FINAL_ANSWER", grade: null };
     }

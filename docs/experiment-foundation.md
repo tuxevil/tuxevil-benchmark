@@ -668,6 +668,30 @@ With the override enabled, select **ToolSandbox wifi_off tuxevil-lite**
 in Churn Lab. The grading socket is needed for this suite. A failed
 grader request is recorded as `GRADER_ERROR`.
 
+## ToolSandbox contacts and reminders tuxevil-lite
+
+Select **ToolSandbox contacts and reminders tuxevil-lite** in Churn Lab
+with the same optional socket override enabled. The suite preserves the
+upstream contact addition and time conversion plus reminder addition cases
+from the same pinned commit. Each execution starts with a fresh copy of the
+scenario. The clock is fixed at `2024-03-20T12:00:00Z`, timestamps are UTC,
+and simulated IDs are reproducible from the case and action position.
+
+The sidecar executes each allow-listed native call and sends its actual
+receipt back to the model through `role=tool`. During grading it replays
+the recorded calls, validates their receipts, and runs the pinned
+ToolSandbox milestone evaluator. Passing requires a single new row in
+the target database and full evaluation similarity. Reports retain the
+original milestone scores, final-state success and failed action count.
+An unreachable sidecar reports `GRADER_ERROR`.
+
+Rebuild the sidecar before selecting this suite so it serves both
+`/step` and `/grade`. The provider transport regression can use the real
+sidecar by setting `TOOL_SANDBOX_TEST_SOCKET` to its mounted socket when
+running `npx vitest run src/lib/public-benchmark-runner.test.ts`.
+The suite uses a scripted request with no network access in the Python
+container. Results use the adapted `tuxevil-lite` protocol.
+
 ## Local capacity benchmark
 
 `benchmark:capacity` measures 1, 2 and 4 simultaneous client sessions
