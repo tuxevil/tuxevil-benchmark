@@ -1,3 +1,4 @@
+import { TOOL_SANDBOX_CASE, TOOL_SANDBOX_REVISION, TOOL_SANDBOX_SUITE, TOOL_SANDBOX_VERSION } from "@/lib/toolsandbox-upstream";
 import { BFCL_MEMORY_CASE, BFCL_MEMORY_SUITE, BFCL_MEMORY_SYSTEM, BFCL_MEMORY_VERSION } from "@/lib/bfcl-v4-memory-kv";
 import {
   BFCL_MISS_FUNC_CASES, BFCL_MISS_FUNC_SUITE, BFCL_MULTITURN_CASES, BFCL_MULTITURN_SUITE, BFCL_MULTITURN_SYSTEM, BFCL_MULTITURN_VERSION,
@@ -410,6 +411,27 @@ export const PUBLIC_BENCHMARKS = [{
     scenarioId: BFCL_MEMORY_CASE.scenarioId, sourceCaseId: BFCL_MEMORY_CASE.sourceCaseId,
     prerequisiteId: BFCL_MEMORY_CASE.prerequisiteId, caseVersion: 1, contentSha256: BFCL_MEMORY_CASE.contentSha256,
   }],
+}, {
+  id: TOOL_SANDBOX_SUITE,
+  version: TOOL_SANDBOX_VERSION,
+  language: "en",
+  modality: "stateful-tools",
+  officiallyComparable: false,
+  dataset: {
+    project: "ToolSandbox",
+    revision: TOOL_SANDBOX_REVISION,
+    url: "https://github.com/apple-aiml-research/ToolSandbox/blob/c8571d7854316d2e1c5f288e59fe1e34e53f6dd1/tool_sandbox/scenarios/single_tool_call_scenarios.py",
+    split: "single_tool_call/wifi_off",
+    license: "MIT",
+    caseCount: 1,
+  },
+  grader: { type: "TOOL_SANDBOX_UPSTREAM_MILESTONES", version: 1, upstreamRevision: TOOL_SANDBOX_REVISION },
+  systemPrompt: TOOL_SANDBOX_CASE.systemPrompt,
+  caseIdsSha256: caseHash([TOOL_SANDBOX_CASE.sourceCaseId]),
+  cases: [{
+    scenarioId: TOOL_SANDBOX_CASE.scenarioId, sourceCaseId: TOOL_SANDBOX_CASE.sourceCaseId,
+    caseVersion: 1, contentSha256: TOOL_SANDBOX_CASE.contentSha256,
+  }],
 }] as const;
 
 export const PUBLIC_BENCHMARK_SCENARIOS: Array<Omit<Scenario, "createdAt" | "updatedAt">> = [
@@ -426,6 +448,7 @@ export const PUBLIC_BENCHMARK_SCENARIOS: Array<Omit<Scenario, "createdAt" | "upd
   ...BFCL_MULTITURN_CASES.map(({ scenario }) => scenario),
   ...BFCL_MISS_FUNC_CASES.map(({ scenario }) => scenario),
   BFCL_MEMORY_CASE.scenario,
+  TOOL_SANDBOX_CASE.scenario,
 ];
 
 export function isPublicBenchmarkSuite(key?: string | null) {

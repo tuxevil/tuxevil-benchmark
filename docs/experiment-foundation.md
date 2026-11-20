@@ -627,3 +627,43 @@ filesystem, network or account access.
 This adapted protocol selects one prerequisite conversation, keeps core
 memory behind tools and uses a strict local answer check. The result
 applies to the selected case, rather than the official BFCL V4 suite.
+
+## ToolSandbox wifi_off tuxevil-lite
+
+This optional suite uses ToolSandbox's original `wifi_off` definition,
+simulated settings functions and milestone evaluator at commit
+`c8571d7854316d2e1c5f288e59fe1e34e53f6dd1`. The runner exposes
+`set_wifi_status(on: boolean)` and records the native call and its
+feedback. The grader replays those actions against a fresh copy of
+the upstream scenario and checks both milestones and the final Wi-Fi
+setting. The binary pass requires both milestone similarities to reach 1
+and Wi-Fi to remain off. The result also reports the original continuous
+similarity and action counts.
+
+The user request is scripted. The runner sends the original English request
+and replays structured actions without executing model-generated code.
+The catalog records this as an adapted protocol. The historical
+Spanish ToolSandbox-inspired case keeps its own ID and scoring.
+
+The grader is a separate container with no network, read-only root,
+a bounded temporary filesystem, a writable socket volume and no
+credentials. The container pins the source and Python runtime dependencies. Build it and run
+the offline positive and negative controls from the repository root.
+
+```bash
+docker build -t tuxevil-toolsandbox:wifi-check scripts/toolsandbox
+bash scripts/toolsandbox/smoke.sh tuxevil-toolsandbox:wifi-check
+```
+
+The optional `deploy/coolify-toolsandbox.yaml` override mounts the socket
+read-only in web and worker and sets `TOOL_SANDBOX_SOCKET`. Validate
+it with the existing Compose definition before enabling it in Coolify.
+
+```bash
+docker compose --project-directory . -f deploy/coolify-compose.yaml \
+  -f deploy/coolify-toolsandbox.yaml config --no-env-resolution --quiet
+```
+
+With the override enabled, select **ToolSandbox wifi_off tuxevil-lite**
+in Churn Lab. The grading socket is needed for this suite. A failed
+grader request is recorded as `GRADER_ERROR`.

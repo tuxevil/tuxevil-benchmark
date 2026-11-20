@@ -438,7 +438,12 @@ test("lists public benchmark provenance and protects opt-in scenarios", async ({
 
   const catalog = await request.get("/api/experiments/benchmarks");
   expect(catalog.ok()).toBeTruthy();
-  const { benchmarks: [suite, nativeTools, bfcl, mgsm, ifeval, ifstruct, math500, ptBr, stateful, irrelevance, multiturn, missFunc, memory] } = await catalog.json();
+  const { benchmarks: [suite, nativeTools, bfcl, mgsm, ifeval, ifstruct, math500, ptBr, stateful, irrelevance, multiturn, missFunc, memory, toolsandbox] } = await catalog.json();
+  expect(toolsandbox).toMatchObject({
+    id: "toolsandbox-upstream-wifi-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
+    grader: { type: "TOOL_SANDBOX_UPSTREAM_MILESTONES" },
+    cases: [{ sourceCaseId: "wifi_off" }],
+  });
   expect(memory).toMatchObject({
     id: "bfcl-v4-memory-kv-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
     dataset: { split: "memory", caseCount: 155, license: "Apache-2.0" },
