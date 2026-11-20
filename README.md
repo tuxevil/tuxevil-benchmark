@@ -391,6 +391,9 @@ Web y worker necesitan la misma base de datos, Redis y clave de cifrado para
 leer la configuración migrada. Publica únicamente HTTPS a través del proxy;
 PostgreSQL, Redis y el colector deben quedar en redes privadas o loopback.
 El proceso worker se inicia con `node node_modules/tsx/dist/cli.mjs src/worker.ts`.
+La etapa final de `deploy/Dockerfile` incluye las dependencias npm de
+producción y los entornos Python de IFStruct y MATH-500. ESLint, Playwright,
+Vitest y el compilador de TypeScript se instalan en la etapa de compilación.
 La raíz es pública tanto para visitantes como para administradores; las rutas `/admin`
 solicitan autenticación. Conserva el despliegue anterior hasta validar el nuevo
 para disponer de una reversión del enrutamiento.
