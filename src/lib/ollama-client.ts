@@ -17,6 +17,7 @@ type StreamedChat = {
   toolCalls: OllamaToolCall[];
   thinking: string;
   firstTokenAt: number | null;
+  firstVisibleTokenAt: number | null;
   finalChunk: OllamaChunk;
 };
 
@@ -25,6 +26,8 @@ export type OllamaChatResult = Telemetry & {
   toolCalls: OllamaToolCall[];
   thinking: string;
   evalDurationMs: number | null;
+  firstVisibleTokenMs: number | null;
+  requestedThinking: false | "low" | "medium" | "high" | "max" | null;
   finishReason: string | null;
   truncated: boolean;
 };
@@ -49,7 +52,9 @@ export async function streamOllamaChat({
   apiKey?: string | null;
 }): Promise<OllamaChatResult> {
   const startedAt = performance.now();
-  const streamed = await requestChat({ endpoint, model, messages, tools, parameters, signal, onToken, apiKey });
+  const effort = parameters.reasoningEffort;
+  const think = effort === "off" ? false : effort === "default" ? undefined : effort;
+  const streamed = await requestChat({ endpoint, model, messages, tools, parameters, signal, onToken, apiKey, think });
 
   const evalDurationMs = durationMs(streamed.finalChunk.eval_duration);
   const outputTokens = streamed.finalChunk.eval_count ?? null;
@@ -64,6 +69,9 @@ export async function streamOllamaChat({
     finishReason,
     truncated,
     ttftMs: streamed.firstTokenAt === null ? null : Math.round(streamed.firstTokenAt - startedAt),
+    firstVisibleTokenMs: streamed.firstVisibleTokenAt === null
+      ? null : Math.round(streamed.firstVisibleTokenAt - startedAt),
+    requestedThinking: think ?? null,
     inputTokens: streamed.finalChunk.prompt_eval_count ?? null,
     outputTokens,
     tokPerSec:
@@ -84,6 +92,7 @@ async function requestChat({
   signal,
   onToken,
   apiKey,
+  think,
 }: {
   endpoint: string;
   model: string;
@@ -93,6 +102,7 @@ async function requestChat({
   signal: AbortSignal;
   onToken?: (token: string) => void;
   apiKey?: string | null;
+  think?: NonNullable<OllamaChatResult["requestedThinking"]>;
 }): Promise<StreamedChat> {
   const timeoutSignal = AbortSignal.timeout(120_000);
   const requestSignal = AbortSignal.any([signal, timeoutSignal]);
@@ -108,6 +118,7 @@ async function requestChat({
       messages,
       ...(tools?.length ? { tools } : {}),
       stream: true,
+      ...(think !== undefined ? { think } : {}),
       options: {
         temperature: parameters.temperature,
         num_ctx: parameters.numCtx,
@@ -134,6 +145,7 @@ async function requestChat({
   let responseText = "";
   let thinking = "";
   let firstTokenAt: number | null = null;
+  let firstVisibleTokenAt: number | null = null;
   let finalChunk: OllamaChunk | null = null;
   const toolCalls: OllamaToolCall[] = [];
 
@@ -146,6 +158,7 @@ async function requestChat({
     if (chunkThinking || token || calls?.length) firstTokenAt ??= performance.now();
     if (chunkThinking) thinking += chunkThinking;
     if (token) {
+      firstVisibleTokenAt ??= performance.now();
       responseText += token;
       onToken?.(token);
     }
@@ -174,7 +187,7 @@ async function requestChat({
     throw new Error("Ollama closed the stream before sending telemetry.");
   }
 
-  return { responseText, toolCalls, thinking, firstTokenAt, finalChunk };
+  return { responseText, toolCalls, thinking, firstTokenAt, firstVisibleTokenAt, finalChunk };
 }
 
 export class OllamaRequestError extends Error {
