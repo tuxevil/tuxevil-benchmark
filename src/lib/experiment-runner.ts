@@ -1,3 +1,4 @@
+import { findMath500Case, gradeMath500 } from "@/lib/math500-pilot";
 import { findIfstructCase, gradeIfstruct } from "@/lib/ifstruct-pilot";
 import { findIfevalCase, summarizeIfeval } from "@/lib/ifeval-pilot";
 import { findBfclV3Case } from "@/lib/bfcl-v3-pilot";
@@ -353,7 +354,8 @@ async function importRunObservations(
   const scenario = benchmarkStore.getScenario(mapping.scenarioId);
   const publicCase = publicBenchmarkCase(mapping.scenarioId);
   const ifstruct = findIfstructCase(mapping.scenarioId);
-  const existingGrades = ifstruct
+  const math500 = findMath500Case(mapping.scenarioId);
+  const existingGrades = ifstruct || math500
     ? await listExperimentExecutionObservations(execution.id, mapping.variantId)
     : [];
   const storedResultIds = new Set(existingGrades
@@ -368,10 +370,11 @@ async function importRunObservations(
     const lastTurn = result.turns.at(-1);
     const finishReason = lastTurn?.finishReason ?? result.finishReason ?? null;
     const truncated = result.truncated || lastTurn?.truncated;
-    const externalGrade = ifstruct && result.status === "COMPLETED" && !truncated
-      && finishReason !== "length" && result.responseText?.trim()
-      ? await gradeIfstruct(ifstruct.fixture, result.responseText)
-      : undefined;
+    let externalGrade: DeterministicGrade | null | undefined;
+    if (result.status === "COMPLETED" && !truncated && finishReason !== "length" && result.responseText?.trim()) {
+      if (ifstruct) externalGrade = await gradeIfstruct(ifstruct.fixture, result.responseText);
+      if (math500) externalGrade = await gradeMath500(math500.fixture.answer, result.responseText);
+    }
     const benchmarkGrade = publicCase ? gradePublicBenchmarkResult({
       ...result,
       finishReason,
@@ -464,7 +467,7 @@ export async function startExperimentExecution(
     throw new Error("Public benchmarks require a dedicated standard execution with deterministic scoring and no judge.");
   }
   if (parsed.successPolicy === "DETERMINISTIC") {
-    const ungraded = scenarios.filter((scenario) => scenario && !scenario.grader && !findBfclV3Case(scenario.id) && !findIfevalCase(scenario.id) && !findIfstructCase(scenario.id));
+    const ungraded = scenarios.filter((scenario) => scenario && !scenario.grader && !findBfclV3Case(scenario.id) && !findIfevalCase(scenario.id) && !findIfstructCase(scenario.id) && !findMath500Case(scenario.id));
     if (ungraded.length > 0) {
       throw new Error(
         `Deterministic success policy requires a grader on every selected scenario. Missing: ${ungraded.map((scenario) => scenario?.name ?? "unknown").join(", ")}.`,

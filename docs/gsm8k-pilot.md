@@ -106,3 +106,26 @@ without separators and compares the trimmed answer exactly. For example,
 the source answer `276,000` requires `276000` in this protocol. The prompt is an
 adapted zero-shot direct-answer prompt. This score has no official MGSM or
 LightEval comparability and describes only the selected cases.
+
+## MATH-500
+
+Select **MATH-500 tuxevil-lite** in Churn Lab. The four pinned problems
+come from the [original PRM800K test split](https://github.com/openai/prm800k/blob/7ecc794703b2877f63226f2477a49b34f9b25163/prm800k/math_splits/test.jsonl).
+They cover rational, radical, integer and symbolic answers at levels 4–5.
+The catalog records the source ID, subject, level and dataset digest.
+The source data is attributed to OpenAI PRM800K and the original MATH
+dataset authors, with the upstream MIT notice in
+`src/lib/benchmark-data/math500.LICENSE`.
+
+The system prompt requests a final LaTeX answer in `\boxed{...}`. The
+adapter takes the last balanced boxed expression and checks equivalence
+using Math-Verify 0.9.0. The adapted prompt, extraction rules and
+four-case subset define this score. Missing or unparseable boxes
+count as wrong answers. A timeout, process failure or input over the
+validator limit produces a grader error. Responses are retained for
+offline regrading.
+
+For local Linux development, install `scripts/math500/requirements.txt`
+in an isolated venv and set `MATH500_PYTHON` to its Python executable.
+Coolify packages that venv. The runner passes data over stdin to the
+fixed script and caps input, output, CPU, address space and elapsed time.

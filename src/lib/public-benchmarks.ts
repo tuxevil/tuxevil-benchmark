@@ -1,3 +1,4 @@
+import { MATH500_CASES, MATH500_PROMPT, MATH500_SUITE, MATH500_VERSION } from "@/lib/math500-pilot";
 import { IFSTRUCT_CASES, IFSTRUCT_SUITE, IFSTRUCT_VERSION } from "@/lib/ifstruct-pilot";
 import { IFEVAL_CASES, IFEVAL_SUITE, IFEVAL_VERSION } from "@/lib/ifeval-pilot";
 import { BFCL_V3_CASES, BFCL_V3_SUITE, BFCL_V3_SYSTEM_PROMPT, BFCL_V3_VERSION } from "@/lib/bfcl-v3-pilot";
@@ -209,6 +210,27 @@ export const PUBLIC_BENCHMARKS = [{
   cases: IFSTRUCT_CASES.map(({ scenarioId, sourceCaseId, outputFormat, contentSha256 }) => ({
     scenarioId, sourceCaseId, outputFormat, caseVersion: 1, contentSha256,
   })),
+}, {
+  id: MATH500_SUITE,
+  version: MATH500_VERSION,
+  language: "en",
+  modality: "chat",
+  officiallyComparable: false,
+  dataset: {
+    project: "PRM800K MATH-500",
+    revision: "7ecc794703b2877f63226f2477a49b34f9b25163",
+    url: "https://github.com/openai/prm800k/blob/7ecc794703b2877f63226f2477a49b34f9b25163/prm800k/math_splits/test.jsonl",
+    sha256: "35dc41080a3680858b27fa7e0533d2d547825316fc5dafe5d316f4ccc5a06132",
+    split: "test",
+    license: "MIT",
+    caseCount: 500,
+  },
+  grader: { type: "MATH_VERIFY_BOXED", version: 1, upstreamVersion: "0.9.0" },
+  systemPrompt: MATH500_PROMPT,
+  caseIdsSha256: caseHash(MATH500_CASES.map(({ sourceCaseId }) => sourceCaseId)),
+  cases: MATH500_CASES.map(({ scenarioId, sourceCaseId, contentSha256, fixture }) => ({
+    scenarioId, sourceCaseId, subject: fixture.subject, level: fixture.level, caseVersion: 1, contentSha256,
+  })),
 }] as const;
 
 export const PUBLIC_BENCHMARK_SCENARIOS = [
@@ -218,6 +240,7 @@ export const PUBLIC_BENCHMARK_SCENARIOS = [
   ...mgsmCases.map(({ scenario }) => scenario),
   ...IFEVAL_CASES.map(({ scenario }) => scenario),
   ...IFSTRUCT_CASES.map(({ scenario }) => scenario),
+  ...MATH500_CASES.map(({ scenario }) => scenario),
 ];
 
 export function isPublicBenchmarkSuite(key?: string | null) {
