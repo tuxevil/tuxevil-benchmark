@@ -541,3 +541,19 @@ final state, confirmation, action count and invalid actions.
 The simulator operates on an in-memory object. It uses no device APIs,
 contacts, accounts or external tools. It is an adapted synthetic protocol
 with its own IDs and scores, independent of the upstream Python benchmark.
+
+## BFCL V3 Irrelevance tuxevil-lite
+
+In Churn Lab select **BFCL V3 Irrelevance tuxevil-lite**, or select any of
+the three cases individually. The catalog pins the Apache-2.0
+`irrelevance` split and records case IDs and hashes. The original user
+messages and tool descriptions are sent to the selected runtime, with
+types translated to the provider's JSON Schema. Tools are never executed.
+
+This native protocol scores whether the model abstains from calling an
+irrelevant tool. It does not score the correctness of the text answer.
+An unexpected call fails even when the arguments are malformed. A
+completion with no call and no visible response is recorded as
+`NO_FINAL_ANSWER`. These rules differ from the upstream irrelevance
+checker, which tests whether a call can be decoded. The three cases are
+an adapted subset and do not yield an official BFCL score.

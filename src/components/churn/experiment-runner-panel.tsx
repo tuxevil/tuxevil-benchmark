@@ -151,6 +151,7 @@ export function ExperimentRunnerPanel({
     { key: "gsm8k-tuxevil-lite", label: "GSM8K tuxevil-lite" },
     { key: "native-tool-smoke-es", label: "Native tool smoke ES" },
     { key: "bfcl-v3-tuxevil-lite", label: "BFCL V3 tuxevil-lite" },
+    { key: "bfcl-v3-irrelevance-tuxevil-lite", label: "BFCL V3 Irrelevance tuxevil-lite" },
     { key: "mgsm-es-tuxevil-lite", label: "MGSM ES tuxevil-lite" },
     { key: "ifeval-tuxevil-lite", label: "IFEval tuxevil-lite" },
     { key: "ifstruct-tuxevil-lite", label: "IFStruct tuxevil-lite" },

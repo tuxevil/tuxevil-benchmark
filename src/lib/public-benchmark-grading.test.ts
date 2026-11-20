@@ -1,3 +1,4 @@
+import { BFCL_V3_IRRELEVANCE_CASES } from "@/lib/bfcl-v3-pilot";
 import { describe, expect, it } from "vitest";
 import type { DeterministicGrader, ModelResult } from "@/lib/contracts";
 import { extractGsm8kAnswer } from "@/lib/deterministic-grader";
@@ -32,4 +33,16 @@ describe("GSM8K scoring", () => {
   it("separates missing grader configuration from wrong answers", () => {
     expect(gradePublicBenchmarkResult(completion, null)).toEqual({ outcome: "GRADER_ERROR", grade: null });
   });
+});
+
+it("does not count a silent BFCL irrelevance completion as successful abstention", () => {
+  const scenarioId = BFCL_V3_IRRELEVANCE_CASES[0].scenarioId;
+  const turn = {
+    id: "turn", stepOrder: 1, userMessage: "Question",
+    responseText: "", thinking: "Reasoning only", finishReason: "stop",
+    ttftMs: null, inputTokens: null, outputTokens: null, tokPerSec: null, totalDurationMs: null,
+  };
+  expect(gradePublicBenchmarkResult({ ...completion, responseText: "" }, null, {
+    scenarioId, turns: [turn],
+  })).toEqual({ outcome: "NO_FINAL_ANSWER", grade: null });
 });

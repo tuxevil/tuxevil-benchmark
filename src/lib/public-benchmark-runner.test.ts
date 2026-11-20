@@ -7,7 +7,8 @@ import { tmpdir } from "node:os";
 import { expect, it, vi } from "vitest";
 import { MATH500_CASES, MATH500_PROMPT } from "@/lib/math500-pilot";
 import { IFSTRUCT_CASES } from "@/lib/ifstruct-pilot";
-import { BFCL_V3_CASES } from "@/lib/bfcl-v3-pilot";
+import { BFCL_V3_CASES, BFCL_V3_IRRELEVANCE_CASES, BFCL_V3_IRRELEVANCE_SYSTEM_PROMPT } from "@/lib/bfcl-v3-pilot";
+import type { ChatTool } from "@/lib/providers/chat-tools";
 import bfclOracle from "@/lib/benchmark-data/bfcl-v3-oracle.json";
 import { NATIVE_TOOL_FIXTURES } from "@/lib/native-tool-fixtures";
 import { PUBLIC_BENCHMARKS } from "@/lib/public-benchmarks";
@@ -19,7 +20,7 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
   vi.stubEnv("REDIS_URL", undefined);
 
   const unexpectedCalls = [{ function: { name: "add_numbers", arguments: { a: 17, b: 25 } } }];
-  const chatRequests: Array<{ model: string; messages: Array<{ role: string; content: string }> }> = [];
+  const chatRequests: Array<{ model: string; tools?: ChatTool[]; messages: Array<{ role: string; content: string }> }> = [];
   const server = createServer(async (request, response) => {
     if (request.url === "/api/tags") {
       response.end(JSON.stringify({ models: ["correct", "incorrect", "truncated", "error"].map((name) => ({ name })) }));
@@ -48,6 +49,13 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
         ]
         : [{ name: "set_wifi", arguments: { enabled: false } }];
       const message = steps < calls.length ? { tool_calls: [{ function: calls[steps] }] } : { content: "Pronto." };
+      response.end(JSON.stringify({ message, done: true, done_reason: body.model === "truncated" ? "length" : "stop" }));
+      return;
+    }
+    if (body.messages[0].content === BFCL_V3_IRRELEVANCE_SYSTEM_PROMPT) {
+      const message = body.model === "incorrect"
+        ? { tool_calls: [{ function: { name: body.tools[0].function.name, arguments: { weight: 70, height: 1.7 } } }] }
+        : { content: "25 square meters." };
       response.end(JSON.stringify({ message, done: true, done_reason: body.model === "truncated" ? "length" : "stop" }));
       return;
     }
@@ -357,6 +365,25 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
     const statefulRun = sandbox.runs.find((item) => item.variantId === variants[0].id)!;
     const statefulStored = await loadPersistedState(statefulRun.testRunId);
     expect(statefulStored?.runs[0].run.results[0].turns).toHaveLength(4);
+    const irrelevanceCase = BFCL_V3_IRRELEVANCE_CASES[0];
+    const irrelevance = await startExperimentExecution(experiment.id, {
+      scenarioIds: [irrelevanceCase.scenarioId], successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(experiment.id, irrelevance.execution.id);
+      expect(report.publicBenchmarkResults).toHaveLength(4);
+      const items = variants.map((variant) =>
+        report.publicBenchmarkResults!.find((item) => item.variantId === variant.id)!.observations[0]);
+      expect(items.map((item) => item.metadata.outcome)).toEqual(["PASS", "WRONG_ANSWER", "TRUNCATED", "PROVIDER_ERROR"]);
+      expect(items[1].metadata).toMatchObject({
+        benchmark: { sourceCaseId: "irrelevance_0", suite: { id: "bfcl-v3-irrelevance-tuxevil-lite" } },
+        deterministicGrade: { reason: "UNNECESSARY_CALLS", details: { unnecessaryCalls: 1 } },
+      });
+    }, { timeout: 5_000 });
+    const irrelevanceRequests = chatRequests.filter((item) => item.messages[0].content === BFCL_V3_IRRELEVANCE_SYSTEM_PROMPT);
+    expect(irrelevanceRequests.map(({ model }) => model).sort()).toEqual(["correct", "error", "incorrect", "truncated"]);
+    expect(irrelevanceRequests.map(({ tools }) => tools)).toEqual(variants.map(() => irrelevanceCase.tools));
+    expect(irrelevanceRequests.every((item) => item.messages.length === 2)).toBe(true);
   } finally {
     server.close();
     vi.unstubAllEnvs();

@@ -1,0 +1,122 @@
+[
+  {
+    "category": "irrelevance",
+    "id": "irrelevance_0",
+    "question": [
+      [
+        {
+          "role": "user",
+          "content": "Calculate the area of a triangle given the base is 10 meters and height is 5 meters."
+        }
+      ]
+    ],
+    "function": [
+      {
+        "name": "determine_body_mass_index",
+        "description": "Calculate body mass index given weight and height.",
+        "parameters": {
+          "type": "dict",
+          "properties": {
+            "weight": {
+              "type": "float",
+              "description": "Weight of the individual in kilograms."
+            },
+            "height": {
+              "type": "float",
+              "description": "Height of the individual in meters."
+            }
+          },
+          "required": [
+            "weight",
+            "height"
+          ]
+        }
+      }
+    ],
+    "ground_truth": []
+  },
+  {
+    "category": "irrelevance",
+    "id": "irrelevance_3",
+    "question": [
+      [
+        {
+          "role": "user",
+          "content": "What is the slope of the line which is perpendicular to the line with the equation y = 3x + 2?"
+        }
+      ]
+    ],
+    "function": [
+      {
+        "name": "find_critical_points",
+        "description": "Finds the critical points of the function.",
+        "parameters": {
+          "type": "dict",
+          "properties": {
+            "function": {
+              "type": "string",
+              "description": "The function to find the critical points for."
+            },
+            "variable": {
+              "type": "string",
+              "description": "The variable in the function."
+            },
+            "range": {
+              "type": "array",
+              "items": {
+                "type": "float"
+              },
+              "description": "The range to consider for finding critical points. Optional. Default is [0.0, 3.4]."
+            }
+          },
+          "required": [
+            "function",
+            "variable"
+          ]
+        }
+      }
+    ],
+    "ground_truth": []
+  },
+  {
+    "category": "irrelevance",
+    "id": "irrelevance_5",
+    "question": [
+      [
+        {
+          "role": "user",
+          "content": "What is the perimeter of a rectangle with length 5 meters and width 4 meters?"
+        }
+      ]
+    ],
+    "function": [
+      {
+        "name": "solve_quadratic_equation",
+        "description": "Solves a quadratic equation and returns the possible solutions.",
+        "parameters": {
+          "type": "dict",
+          "properties": {
+            "a": {
+              "type": "float",
+              "description": "Coefficient of the x-squared term in the quadratic equation."
+            },
+            "b": {
+              "type": "float",
+              "description": "Coefficient of the x term in the quadratic equation."
+            },
+            "c": {
+              "type": "float",
+              "description": "Constant term in the quadratic equation."
+            }
+          },
+          "required": [
+            "a",
+            "b",
+            "c"
+          ]
+        }
+      }
+    ],
+    "ground_truth": []
+  }
+]
