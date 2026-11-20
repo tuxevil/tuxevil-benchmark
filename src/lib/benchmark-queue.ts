@@ -422,6 +422,7 @@ async function executeModel(runId: string, resultId: string) {
         totalDurationMs: response.totalDurationMs,
         wireDiagnostics: "wireDiagnostics" in response ? (response.wireDiagnostics as import("@/lib/providers/openai-client").WireDiagnostics | null) : null,
         protocolDiagnostics: "protocolDiagnostics" in response ? (response.protocolDiagnostics as import("@/lib/providers/openai-client").ProtocolDiagnostics | null) : null,
+        toolCalls: response.toolCalls?.length ? response.toolCalls : null,
         requestBody: "requestBody" in response ? (response.requestBody as Record<string, unknown> | null) : null,
       });
 

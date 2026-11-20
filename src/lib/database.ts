@@ -1132,8 +1132,8 @@ export async function loadPersistedState(runId?: string): Promise<DatabaseState 
         ? transaction`SELECT id, test_run_id, model_name, sample_index, status, eval_status, response_text, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, error_message, human_status, human_notes FROM model_results WHERE test_run_id = ${runId}`
         : transaction`SELECT id, test_run_id, model_name, sample_index, status, eval_status, response_text, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, error_message, human_status, human_notes FROM model_results`,
       runId
-        ? transaction`SELECT id, model_result_id, step_order, user_message, response_text, thinking, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body FROM model_result_turns WHERE model_result_id IN (SELECT id FROM model_results WHERE test_run_id = ${runId}) ORDER BY step_order ASC`
-        : transaction`SELECT id, model_result_id, step_order, user_message, response_text, thinking, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body FROM model_result_turns ORDER BY step_order ASC`,
+        ? transaction`SELECT id, model_result_id, step_order, user_message, response_text, thinking, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body, tool_calls FROM model_result_turns WHERE model_result_id IN (SELECT id FROM model_results WHERE test_run_id = ${runId}) ORDER BY step_order ASC`
+        : transaction`SELECT id, model_result_id, step_order, user_message, response_text, thinking, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body, tool_calls FROM model_result_turns ORDER BY step_order ASC`,
       runId
         ? transaction`SELECT model_result_id, evaluator_model, grammar_rating, compliance_rating, accuracy_rating, score_stars, grammar_analysis, compliance_analysis, accuracy_analysis, feedback_text, security_score, injection_successful, system_leakage_detected, vulnerability_analysis, evaluator_raw_json FROM evaluations WHERE model_result_id IN (SELECT id FROM model_results WHERE test_run_id = ${runId})`
         : transaction`SELECT model_result_id, evaluator_model, grammar_rating, compliance_rating, accuracy_rating, score_stars, grammar_analysis, compliance_analysis, accuracy_analysis, feedback_text, security_score, injection_successful, system_leakage_detected, vulnerability_analysis, evaluator_raw_json FROM evaluations`,
@@ -1573,7 +1573,7 @@ async function persistTurn(transaction: TransactionSql, resultId: string, turn: 
     INSERT INTO model_result_turns (
       id, model_result_id, step_order, user_message, response_text, thinking,
       input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms,
-      finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body
+      finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body, tool_calls
     )
     VALUES (
       ${turn.id}, ${resultId}, ${turn.stepOrder}, ${turn.userMessage}, ${turn.responseText}, ${turn.thinking ?? ""},
@@ -1581,7 +1581,8 @@ async function persistTurn(transaction: TransactionSql, resultId: string, turn: 
       ${turn.finishReason ?? null}, ${turn.truncated ?? false},
       ${turn.wireDiagnostics ? JSON.stringify(turn.wireDiagnostics) : null}::jsonb,
       ${turn.protocolDiagnostics ? JSON.stringify(turn.protocolDiagnostics) : null}::jsonb,
-      ${turn.requestBody ? JSON.stringify(turn.requestBody) : null}::jsonb
+      ${turn.requestBody ? JSON.stringify(turn.requestBody) : null}::jsonb,
+      ${turn.toolCalls ? JSON.stringify(turn.toolCalls) : null}::text::jsonb
     )
   `;
 }
@@ -1645,6 +1646,7 @@ function groupTurns(rows: Array<Record<string, unknown>>) {
       truncated: row.truncated === true || row.truncated === 1,
       wireDiagnostics: row.wire_diagnostics != null ? (row.wire_diagnostics as import("@/lib/providers/openai-client").WireDiagnostics) : null,
       protocolDiagnostics: row.protocol_diagnostics != null ? (row.protocol_diagnostics as import("@/lib/providers/openai-client").ProtocolDiagnostics) : null,
+      toolCalls: Array.isArray(row.tool_calls) ? row.tool_calls : null,
       requestBody: row.request_body != null ? (row.request_body as Record<string, unknown>) : null,
     });
     grouped.set(String(row.model_result_id), turns);

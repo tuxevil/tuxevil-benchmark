@@ -12,6 +12,7 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
   vi.stubEnv("DATABASE_URL", undefined);
   vi.stubEnv("REDIS_URL", undefined);
 
+  const unexpectedCalls = [{ function: { name: "add_numbers", arguments: { a: 17, b: 25 } } }];
   const chatRequests: Array<{ model: string; messages: Array<{ role: string; content: string }> }> = [];
   const server = createServer(async (request, response) => {
     if (request.url === "/api/tags") {
@@ -31,7 +32,9 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
       return;
     }
     response.end(JSON.stringify({
-      message: { content: body.model === "incorrect" ? "#### 19" : "9 x 2\n#### 18" },
+      message: body.model === "incorrect"
+        ? { content: "#### 19", tool_calls: unexpectedCalls }
+        : { content: "9 x 2\n#### 18" },
       done: true,
       done_reason: body.model === "truncated" ? "length" : "stop",
       eval_count: 8,
@@ -96,6 +99,9 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
     const baselineRun = started.runs.find((run) => run.variantId === variants[0].id)!;
     const stored = await loadPersistedState(baselineRun.testRunId);
     expect(stored?.runs[0].run.results[0].responseText).toBe("9 x 2\n#### 18");
+    const wrongRun = started.runs.find((run) => run.variantId === variants[1].id)!;
+    const wrongStored = await loadPersistedState(wrongRun.testRunId);
+    expect(wrongStored?.runs[0].run.results[0].turns[0].toolCalls).toEqual(unexpectedCalls);
   } finally {
     server.close();
     vi.unstubAllEnvs();

@@ -201,6 +201,7 @@ export type TurnResult = Telemetry & {
   protocolDiagnostics?: import("@/lib/providers/openai-client").ProtocolDiagnostics | null;
   /** Exact request body sent to the provider (no API key). Populated for OpenAI-compatible providers. */
   requestBody?: Record<string, unknown> | null;
+  toolCalls?: import("@/lib/providers/chat-tools").OpenAIToolCall[] | import("@/lib/providers/chat-tools").OllamaToolCall[] | null;
 };
 
 export type Evaluation = {
