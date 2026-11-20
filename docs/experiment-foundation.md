@@ -474,3 +474,16 @@ with a 128 KiB input cap, CPU and memory limits, a wall timeout and a minimal
 environment. Process failures or limits are recorded as `GRADER_ERROR`.
 No model-generated code is executed. Responses are stored for local
 regrading, and persisted grades are reused when the Runner polls.
+
+### Ollama thinking controls
+
+The Ollama adapter sends `think: false` for an explicit `off` request.
+It sends named effort levels as requested and omits `think` for
+`default` or absent settings. Per-turn diagnostic events expose
+`requestedThinking`, `ttftMs` for the first emitted content, reasoning or
+tool call, and `firstVisibleTokenMs` for the first answer content. The
+visible measurement is null for a response consisting only of reasoning
+or tool calls. These fields record the request and observed timing. A
+model that cannot disable thinking may still reason, and a runtime may
+choose its default for an unsupported named level. Check the selected
+model's `/api/show` capabilities before comparing effects.

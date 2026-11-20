@@ -181,3 +181,34 @@ describe("streamOllamaChat", () => {
   });
 
 });
+
+it.each([
+  ["off", false],
+  ["default", undefined],
+  ["high", "high"],
+] as const)("sends Ollama thinking mode %s and separates visible timing", async (effort, expected) => {
+  let tick = 0;
+  vi.spyOn(performance, "now").mockImplementation(() => (tick += 10));
+  const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response([
+    JSON.stringify({ message: { thinking: "reasoning" } }),
+    JSON.stringify({ message: { content: "answer" }, done: true }),
+  ].join("\n")));
+  vi.stubGlobal("fetch", fetchMock);
+  try {
+    const result = await streamOllamaChat({
+      endpoint: "http://localhost:11434",
+      model: "fixture",
+      messages: [{ role: "user", content: "Question" }],
+      parameters: { temperature: 0, numCtx: 2048, topP: 1, numPredict: 128, repeatPenalty: 1, reasoningEffort: effort },
+      signal: new AbortController().signal,
+    });
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(body.think).toBe(expected);
+    if (expected === undefined) expect(body).not.toHaveProperty("think");
+    expect(result.requestedThinking).toBe(expected ?? null);
+    expect(result.firstVisibleTokenMs).toBeGreaterThan(result.ttftMs!);
+  } finally {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  }
+});

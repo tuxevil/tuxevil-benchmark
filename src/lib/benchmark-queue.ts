@@ -404,6 +404,10 @@ async function executeModel(runId: string, resultId: string) {
         await recordDiagnostic("inference", "turn_completed", {
           turn: stepOrder,
           ttftMs: response.ttftMs,
+          ...("firstVisibleTokenMs" in response && {
+            firstVisibleTokenMs: response.firstVisibleTokenMs,
+            requestedThinking: response.requestedThinking,
+          }),
           durationMs: response.totalDurationMs,
           inputTokens: response.inputTokens,
           outputTokens: response.outputTokens,
