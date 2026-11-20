@@ -428,13 +428,9 @@ test("Churn Lab exposes automatic Experiment Runner for a selected experiment", 
   await expect(runner.getByRole("button", { name: "Run 1 scenario", exact: true })).toBeVisible();
 });
 
-test("lists GSM8K provenance and protects opt-in scenarios", async ({ request, playwright, baseURL }) => {
-  const external = await playwright.request.newContext({ baseURL });
-  try {
-    expect((await external.get("/api/scenarios?includePublicBenchmarks=true")).status()).toBe(401);
-  } finally {
-    await external.dispose();
-  }
+test("lists GSM8K provenance and protects opt-in scenarios", async ({ request, baseURL }) => {
+  const external = await fetch(new URL("/api/scenarios?includePublicBenchmarks=true", baseURL));
+  expect(external.status).toBe(401);
 
   const catalog = await request.get("/api/experiments/benchmarks");
   expect(catalog.ok()).toBeTruthy();
