@@ -636,7 +636,9 @@ simulated settings functions and milestone evaluator at commit
 `set_wifi_status(on: boolean)` and records the native call and its
 feedback. The grader replays those actions against a fresh copy of
 the upstream scenario and checks both milestones and the final Wi-Fi
-setting. Its verdict includes the milestone similarities and action counts.
+setting. The binary pass requires both milestone similarities to reach 1
+and Wi-Fi to remain off. The result also reports the original continuous
+similarity and action counts.
 
 The user request is scripted. The runner sends the original English request
 and replays structured actions without executing model-generated code.
