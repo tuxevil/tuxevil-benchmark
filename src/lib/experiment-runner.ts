@@ -1,3 +1,4 @@
+import { gradeToolSandboxUpstream, TOOL_SANDBOX_CASE } from "@/lib/toolsandbox-upstream";
 import { BFCL_MEMORY_CASE } from "@/lib/bfcl-v4-memory-kv";
 import { findBfclMultiturnCase } from "@/lib/bfcl-v3-multiturn";
 import { STATEFUL_CASE } from "@/lib/stateful-tool-sandbox";
@@ -381,6 +382,7 @@ async function importRunObservations(
     if (result.status === "COMPLETED" && !truncated && finishReason !== "length" && result.responseText?.trim()) {
       if (ifstruct) externalGrade = await gradeIfstruct(ifstruct.fixture, result.responseText);
       if (math500) externalGrade = await gradeMath500(math500.fixture.answer, result.responseText);
+      if (mapping.scenarioId === TOOL_SANDBOX_CASE.scenarioId) externalGrade = await gradeToolSandboxUpstream(result.turns);
     }
     const benchmarkGrade = publicCase ? gradePublicBenchmarkResult({
       ...result,
@@ -473,8 +475,11 @@ export async function startExperimentExecution(
   )) {
     throw new Error("Public benchmarks require a dedicated standard execution with deterministic scoring and no judge.");
   }
+  if (scenarios.some((scenario) => scenario?.id === TOOL_SANDBOX_CASE.scenarioId) && !process.env.TOOL_SANDBOX_SOCKET) {
+    throw new Error("ToolSandbox requires the isolated grader socket (TOOL_SANDBOX_SOCKET).");
+  }
   if (parsed.successPolicy === "DETERMINISTIC") {
-    const ungraded = scenarios.filter((scenario) => scenario && !scenario.grader && !findBfclV3Case(scenario.id) && !findBfclMultiturnCase(scenario.id) && !findIfevalCase(scenario.id) && !findIfstructCase(scenario.id) && !findMath500Case(scenario.id) && scenario.id !== STATEFUL_CASE.scenarioId && scenario.id !== BFCL_MEMORY_CASE.scenarioId);
+    const ungraded = scenarios.filter((scenario) => scenario && !scenario.grader && !findBfclV3Case(scenario.id) && !findBfclMultiturnCase(scenario.id) && !findIfevalCase(scenario.id) && !findIfstructCase(scenario.id) && !findMath500Case(scenario.id) && scenario.id !== STATEFUL_CASE.scenarioId && scenario.id !== BFCL_MEMORY_CASE.scenarioId && scenario.id !== TOOL_SANDBOX_CASE.scenarioId);
     if (ungraded.length > 0) {
       throw new Error(
         `Deterministic success policy requires a grader on every selected scenario. Missing: ${ungraded.map((scenario) => scenario?.name ?? "unknown").join(", ")}.`,

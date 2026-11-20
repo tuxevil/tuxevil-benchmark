@@ -1,3 +1,4 @@
+import { TOOL_SANDBOX_CASE } from "@/lib/toolsandbox-upstream";
 import { BFCL_MEMORY_CASE, BFCL_MEMORY_SYSTEM } from "@/lib/bfcl-v4-memory-kv";
 import { BFCL_MISS_FUNC_CASES, BFCL_MULTITURN_CASES, BFCL_MULTITURN_SYSTEM, BFCL_TOOL_RESTORATION_PROMPT } from "@/lib/bfcl-v3-multiturn";
 import { STATEFUL_CASE, STATEFUL_SYSTEM } from "@/lib/stateful-tool-sandbox";
@@ -54,6 +55,14 @@ it("runs public cases through provider transports and persists scored and techni
       } } }] } : shouldRetrieve ? { tool_calls: [{ function: { name: "archival_memory_retrieve", arguments: {
         key: "client_proposal",
       } } }] } : { content: prompt === recallPrompt ? '{"answer":"Legal"}' : "Understood." };
+      response.end(JSON.stringify({ message, done: true, done_reason: body.model === "truncated" ? "length" : "stop" }));
+      return;
+    }
+    if (body.messages[0].content === TOOL_SANDBOX_CASE.systemPrompt) {
+      const continuation = body.messages.at(-1)?.role === "tool";
+      const message = body.model === "correct" && !continuation
+        ? { tool_calls: [{ function: { name: "set_wifi_status", arguments: { on: false } } }] }
+        : { content: "Wifi is turned off" };
       response.end(JSON.stringify({ message, done: true, done_reason: body.model === "truncated" ? "length" : "stop" }));
       return;
     }
@@ -205,6 +214,23 @@ it("runs public cases through provider transports and persists scored and techni
     }) + "\n");
   });
 
+  const testSocket = process.env.TOOL_SANDBOX_TEST_SOCKET;
+  const sandboxGrader = testSocket ? null : createServer(async (req, res) => {
+    if (req.url !== "/grade" || req.method !== "POST") {
+      res.writeHead(404).end();
+      return;
+    }
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const { actions, finalMessage } = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    const wifiEnabled = actions.at(-1) !== false;
+    const confirmation = finalMessage === "Wifi is turned off" ? 1 : 0;
+    res.end(JSON.stringify({
+      passed: !wifiEnabled && confirmation === 1,
+      wifiEnabled, similarity: (Number(!wifiEnabled) + confirmation) / 2,
+      milestones: [Number(!wifiEnabled), confirmation], actions: actions.length, failedActions: 0,
+    }));
+  });
   try {
     server.listen(0, "127.0.0.1");
     await once(server, "listening");
@@ -567,7 +593,29 @@ it("runs public cases through provider transports and persists scored and techni
       { role: "tool", tool_name: "archival_memory_retrieve", content: '{"value":"Send the client proposal to Legal."}' },
     ]));
 
+
+    const sandboxInput = { scenarioIds: [TOOL_SANDBOX_CASE.scenarioId], successPolicy: "DETERMINISTIC" as const };
+    vi.stubEnv("TOOL_SANDBOX_SOCKET", undefined);
+    await expect(startExperimentExecution(experiment.id, sandboxInput)).rejects.toThrow("isolated grader socket");
+    const socket = testSocket ?? join(tmp, "grader.sock");
+    if (sandboxGrader) {
+      sandboxGrader.listen(socket);
+      await once(sandboxGrader, "listening");
+    }
+    vi.stubEnv("TOOL_SANDBOX_SOCKET", socket);
+    const upstreamSandbox = await startExperimentExecution(experiment.id, sandboxInput);
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(experiment.id, upstreamSandbox.execution.id);
+      expect(report.publicBenchmarkResults).toHaveLength(4);
+      const items = variants.map((variant) =>
+        report.publicBenchmarkResults!.find((item) => item.variantId === variant.id)!.observations[0]);
+      expect(items.map((item) => item.metadata.outcome)).toEqual(["PASS", "WRONG_ANSWER", "TRUNCATED", "PROVIDER_ERROR"]);
+      expect(items[0].metadata.deterministicGrade).toMatchObject({ details: { wifiEnabled: false, milestones: [1, 1] } });
+      expect(items[1].metadata.deterministicGrade).toMatchObject({ details: { wifiEnabled: true } });
+    }, { timeout: 8_000 });
+
   } finally {
+    sandboxGrader?.close();
     server.close();
     vi.unstubAllEnvs();
     rmSync(tmp, { force: true, recursive: true });

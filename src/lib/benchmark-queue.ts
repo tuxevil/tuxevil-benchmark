@@ -1,3 +1,4 @@
+import { createToolSandboxWifi, TOOL_SANDBOX_CASE, TOOL_SANDBOX_MAX_ACTIONS } from "@/lib/toolsandbox-upstream";
 import { BFCL_MEMORY_CASE, BFCL_MEMORY_MAX_ACTIONS, BFCL_MEMORY_RECALL_TURN, createBfclMemory } from "@/lib/bfcl-v4-memory-kv";
 import { BFCL_MULTITURN_MAX_ACTIONS, createBfclFileSystem, findBfclMultiturnCase } from "@/lib/bfcl-v3-multiturn";
 import { createSimulatedDevice, runSimulatedDeviceTool, STATEFUL_CASE, STATEFUL_MAX_ACTIONS } from "@/lib/stateful-tool-sandbox";
@@ -277,16 +278,17 @@ async function executeModel(runId: string, resultId: string) {
 
   const fixture = findNativeToolFixture(run.scenarioId);
   const stateful = run.scenarioId === STATEFUL_CASE.scenarioId;
+  const upstreamWifi = run.scenarioId === TOOL_SANDBOX_CASE.scenarioId;
   const bfclMultiturn = findBfclMultiturnCase(run.scenarioId);
   const memoryCase = run.scenarioId === BFCL_MEMORY_CASE.scenarioId;
   let memory = memoryCase ? createBfclMemory() : null;
   const scriptedTools = Boolean(bfclMultiturn || memoryCase);
   const staticTools = memoryCase ? BFCL_MEMORY_CASE.tools
-    : stateful ? STATEFUL_CASE.tools : fixture ? [fixture.tool] : findBfclV3Case(run.scenarioId)?.tools;
+    : upstreamWifi ? TOOL_SANDBOX_CASE.tools : stateful ? STATEFUL_CASE.tools : fixture ? [fixture.tool] : findBfclV3Case(run.scenarioId)?.tools;
   const device = stateful ? createSimulatedDevice() : null;
   const statefulHandler = bfclMultiturn ? createBfclFileSystem(bfclMultiturn).invoke
-    : device ? (name: string, args: unknown) => runSimulatedDeviceTool(device, name, args) : null;
-  const maxActions = memoryCase ? BFCL_MEMORY_MAX_ACTIONS : bfclMultiturn ? BFCL_MULTITURN_MAX_ACTIONS : STATEFUL_MAX_ACTIONS;
+    : upstreamWifi ? createToolSandboxWifi() : device ? (name: string, args: unknown) => runSimulatedDeviceTool(device, name, args) : null;
+  const maxActions = upstreamWifi ? TOOL_SANDBOX_MAX_ACTIONS : memoryCase ? BFCL_MEMORY_MAX_ACTIONS : bfclMultiturn ? BFCL_MULTITURN_MAX_ACTIONS : STATEFUL_MAX_ACTIONS;
   const conversation: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
     ...(run.systemPrompt ? [{ role: "system" as const, content: run.systemPrompt }] : []),
   ];
