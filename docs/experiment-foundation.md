@@ -395,3 +395,33 @@ The sensor name refers to fictional data. There is no Home Assistant
 connection, external tool execution, or shell access. The suite is a
 transport and grading smoke test. It has no official BFCL score.
 Apply the normal database migration before starting the PostgreSQL worker.
+
+## BFCL V3 tuxevil-lite
+
+In Churn Lab select **BFCL V3 tuxevil-lite**. The four fixed English cases
+cover simple, multiple, parallel and parallel multiple in standard mode.
+The catalog records the pinned dataset revision, case IDs and hashes.
+The adapted chat prompt and native JSON wire protocol make this a pilot.
+It is not an official score for the full BFCL V3 or V4 leaderboard.
+
+Calls are recorded and scored without invoking any of the advertised
+functions. The grader records selection, argument validity, extra calls
+and format separately. Parallel calls are matched without relying on their
+order. The four pilot cases use primitive argument types. JSON numbers use
+JavaScript numeric representation, so integral forms such as 10 and 10.0
+are indistinguishable after decoding. Expanding to other BFCL cases
+requires verifying their schema types and their AST rules.
+
+The dataset is derived from the Apache-2.0 BFCL data published by Gorilla.
+See the catalog for the pinned Hugging Face revision and the bundled
+`src/lib/benchmark-data/bfcl-v3.LICENSE` for the license.
+
+For offline parity checks, save the official pinned AST checker
+(`bfcl_eval/eval_checker/ast_eval/ast_checker.py` from Gorilla commit
+`6ea57973c7a6097fd7c5915698c54c17c5b1b6c8`) to a local file. Then run
+`python3 scripts/verify-bfcl-v3-parity.py /path/to/ast_checker.py` and compare
+its output with `src/lib/benchmark-data/bfcl-v3-oracle.json`. The script
+checks the source digest and uses the official Python branch with the
+provider name-normalization flag enabled. It does not execute the calls
+in its input. Vitest compares the runtime grader against all 39 oracle
+vectors and separately checks native argument format.

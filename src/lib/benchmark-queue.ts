@@ -1,3 +1,4 @@
+import { findBfclV3Case } from "@/lib/bfcl-v3-pilot";
 import { checkFixtureCall, findNativeToolFixture } from "@/lib/native-tool-fixtures";
 import type { OllamaChatMessage, OpenAIChatMessage } from "@/lib/providers/chat-tools";
 import { acquireRunAdmission, ResourceBusyError } from "@/lib/execution-admission";
@@ -272,7 +273,7 @@ async function executeModel(runId: string, resultId: string) {
   }>;
 
   const fixture = findNativeToolFixture(run.scenarioId);
-  const tools = fixture ? [fixture.tool] : undefined;
+  const tools = fixture ? [fixture.tool] : findBfclV3Case(run.scenarioId)?.tools;
   const conversation: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
     { role: "system", content: run.systemPrompt },
   ];
@@ -467,7 +468,7 @@ async function executeModel(runId: string, resultId: string) {
       const turnThinking = response.thinking?.trim() || null;
 
       // If this turn failed to produce visible content, fail the turn and stop conversation
-      if (!fixture && turnResponse.length === 0) {
+      if (!tools && turnResponse.length === 0) {
         const errorReason = turnThinking ? "NO_FINAL_ANSWER" : "EMPTY_RESPONSE";
         console.warn(`[tuxevil-benchmark] [Inference Failed] ${runId}/${resultId} turn ${index + 1}: ${errorReason}.`);
         benchmarkStore.updateResult(runId, resultId, {
@@ -492,7 +493,7 @@ async function executeModel(runId: string, resultId: string) {
     const responseText = inferredResult?.responseText ?? "";
     const lastTurn = inferredResult?.turns[inferredResult.turns.length - 1];
 
-    if (!fixture && responseText.trim().length === 0) {
+    if (!tools && responseText.trim().length === 0) {
       const errorReason = lastTurn?.thinking ? "NO_FINAL_ANSWER" : "EMPTY_RESPONSE";
       console.warn(`[tuxevil-benchmark] [Inference Failed] ${runId}/${resultId}: ${errorReason}.`);
       benchmarkStore.updateResult(runId, resultId, {
