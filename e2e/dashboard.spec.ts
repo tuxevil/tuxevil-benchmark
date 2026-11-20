@@ -287,7 +287,7 @@ test("Churn Lab exposes automatic Experiment Runner for a selected experiment", 
       },
     });
   });
-  await page.route(/\/api\/scenarios$/, async (route) => {
+  await page.route(/\/api\/scenarios\?includePublicBenchmarks=true$/, async (route) => {
     await route.fulfill({
       json: {
         scenarios: [{
@@ -298,7 +298,13 @@ test("Churn Lab exposes automatic Experiment Runner for a selected experiment", 
           suiteKey: "practical-slm",
           suiteVersion: "1.0.0",
           grader: { type: "EXACT_TEXT", version: 1, expected: "OK", caseSensitive: true, collapseWhitespace: false },
-        }],
+        }, ...[0, 659].map((index) => ({
+          id: `gsm8k-${index}`,
+          name: `GSM8K · tuxevil-lite · test:${index}`,
+          category: "GENERAL",
+          suiteKey: "gsm8k-tuxevil-lite",
+          suiteVersion: "1.0.0",
+        }))],
       },
     });
   });
@@ -371,4 +377,34 @@ test("Churn Lab exposes automatic Experiment Runner for a selected experiment", 
   await expect(runner.getByText(/Practical SLM 1\.0\.0 · objective/)).toBeVisible();
   await expect(runner.getByText("baseline", { exact: true })).toBeVisible();
   await expect(runner.getByText("variant", { exact: true })).toBeVisible();
+  await runner.getByRole("button", { name: "Select GSM8K tuxevil-lite" }).click();
+  await expect(runner.getByRole("button", { name: "Run 2 scenarios" })).toBeVisible();
+  await runner.getByRole("checkbox", { name: /test:659/ }).uncheck();
+  await expect(runner.getByRole("button", { name: "Run 1 scenario", exact: true })).toBeVisible();
+});
+
+test("lists GSM8K provenance and protects opt-in scenarios", async ({ request }) => {
+  const catalog = await request.get("/api/experiments/benchmarks");
+  expect(catalog.ok()).toBeTruthy();
+  const { benchmarks: [suite] } = await catalog.json();
+  expect(suite).toMatchObject({
+    id: "gsm8k-tuxevil-lite",
+    version: "1.0.0",
+    officiallyComparable: false,
+    dataset: { split: "test", license: "MIT" },
+  });
+
+  const ordinary = await request.get("/api/scenarios");
+  expect(ordinary.ok()).toBeTruthy();
+  expect((await ordinary.json()).scenarios).not.toEqual(expect.arrayContaining([
+    expect.objectContaining({ suiteKey: suite.id }),
+  ]));
+
+  const included = await request.get("/api/scenarios?includePublicBenchmarks=true");
+  expect(included.ok()).toBeTruthy();
+  const selected = (await included.json()).scenarios.find((item: { id: string }) => item.id === suite.cases[0].scenarioId);
+  expect(selected).toMatchObject({ suiteKey: suite.id, grader: { type: "GSM8K" } });
+  expect((await request.patch(`/api/scenarios/${selected.id}`, { data: selected })).status()).toBe(409);
+  expect((await request.delete(`/api/scenarios/${selected.id}`)).status()).toBe(409);
+  expect((await request.post("/api/scenarios", { data: selected })).status()).toBe(409);
 });

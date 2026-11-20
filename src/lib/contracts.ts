@@ -286,6 +286,11 @@ export const deterministicGraderSchema = z.discriminatedUnion("type", [
     tolerance: z.number().finite().min(0).default(0),
   }),
   z.object({
+    type: z.literal("GSM8K"),
+    version: z.literal(1).default(1),
+    expected: z.string().regex(/^-?[0-9.]+$/),
+  }),
+  z.object({
     type: z.literal("CONTAINS_ALL"),
     version: z.literal(1).default(1),
     required: z.array(z.string().min(1).max(2_000)).min(1).max(100),
