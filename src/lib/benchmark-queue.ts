@@ -1,3 +1,4 @@
+import { createSimulatedDevice, runSimulatedDeviceTool, STATEFUL_CASE, STATEFUL_MAX_ACTIONS } from "@/lib/stateful-tool-sandbox";
 import { findBfclV3Case } from "@/lib/bfcl-v3-pilot";
 import { checkFixtureCall, findNativeToolFixture } from "@/lib/native-tool-fixtures";
 import type { OllamaChatMessage, OpenAIChatMessage } from "@/lib/providers/chat-tools";
@@ -273,7 +274,8 @@ async function executeModel(runId: string, resultId: string) {
   }>;
 
   const fixture = findNativeToolFixture(run.scenarioId);
-  const tools = fixture ? [fixture.tool] : findBfclV3Case(run.scenarioId)?.tools;
+  const stateful = run.scenarioId === STATEFUL_CASE.scenarioId;
+  const tools = stateful ? STATEFUL_CASE.tools : fixture ? [fixture.tool] : findBfclV3Case(run.scenarioId)?.tools;
   const conversation: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
     ...(run.systemPrompt ? [{ role: "system" as const, content: run.systemPrompt }] : []),
   ];
@@ -467,6 +469,35 @@ async function executeModel(runId: string, resultId: string) {
           ];
           response = await infer(continuation, []);
           await recordTurn(response, index + 2, continuation);
+        }
+      } else if (stateful) {
+        const device = createSimulatedDevice();
+        const ollamaConversation: OllamaChatMessage[] = [...conversation];
+        const openAIConversation: OpenAIChatMessage[] = [...conversation];
+        for (let step = 0; step < STATEFUL_MAX_ACTIONS; step++) {
+          const call = response.toolCalls.length === 1 ? response.toolCalls[0] : null;
+          if (response.truncated || !call?.function || typeof call.function.name !== "string"
+            || !call.function.name || ("id" in call && !call.id)) break;
+          if (!(await waitUntilRunnable(runId))) return;
+          const name = call.function.name;
+          const content = JSON.stringify(runSimulatedDeviceTool(device, name, call.function.arguments));
+          const stepOrder = index + step + 2;
+          if ("protocolDiagnostics" in response) {
+            openAIConversation.push(
+              { role: "assistant", content: response.responseText || null, tool_calls: response.toolCalls },
+              { role: "tool", content, tool_call_id: response.toolCalls[0].id },
+            );
+            response = await infer([], openAIConversation.slice());
+            await recordTurn(response, stepOrder);
+          } else {
+            ollamaConversation.push(
+              { role: "assistant", content: response.responseText, tool_calls: response.toolCalls },
+              { role: "tool", content, tool_name: name },
+            );
+            const messages = ollamaConversation.slice();
+            response = await infer(messages, []);
+            await recordTurn(response, stepOrder, messages);
+          }
         }
       }
       const turnResponse = response.responseText.trim();

@@ -1,3 +1,4 @@
+import { gradeSimulatedDevice, STATEFUL_CASE } from "@/lib/stateful-tool-sandbox";
 import { findIfevalCase, gradeIfeval } from "@/lib/ifeval-pilot";
 import { findBfclV3Case, gradeBfclV3 } from "@/lib/bfcl-v3-pilot";
 import { checkFixtureCall, findNativeToolFixture } from "@/lib/native-tool-fixtures";
@@ -27,6 +28,11 @@ export function gradePublicBenchmarkResult(
     if (/\bout of memory\b|\boom\b/i.test(message)) return { outcome: "OOM", grade: null };
     if (/\btimeout\b|\btimed? out\b/i.test(message)) return { outcome: "TIMEOUT", grade: null };
     return { outcome: "PROVIDER_ERROR", grade: null };
+  }
+  if (scenarioContext?.scenarioId === STATEFUL_CASE.scenarioId) {
+    if (scenarioContext.turns.length === 0) return { outcome: "PROVIDER_ERROR", grade: null };
+    const grade = gradeSimulatedDevice(scenarioContext.turns);
+    return { outcome: grade.passed ? "PASS" : "WRONG_ANSWER", grade };
   }
   const bfcl = scenarioContext && findBfclV3Case(scenarioContext.scenarioId);
   if (bfcl && scenarioContext) {
