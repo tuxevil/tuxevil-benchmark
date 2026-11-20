@@ -438,11 +438,19 @@ test("lists public benchmark provenance and protects opt-in scenarios", async ({
 
   const catalog = await request.get("/api/experiments/benchmarks");
   expect(catalog.ok()).toBeTruthy();
-  const { benchmarks: [suite, nativeTools, bfcl, mgsm, ifeval, ifstruct, math500, ptBr, stateful, irrelevance, multiturn, missFunc, memory, toolsandbox] } = await catalog.json();
+  const { benchmarks: [suite, nativeTools, bfcl, mgsm, ifeval, ifstruct, math500, ptBr, stateful, irrelevance, multiturn, missFunc, memory, toolsandbox, toolsandboxState] } = await catalog.json();
   expect(toolsandbox).toMatchObject({
     id: "toolsandbox-upstream-wifi-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
     grader: { type: "TOOL_SANDBOX_UPSTREAM_MILESTONES" },
     cases: [{ sourceCaseId: "wifi_off" }],
+  });
+  expect(toolsandboxState).toMatchObject({
+    id: "toolsandbox-upstream-state-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
+    grader: { type: "TOOL_SANDBOX_UPSTREAM_STATE", version: 1, clock: "2024-03-20T12:00:00Z" },
+    cases: [
+      { sourceCaseId: "add_contact_with_name_and_phone_number" },
+      { sourceCaseId: "add_reminder_content_and_date_and_time" },
+    ],
   });
   expect(memory).toMatchObject({
     id: "bfcl-v4-memory-kv-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
