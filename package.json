@@ -38,6 +38,7 @@
     "test:e2e:dev": "PLAYWRIGHT_DEV=1 playwright test",
     "db:migrate": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f db/schema.sql -f db/experiment-schema.sql",
     "worker": "tsx src/worker.ts",
+    "benchmark:capacity": "tsx scripts/benchmark-capacity.ts",
     "mcp": "tsx src/mcp-server.ts",
     "landing:export": "tsx scripts/export-public-snapshot.ts",
     "landing:build": "npm run landing:export && npm run --prefix landing build",

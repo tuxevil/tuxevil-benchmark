@@ -58,7 +58,7 @@ function percentile(sorted: number[], p: number): number | null {
   return sorted[lower] + (sorted[upper] - sorted[lower]) * weight;
 }
 
-function summarize(values: Array<number | null>, attempts: number): DistributionSummary {
+export function summarizePerformanceDistribution(values: Array<number | null>, attempts: number): DistributionSummary {
   const present = values.filter((value): value is number => value !== null).sort((a, b) => a - b);
   const count = present.length;
   return {
@@ -135,11 +135,11 @@ export function buildPerformanceProfile(
       successCoverage === 0 ? null : round((successes / successCoverage) * 100, 1),
     successCoveragePct:
       attempts === 0 ? 0 : round((successCoverage / attempts) * 100, 1),
-    ttftMs: summarize(ttft, attempts),
-    totalDurationMs: summarize(duration, attempts),
-    tokPerSec: summarize(tps, attempts),
-    inputTokens: summarize(input, attempts),
-    outputTokens: summarize(output, attempts),
+    ttftMs: summarizePerformanceDistribution(ttft, attempts),
+    totalDurationMs: summarizePerformanceDistribution(duration, attempts),
+    tokPerSec: summarizePerformanceDistribution(tps, attempts),
+    inputTokens: summarizePerformanceDistribution(input, attempts),
+    outputTokens: summarizePerformanceDistribution(output, attempts),
     secondsPerSuccessfulTask:
       successes > 0 && totalDurationMs !== null ? round(totalDurationMs / 1000 / successes, 3) : null,
     outputTokensPerSuccessfulTask:
