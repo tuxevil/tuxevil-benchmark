@@ -153,6 +153,7 @@ export function ExperimentRunnerPanel({
     { key: "bfcl-v3-tuxevil-lite", label: "BFCL V3 tuxevil-lite" },
     { key: "bfcl-v3-irrelevance-tuxevil-lite", label: "BFCL V3 Irrelevance tuxevil-lite" },
     { key: "bfcl-v3-multiturn-tuxevil-lite", label: "BFCL V3 Multiturn tuxevil-lite" },
+    { key: "bfcl-v3-miss-func-tuxevil-lite", label: "BFCL V3 Missing Function tuxevil-lite" },
     { key: "mgsm-es-tuxevil-lite", label: "MGSM ES tuxevil-lite" },
     { key: "ifeval-tuxevil-lite", label: "IFEval tuxevil-lite" },
     { key: "ifstruct-tuxevil-lite", label: "IFStruct tuxevil-lite" },

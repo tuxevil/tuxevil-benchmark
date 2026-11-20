@@ -5,6 +5,8 @@ import type { DeterministicGrade } from "@/lib/deterministic-grader";
 import { matchesToolFeedback, type ChatTool } from "@/lib/providers/chat-tools";
 
 export const BFCL_MULTITURN_SUITE = "bfcl-v3-multiturn-tuxevil-lite";
+export const BFCL_MISS_FUNC_SUITE = "bfcl-v3-miss-func-tuxevil-lite";
+export const BFCL_TOOL_RESTORATION_PROMPT = "I have updated some more functions you can choose from. What about now?";
 export const BFCL_MULTITURN_VERSION = "1.0.0";
 export const BFCL_MULTITURN_SYSTEM = "Use the provided tools to work with the simulated file system. Ask for clarification if the request lacks necessary information.";
 export const BFCL_MULTITURN_MAX_ACTIONS = 6;
@@ -13,28 +15,49 @@ const tools: ChatTool[] = data.tools.map(({ name, description, parameters }) => 
   type: "function", function: { name, description, parameters: { ...parameters, type: "object" } },
 }));
 
-export const BFCL_MULTITURN_CASES = data.cases.map(({ source, groundTruth }) => {
-  const hash = createHash("sha256").update(`${BFCL_MULTITURN_SUITE}@${BFCL_MULTITURN_VERSION}:${source.id}`).digest("hex");
+const cases = data.cases.map(({ source, groundTruth }) => {
+  const holdouts: Record<string, string[] | undefined> | undefined = source.missed_function;
+  const suite = holdouts ? BFCL_MISS_FUNC_SUITE : BFCL_MULTITURN_SUITE;
+  const userMessages = source.question.map(([message], index) => message?.content
+    ?? (holdouts?.[index] ? BFCL_TOOL_RESTORATION_PROMPT : ""));
+  if (userMessages.some((message) => !message)) throw new Error(`Empty BFCL turn in ${source.id}`);
+
+  const withheld = Object.values(holdouts ?? {}).flat();
+  const available = tools.filter(({ function: tool }) => !withheld.includes(tool.name));
+  const turnTools = userMessages.map((_, index) => {
+    for (const name of holdouts?.[index] ?? []) {
+      const restored = tools.find(({ function: tool }) => tool.name === name);
+      if (!restored) throw new Error(`Unknown BFCL holdout ${name}`);
+      available.push(restored);
+    }
+    return available.slice();
+  });
+  const hash = createHash("sha256").update(`${suite}@${BFCL_MULTITURN_VERSION}:${source.id}`).digest("hex");
   const scenarioId = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
-  const category = source.id.startsWith("multi_turn_miss_param_") ? "multi_turn_miss_param" : "multi_turn_base";
+  const category = holdouts ? "multi_turn_miss_func"
+    : source.id.startsWith("multi_turn_miss_param_") ? "multi_turn_miss_param" : "multi_turn_base";
   return {
-    scenarioId, sourceCaseId: source.id, category, tools, groundTruth,
+    scenarioId, sourceCaseId: source.id, category, groundTruth, turnTools,
     initialConfig: source.initial_config.GorillaFileSystem,
     contentSha256: createHash("sha256").update(JSON.stringify([
       source, groundTruth, tools, BFCL_MULTITURN_SYSTEM, BFCL_MULTITURN_MAX_ACTIONS,
+      ...(holdouts ? [userMessages, turnTools] : []),
     ])).digest("hex"),
     scenario: {
       id: scenarioId, name: `BFCL V3 · ${source.id}`, category: "GENERAL", attackType: null,
-      suiteKey: BFCL_MULTITURN_SUITE, suiteVersion: BFCL_MULTITURN_VERSION,
-      systemPrompt: BFCL_MULTITURN_SYSTEM, userMessages: source.question.map(([message]) => message.content),
+      suiteKey: suite, suiteVersion: BFCL_MULTITURN_VERSION,
+      systemPrompt: BFCL_MULTITURN_SYSTEM, userMessages,
     } satisfies Omit<Scenario, "createdAt" | "updatedAt">,
   };
 });
 
-type Fixture = (typeof BFCL_MULTITURN_CASES)[number];
+export const BFCL_MULTITURN_CASES = cases.filter(({ scenario }) => scenario.suiteKey === BFCL_MULTITURN_SUITE);
+export const BFCL_MISS_FUNC_CASES = cases.filter(({ scenario }) => scenario.suiteKey === BFCL_MISS_FUNC_SUITE);
+
+type Fixture = (typeof cases)[number];
 
 export function findBfclMultiturnCase(scenarioId: string | null) {
-  return BFCL_MULTITURN_CASES.find((fixture) => fixture.scenarioId === scenarioId);
+  return cases.find((fixture) => fixture.scenarioId === scenarioId);
 }
 
 type ToolResult = Record<string, unknown> | null;
@@ -61,7 +84,10 @@ export function createBfclFileSystem(fixture: Fixture) {
 
   return {
     snapshot: () => ({ directory: cwd ? `/alex/${cwd}` : "/alex", files: Array.from(files.entries()).sort() }),
-    invoke(name: string, raw: unknown): ToolResult {
+    invoke(name: string, raw: unknown, turnIndex: number): ToolResult {
+      if (!fixture.turnTools[turnIndex]?.some(({ function: tool }) => tool.name === name)) {
+        return { error: "UNKNOWN_TOOL" };
+      }
       const args = asArguments(raw);
       const schema = data.tools.find((tool) => tool.name === name)?.parameters;
       if (!schema) return { error: "UNKNOWN_TOOL" };
@@ -137,6 +163,14 @@ export function gradeBfclMultiturn(fixture: Fixture, turns: TurnResult[]): Deter
       const turn = turns[index];
       const messages = requestMessages(turn);
       if (messages.filter((message) => message.role === "user").length !== userIndex + 1) break;
+      if (fixture.category === "multi_turn_miss_func") {
+        const advertised = turn.requestBody?.tools;
+        if (!Array.isArray(advertised)
+          || advertised.length !== fixture.turnTools[userIndex].length
+          || advertised.some((tool, position) => tool?.function?.name !== fixture.turnTools[userIndex][position].function.name)) {
+          return null;
+        }
+      }
       index++;
       const calls = turn.toolCalls ?? [];
       callsInTurn += calls.length;
@@ -152,14 +186,14 @@ export function gradeBfclMultiturn(fixture: Fixture, turns: TurnResult[]): Deter
       for (const [callIndex, call] of calls.entries()) {
         const tool = feedback[callIndex];
         if (!call?.function?.name || !matchesToolFeedback(call, tool)) return null;
-        const result = environment.invoke(call.function.name, call.function.arguments);
+        const result = environment.invoke(call.function.name, call.function.arguments, userIndex);
         if (tool.content !== JSON.stringify(result)) return null;
         if (result && Object.hasOwn(result, "error")) failedActions++;
         else completed.push(JSON.stringify([call.function.name, result]));
       }
     }
     let cursor = 0;
-    const expected = expectedCalls.map(({ name, arguments: args }) => JSON.stringify([name, reference.invoke(name, args)]));
+    const expected = expectedCalls.map(({ name, arguments: args }) => JSON.stringify([name, reference.invoke(name, args, userIndex)]));
     const resultMatch = expected.every((result) => {
       const found = completed.indexOf(result, cursor);
       cursor = found + 1;
