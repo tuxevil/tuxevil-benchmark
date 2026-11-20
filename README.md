@@ -388,7 +388,10 @@ Los despliegues de producción se gestionan desde Coolify, usando el repositorio
 y `deploy/Dockerfile`; no iniciar una segunda instalación manual en el servidor.
 Proporciona las variables privadas en tiempo de ejecución, nunca en la imagen.
 Web y worker necesitan la misma base de datos, Redis y clave de cifrado para
-leer la configuración migrada. Publica únicamente HTTPS a través del proxy;
+leer la configuración migrada. Aplica `npm run db:migrate` antes de actualizar
+web y worker. Si una base ya creada conserva columnas antiguas, ambos procesos
+esperan a que finalice la actualización aditiva de compatibilidad antes de
+leer o escribir. Publica únicamente HTTPS a través del proxy;
 PostgreSQL, Redis y el colector deben quedar en redes privadas o loopback.
 El proceso worker se inicia con `node node_modules/tsx/dist/cli.mjs src/worker.ts`.
 La etapa final de `deploy/Dockerfile` incluye las dependencias npm de
