@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import irrelevanceFixtures from "@/lib/benchmark-data/bfcl-v3-irrelevance-lite.json";
 import fixtures from "@/lib/benchmark-data/bfcl-v3-lite.json";
 import type { Scenario, TurnResult } from "@/lib/contracts";
 import type { DeterministicGrade } from "@/lib/deterministic-grader";
@@ -8,7 +9,10 @@ export const BFCL_V3_SUITE = "bfcl-v3-tuxevil-lite";
 export const BFCL_V3_VERSION = "1.0.0";
 export const BFCL_V3_SYSTEM_PROMPT = "Use the provided functions to answer the user request.";
 
-type ArgumentSchema = { type: string; description?: string };
+export const BFCL_V3_IRRELEVANCE_SUITE = "bfcl-v3-irrelevance-tuxevil-lite";
+export const BFCL_V3_IRRELEVANCE_SYSTEM_PROMPT = "Answer the user request. Call a provided function only if it is relevant.";
+
+type ArgumentSchema = { type: string; description?: string; items?: ArgumentSchema };
 type FunctionDescription = {
   name: string;
   description: string;
@@ -20,9 +24,18 @@ export function bfclWireName(name: string) {
   return name.replaceAll(".", "_");
 }
 
-export const BFCL_V3_CASES = fixtures.map((fixture) => {
+function wireArgumentSchema(schema: ArgumentSchema): ArgumentSchema {
+  const { items, ...properties } = schema;
+  return {
+    ...properties,
+    type: schema.type === "float" ? "number" : schema.type,
+    ...(items && { items: wireArgumentSchema(items) }),
+  };
+}
+
+function buildCase(fixture: (typeof fixtures)[number] | (typeof irrelevanceFixtures)[number], suite: string, systemPrompt: string) {
   const sourceCaseId = fixture.id;
-  const hash = createHash("sha256").update(`${BFCL_V3_SUITE}@${BFCL_V3_VERSION}:${sourceCaseId}`).digest("hex");
+  const hash = createHash("sha256").update(`${suite}@${BFCL_V3_VERSION}:${sourceCaseId}`).digest("hex");
   const scenarioId = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
   const functions = fixture.function as FunctionDescription[];
   const groundTruth: GroundTruth[] = fixture.ground_truth as GroundTruth[];
@@ -35,7 +48,7 @@ export const BFCL_V3_CASES = fixtures.map((fixture) => {
         ...parameters,
         type: "object",
         properties: Object.fromEntries(Object.entries(parameters.properties).map(([key, schema]) => [
-          key, { ...schema, type: schema.type === "float" ? "number" : schema.type },
+          key, wireArgumentSchema(schema),
         ])),
       },
     },
@@ -43,24 +56,29 @@ export const BFCL_V3_CASES = fixtures.map((fixture) => {
 
   return {
     sourceCaseId, category: fixture.category, scenarioId, groundTruth, functions, tools,
-    contentSha256: createHash("sha256").update(JSON.stringify([BFCL_V3_SYSTEM_PROMPT, fixture])).digest("hex"),
+    contentSha256: createHash("sha256").update(JSON.stringify([systemPrompt, fixture])).digest("hex"),
     scenario: {
       id: scenarioId,
       name: `BFCL V3 · ${sourceCaseId}`,
       category: "GENERAL",
       attackType: null,
-      suiteKey: BFCL_V3_SUITE,
+      suiteKey: suite,
       suiteVersion: BFCL_V3_VERSION,
-      systemPrompt: BFCL_V3_SYSTEM_PROMPT,
+      systemPrompt,
       userMessages: [fixture.question[0][0].content],
     } satisfies Omit<Scenario, "createdAt" | "updatedAt">,
   };
-});
+}
 
-type BfclCase = (typeof BFCL_V3_CASES)[number];
+export const BFCL_V3_CASES = fixtures.map((fixture) => buildCase(fixture, BFCL_V3_SUITE, BFCL_V3_SYSTEM_PROMPT));
+export const BFCL_V3_IRRELEVANCE_CASES = irrelevanceFixtures.map((fixture) =>
+  buildCase(fixture, BFCL_V3_IRRELEVANCE_SUITE, BFCL_V3_IRRELEVANCE_SYSTEM_PROMPT));
+
+type BfclCase = ReturnType<typeof buildCase>;
 
 export function findBfclV3Case(scenarioId: string | null) {
-  return BFCL_V3_CASES.find((fixture) => fixture.scenarioId === scenarioId);
+  return BFCL_V3_CASES.find((fixture) => fixture.scenarioId === scenarioId)
+    ?? BFCL_V3_IRRELEVANCE_CASES.find((fixture) => fixture.scenarioId === scenarioId);
 }
 
 function normalizeBfclString(value: string) {
@@ -87,7 +105,7 @@ function decodeArguments(value: unknown) {
     ? value as Record<string, unknown> : null;
 }
 
-export function gradeBfclV3(fixture: BfclCase, calls: TurnResult["toolCalls"]): DeterministicGrade {
+export function gradeBfclV3(fixture: BfclCase, calls: TurnResult["toolCalls"], finishReason?: TurnResult["finishReason"]): DeterministicGrade {
   const decoded = (calls ?? []).map((call) => ({
     name: call?.function?.name,
     args: (!call || ("id" in call && !call.id)) ? null : decodeArguments(call.function?.arguments),
@@ -95,7 +113,8 @@ export function gradeBfclV3(fixture: BfclCase, calls: TurnResult["toolCalls"]): 
   const expected = fixture.groundTruth.map((answer) => Object.entries(answer)[0]);
   const selected = decoded.map(({ name }) => name ?? "").sort();
   const required = expected.map(([name]) => bfclWireName(name)).sort();
-  const formatValid = decoded.every(({ name, args }) => typeof name === "string" && name.length > 0 && args !== null);
+  const reportedMissingCall = fixture.category === "irrelevance" && finishReason === "tool_calls" && decoded.length === 0;
+  const formatValid = !reportedMissingCall && decoded.every(({ name, args }) => typeof name === "string" && name.length > 0 && args !== null);
   const selectionCorrect = selected.length === required.length && selected.every((name, i) => name === required[i]);
   const unmatched = [...decoded];
   const argumentsValid = formatValid && selectionCorrect && expected.every(([name, params]) => {
@@ -115,7 +134,7 @@ export function gradeBfclV3(fixture: BfclCase, calls: TurnResult["toolCalls"]): 
   const unnecessaryCalls = Math.max(0, decoded.length - expected.length);
   const passed = formatValid && selectionCorrect && argumentsValid;
   const reason = !formatValid ? "INVALID_FORMAT"
-    : decoded.length === 0 ? "MISSING_CALL"
+    : decoded.length === 0 && required.length > 0 ? "MISSING_CALL"
       : unnecessaryCalls > 0 ? "UNNECESSARY_CALLS"
         : !selectionCorrect ? "WRONG_TOOL_SELECTION"
           : !argumentsValid ? "INVALID_ARGUMENTS" : "PASS";

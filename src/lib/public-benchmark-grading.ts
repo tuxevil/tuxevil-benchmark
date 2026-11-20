@@ -39,7 +39,10 @@ export function gradePublicBenchmarkResult(
     const first = scenarioContext.turns[0];
     if (!first) return { outcome: "PROVIDER_ERROR", grade: null };
     if (first.truncated) return { outcome: "TRUNCATED", grade: null };
-    const grade = gradeBfclV3(bfcl, first.toolCalls);
+    const grade = gradeBfclV3(bfcl, first.toolCalls, first.finishReason);
+    if (bfcl.category === "irrelevance" && grade.passed && !first.responseText.trim()) {
+      return { outcome: "NO_FINAL_ANSWER", grade: null };
+    }
     return { outcome: grade.passed ? "PASS" : "WRONG_ANSWER", grade };
   }
   const fixture = scenarioContext && findNativeToolFixture(scenarioContext.scenarioId);
