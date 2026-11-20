@@ -1,3 +1,5 @@
+import { checkFixtureCall, findNativeToolFixture } from "@/lib/native-tool-fixtures";
+import type { OllamaChatMessage, OpenAIChatMessage } from "@/lib/providers/chat-tools";
 import { acquireRunAdmission, ResourceBusyError } from "@/lib/execution-admission";
 import { recordInferenceAttempt, type InferenceAttempt } from "@/lib/inference-attempts";
 import { captureRunManifest } from "@/lib/capture-run-manifest";
@@ -269,6 +271,8 @@ async function executeModel(runId: string, resultId: string) {
     evalDurationMs: number | null;
   }>;
 
+  const fixture = findNativeToolFixture(run.scenarioId);
+  const tools = fixture ? [fixture.tool] : undefined;
   const conversation: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
     { role: "system", content: run.systemPrompt },
   ];
@@ -323,14 +327,18 @@ async function executeModel(runId: string, resultId: string) {
         stopResources = await startResourceMeasurement(endpoint);
         await recordDiagnostic("resources", "measurement_started", { model: result.modelName });
       }
-      const response = await retryTransient(
+      const infer = (
+        ollamaMessages: OllamaChatMessage[],
+        openAIMessages: OpenAIChatMessage[],
+      ) => retryTransient(
         () => recordInferenceAttempt<OllamaChatResult | OpenAIChatResult>(
           attempts,
           () => provider === "ollama"
             ? streamOllamaChat({
                 endpoint,
                 model: result.modelName,
-                messages: conversation,
+                messages: ollamaMessages,
+                tools,
                 parameters: activeRun.parameters,
                 signal: activeRun.cancelController.signal,
                 apiKey,
@@ -346,7 +354,8 @@ async function executeModel(runId: string, resultId: string) {
             : streamOpenAICompatibleChat({
                 endpoint,
                 model: result.modelName,
-                messages: conversation,
+                messages: openAIMessages,
+                tools,
                 parameters: activeRun.parameters,
                 apiKey,
                 provider,
@@ -386,48 +395,79 @@ async function executeModel(runId: string, resultId: string) {
         activeRun.cancelController.signal,
       );
 
-      await recordDiagnostic("inference", "turn_completed", {
-        turn: index + 1,
-        ttftMs: response.ttftMs,
-        durationMs: response.totalDurationMs,
-        inputTokens: response.inputTokens,
-        outputTokens: response.outputTokens,
-        finishReason: response.finishReason,
-        truncated: response.truncated,
-      });
+      const recordTurn = async (
+        response: OllamaChatResult | OpenAIChatResult,
+        stepOrder: number,
+        ollamaContinuation?: OllamaChatMessage[],
+      ) => {
+        await recordDiagnostic("inference", "turn_completed", {
+          turn: stepOrder,
+          ttftMs: response.ttftMs,
+          durationMs: response.totalDurationMs,
+          inputTokens: response.inputTokens,
+          outputTokens: response.outputTokens,
+          finishReason: response.finishReason,
+          truncated: response.truncated,
+        });
 
-      turnTelemetry.push({
-        ttftMs: response.ttftMs,
-        outputTokens: response.outputTokens,
-        inputTokens: response.inputTokens,
-        totalDurationMs: response.totalDurationMs,
-        evalDurationMs: response.evalDurationMs,
-      });
+        turnTelemetry.push({
+          ttftMs: response.ttftMs,
+          outputTokens: response.outputTokens,
+          inputTokens: response.inputTokens,
+          totalDurationMs: response.totalDurationMs,
+          evalDurationMs: response.evalDurationMs,
+        });
 
+        const turnThinking = response.thinking?.trim() || null;
+
+        benchmarkStore.addTurn(runId, resultId, {
+          id: crypto.randomUUID(),
+          stepOrder,
+          userMessage,
+          responseText: response.responseText,
+          thinking: turnThinking,
+          finishReason: response.finishReason,
+          truncated: response.truncated,
+          ttftMs: response.ttftMs,
+          inputTokens: response.inputTokens,
+          outputTokens: response.outputTokens,
+          tokPerSec: response.tokPerSec,
+          totalDurationMs: response.totalDurationMs,
+          wireDiagnostics: "wireDiagnostics" in response ? (response.wireDiagnostics as import("@/lib/providers/openai-client").WireDiagnostics | null) : null,
+          protocolDiagnostics: "protocolDiagnostics" in response ? (response.protocolDiagnostics as import("@/lib/providers/openai-client").ProtocolDiagnostics | null) : null,
+          toolCalls: response.toolCalls?.length ? response.toolCalls : null,
+          requestBody: "requestBody" in response ? (response.requestBody as Record<string, unknown> | null) : ollamaContinuation ? { messages: ollamaContinuation, tools } : null,
+        });
+      };
+
+      let response = await infer(conversation, conversation);
+      await recordTurn(response, index + 1);
+      if (fixture && !response.truncated && checkFixtureCall(fixture, response.toolCalls) === "VALID") {
+        if (!(await waitUntilRunnable(runId))) return;
+        const content = JSON.stringify(fixture.result);
+        if ("protocolDiagnostics" in response) {
+          const toolCall = response.toolCalls[0];
+          response = await infer([], [
+            ...conversation,
+            { role: "assistant", content: response.responseText || null, tool_calls: response.toolCalls },
+            { role: "tool", content, tool_call_id: toolCall.id },
+          ]);
+          await recordTurn(response, index + 2);
+        } else {
+          const continuation: OllamaChatMessage[] = [
+            ...conversation,
+            { role: "assistant", content: response.responseText, tool_calls: response.toolCalls },
+            { role: "tool", content, tool_name: fixture.name },
+          ];
+          response = await infer(continuation, []);
+          await recordTurn(response, index + 2, continuation);
+        }
+      }
       const turnResponse = response.responseText.trim();
       const turnThinking = response.thinking?.trim() || null;
 
-      benchmarkStore.addTurn(runId, resultId, {
-        id: crypto.randomUUID(),
-        stepOrder: index + 1,
-        userMessage,
-        responseText: response.responseText,
-        thinking: turnThinking,
-        finishReason: response.finishReason,
-        truncated: response.truncated,
-        ttftMs: response.ttftMs,
-        inputTokens: response.inputTokens,
-        outputTokens: response.outputTokens,
-        tokPerSec: response.tokPerSec,
-        totalDurationMs: response.totalDurationMs,
-        wireDiagnostics: "wireDiagnostics" in response ? (response.wireDiagnostics as import("@/lib/providers/openai-client").WireDiagnostics | null) : null,
-        protocolDiagnostics: "protocolDiagnostics" in response ? (response.protocolDiagnostics as import("@/lib/providers/openai-client").ProtocolDiagnostics | null) : null,
-        toolCalls: response.toolCalls?.length ? response.toolCalls : null,
-        requestBody: "requestBody" in response ? (response.requestBody as Record<string, unknown> | null) : null,
-      });
-
       // If this turn failed to produce visible content, fail the turn and stop conversation
-      if (turnResponse.length === 0) {
+      if (!fixture && turnResponse.length === 0) {
         const errorReason = turnThinking ? "NO_FINAL_ANSWER" : "EMPTY_RESPONSE";
         console.warn(`[tuxevil-benchmark] [Inference Failed] ${runId}/${resultId} turn ${index + 1}: ${errorReason}.`);
         benchmarkStore.updateResult(runId, resultId, {
@@ -452,7 +492,7 @@ async function executeModel(runId: string, resultId: string) {
     const responseText = inferredResult?.responseText ?? "";
     const lastTurn = inferredResult?.turns[inferredResult.turns.length - 1];
 
-    if (responseText.trim().length === 0) {
+    if (!fixture && responseText.trim().length === 0) {
       const errorReason = lastTurn?.thinking ? "NO_FINAL_ANSWER" : "EMPTY_RESPONSE";
       console.warn(`[tuxevil-benchmark] [Inference Failed] ${runId}/${resultId}: ${errorReason}.`);
       benchmarkStore.updateResult(runId, resultId, {

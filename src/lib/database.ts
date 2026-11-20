@@ -1581,7 +1581,7 @@ async function persistTurn(transaction: TransactionSql, resultId: string, turn: 
       ${turn.finishReason ?? null}, ${turn.truncated ?? false},
       ${turn.wireDiagnostics ? JSON.stringify(turn.wireDiagnostics) : null}::jsonb,
       ${turn.protocolDiagnostics ? JSON.stringify(turn.protocolDiagnostics) : null}::jsonb,
-      ${turn.requestBody ? JSON.stringify(turn.requestBody) : null}::jsonb,
+      ${turn.requestBody ? JSON.stringify(turn.requestBody) : null}::text::jsonb,
       ${turn.toolCalls ? JSON.stringify(turn.toolCalls) : null}::text::jsonb
     )
   `;
@@ -1647,7 +1647,7 @@ function groupTurns(rows: Array<Record<string, unknown>>) {
       wireDiagnostics: row.wire_diagnostics != null ? (row.wire_diagnostics as import("@/lib/providers/openai-client").WireDiagnostics) : null,
       protocolDiagnostics: row.protocol_diagnostics != null ? (row.protocol_diagnostics as import("@/lib/providers/openai-client").ProtocolDiagnostics) : null,
       toolCalls: Array.isArray(row.tool_calls) ? row.tool_calls : null,
-      requestBody: row.request_body != null ? (row.request_body as Record<string, unknown>) : null,
+      requestBody: (parseJson(row.request_body) as Record<string, unknown> | null) ?? null,
     });
     grouped.set(String(row.model_result_id), turns);
   }

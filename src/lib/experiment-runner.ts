@@ -359,7 +359,7 @@ async function importRunObservations(
       ...result,
       finishReason,
       truncated: result.truncated || lastTurn?.truncated,
-    }, scenario?.grader) : null;
+    }, scenario?.grader, { scenarioId: mapping.scenarioId, turns: result.turns }) : null;
     const deterministicGrade = benchmarkGrade
       ? benchmarkGrade.grade
       : scenario?.grader && result.responseText !== null
@@ -437,9 +437,11 @@ export async function startExperimentExecution(
 
   const scenarios = parsed.scenarioIds.map((id) => benchmarkStore.getScenario(id));
   if (scenarios.some((scenario) => !scenario)) throw new Error("One or more scenarios were not found.");
-  const publicCaseCount = parsed.scenarioIds.filter(publicBenchmarkCase).length;
+  const publicCases = parsed.scenarioIds.map(publicBenchmarkCase).filter((item) => item !== null);
+  const publicCaseCount = publicCases.length;
   if (publicCaseCount && (
-    publicCaseCount !== scenarios.length || parsed.executionMode !== "STANDARD"
+    publicCaseCount !== scenarios.length || new Set(publicCases.map(({ suite }) => suite.id)).size !== 1
+    || parsed.executionMode !== "STANDARD"
     || parsed.useEvaluator || parsed.successPolicy !== "DETERMINISTIC"
   )) {
     throw new Error("Public benchmarks require a dedicated standard execution with deterministic scoring and no judge.");

@@ -378,3 +378,20 @@ inside a single global score.
 The [GSM8K tuxevil-lite pilot](gsm8k-pilot.md) registers a pinned public
 dataset subset on the existing Experiment Runner. It documents provenance,
 case selection, scoring, observation retrieval, and the tool-calling follow-up.
+
+## Native tool smoke in Spanish
+
+In Churn Lab select **Native tool smoke ES** and run it in standard mode
+with deterministic scoring and no judge. The suite adapts the calculator
+and battery fixtures from PR #24. Each fixture advertises one function and
+requires exactly one native call with the expected typed arguments.
+The Runner replays a fixed JSON result only after validation and permits
+one continuation. Both assistant turns and the outgoing tool result
+are available in the stored run. Incorrect selection, invalid arguments,
+malformed calls and extra calls are reported per observation. The final
+answer must match the numeric value in the fixture.
+
+The sensor name refers to fictional data. There is no Home Assistant
+connection, external tool execution, or shell access. The suite is a
+transport and grading smoke test. It has no official BFCL score.
+Apply the normal database migration before starting the PostgreSQL worker.

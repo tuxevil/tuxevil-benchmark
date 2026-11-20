@@ -3,6 +3,8 @@ import fixtures from "@/lib/benchmark-data/gsm8k-lite.json";
 import type { DeterministicGrader, Scenario } from "@/lib/contracts";
 import { extractGsm8kAnswer } from "@/lib/deterministic-grader";
 
+import { NATIVE_TOOL_FIXTURES, NATIVE_TOOL_SUITE, NATIVE_TOOL_SYSTEM_PROMPT, NATIVE_TOOL_VERSION } from "@/lib/native-tool-fixtures";
+
 const gsm8k = {
   id: "gsm8k-tuxevil-lite",
   version: "1.0.0",
@@ -54,15 +56,48 @@ const cases = fixtures.map((fixture) => {
   };
 });
 
+const nativeToolScenarios = NATIVE_TOOL_FIXTURES.map((fixture) => ({
+  id: fixture.scenarioId,
+  name: `Native tool smoke ES · ${fixture.sourceCaseId}`,
+  category: "GENERAL",
+  attackType: null,
+  suiteKey: NATIVE_TOOL_SUITE,
+  suiteVersion: NATIVE_TOOL_VERSION,
+  systemPrompt: NATIVE_TOOL_SYSTEM_PROMPT,
+  userMessages: [fixture.prompt],
+  grader: { type: "EXACT_TEXT", version: 1, expected: fixture.expected, caseSensitive: true, collapseWhitespace: false },
+} satisfies Omit<Scenario, "createdAt" | "updatedAt">));
+
 export const PUBLIC_BENCHMARKS = [{
   ...gsm8k,
   caseIdsSha256: caseHash(cases.map(({ sourceCaseId }) => sourceCaseId)),
   cases: cases.map(({ scenarioId, sourceCaseId, caseVersion, contentSha256 }) => ({
     scenarioId, sourceCaseId, caseVersion, contentSha256,
   })),
+}, {
+  id: NATIVE_TOOL_SUITE,
+  version: NATIVE_TOOL_VERSION,
+  language: "es",
+  modality: "native-tools",
+  officiallyComparable: false,
+  dataset: {
+    project: "IA Solar agent tool smoke",
+    revision: "18edfe0c4d4df7d7f9d2edf28e1b5008ce2e52ae",
+    url: "https://github.com/tuxevil/tuxevil-benchmark/blob/18edfe0c4d4df7d7f9d2edf28e1b5008ce2e52ae/scripts/agent-tool-smoke.py",
+    split: "synthetic",
+    license: "MIT",
+    caseCount: NATIVE_TOOL_FIXTURES.length,
+  },
+  grader: { type: "NATIVE_TOOL_SMOKE", version: 1 },
+  systemPrompt: NATIVE_TOOL_SYSTEM_PROMPT,
+  caseIdsSha256: caseHash(NATIVE_TOOL_FIXTURES.map(({ sourceCaseId }) => sourceCaseId)),
+  cases: NATIVE_TOOL_FIXTURES.map((fixture) => ({
+    scenarioId: fixture.scenarioId, sourceCaseId: fixture.sourceCaseId, caseVersion: 1,
+    contentSha256: caseHash([NATIVE_TOOL_SYSTEM_PROMPT, fixture]),
+  })),
 }] as const;
 
-export const PUBLIC_BENCHMARK_SCENARIOS = cases.map(({ scenario }) => scenario);
+export const PUBLIC_BENCHMARK_SCENARIOS = [...cases.map(({ scenario }) => scenario), ...nativeToolScenarios];
 
 export function isPublicBenchmarkSuite(key?: string | null) {
   return PUBLIC_BENCHMARKS.some((suite) => suite.id === key);
