@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { benchmarkStore } from "@/lib/benchmark-store";
+import { isPublicBenchmarkSuite } from "@/lib/public-benchmarks";
 import { scenarioSchema } from "@/lib/contracts";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -15,18 +16,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   await benchmarkStore.hydrate();
   const { id } = await params;
   const existing = benchmarkStore.getScenario(id);
-  if (existing?.suiteKey === "practical-slm") {
+  if (existing?.suiteKey === "practical-slm" || isPublicBenchmarkSuite(existing?.suiteKey)) {
     return NextResponse.json(
-      { error: "Versioned Practical SLM scenarios are immutable. Duplicate the scenario to customize it." },
+      { error: "Built-in versioned scenarios are immutable. Duplicate the scenario to customize it." },
       { status: 409 },
     );
   }
   const body = await readJson(request);
   const parsed = scenarioSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid scenario." }, { status: 400 });
-  if (parsed.data.suiteKey === "practical-slm") {
+  if (parsed.data.suiteKey === "practical-slm" || isPublicBenchmarkSuite(parsed.data.suiteKey)) {
     return NextResponse.json(
-      { error: "The practical-slm suite key is reserved for built-in versioned scenarios." },
+      { error: "This suite key is reserved for built-in versioned scenarios." },
       { status: 409 },
     );
   }
@@ -40,9 +41,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   await benchmarkStore.hydrate();
   const { id } = await params;
   const existing = benchmarkStore.getScenario(id);
-  if (existing?.suiteKey === "practical-slm") {
+  if (existing?.suiteKey === "practical-slm" || isPublicBenchmarkSuite(existing?.suiteKey)) {
     return NextResponse.json(
-      { error: "Versioned Practical SLM scenarios are immutable." },
+      { error: "Built-in versioned scenarios are immutable." },
       { status: 409 },
     );
   }

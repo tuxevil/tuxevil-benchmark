@@ -26,6 +26,7 @@
 import { writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { loadEnvConfig } from "@next/env";
+import { isPublicBenchmarkSuite, publicBenchmarkCase } from "@/lib/public-benchmarks";
 import { isPostgres, loadPersistedState, scenarioKeyFor } from "@/lib/database";
 import { getSqliteDb } from "@/lib/sqlite-db";
 import {
@@ -253,6 +254,8 @@ function buildSnapshot(
     return emptySnapshot(rig, defaultEvaluatorModel);
   }
 
+  const arenaRuns = state.runs.filter(({ run }) => !run.scenarioId || !publicBenchmarkCase(run.scenarioId));
+  const arenaScenarios = state.scenarios.filter((scenario) => !isPublicBenchmarkSuite(scenario.suiteKey));
   const byModel = new Map<string, ModelBucket>();
   const allTokPerSec: number[] = [];
   const perScenario = new Map<string, Map<string, ScenarioModelStat>>();
@@ -270,7 +273,7 @@ function buildSnapshot(
     return stat;
   };
 
-  for (const entry of state.runs) {
+  for (const entry of arenaRuns) {
     const run = entry.run;
     for (const res of run.results) {
       if (res.status !== "COMPLETED") continue;
@@ -438,12 +441,12 @@ function buildSnapshot(
 
   models.sort((a, b) => b.arena_score - a.arena_score || b.avg_stars - a.avg_stars);
 
-  const scenarios = state.scenarios.map((scenario) => {
+  const scenarios = arenaScenarios.map((scenario) => {
     const category = scenarioCategoryFor(scenario.attackType);
     let evaluationsRun = 0;
     const stars: number[] = [];
     const securityStats = { attacks: 0, failures: 0 };
-    for (const entry of state.runs) {
+    for (const entry of arenaRuns) {
       const run = entry.run;
       const contentMatch =
         run.systemPrompt === scenario.systemPrompt &&
@@ -516,7 +519,7 @@ function buildSnapshot(
     global_stats: {
       total_models: models.length,
       total_scenarios: scenarios.length,
-      total_benchmarks: new Set(state.runs.map((entry) => entry.run.id)).size,
+      total_benchmarks: new Set(arenaRuns.map((entry) => entry.run.id)).size,
       default_evaluator_model: defaultEvaluatorModel || "gpt-4o",
       overall_leader: overallLeader,
       security_leader: securityLeader,
