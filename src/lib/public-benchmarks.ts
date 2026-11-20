@@ -1,3 +1,4 @@
+import { BFCL_V3_CASES, BFCL_V3_SUITE, BFCL_V3_SYSTEM_PROMPT, BFCL_V3_VERSION } from "@/lib/bfcl-v3-pilot";
 import { createHash } from "node:crypto";
 import fixtures from "@/lib/benchmark-data/gsm8k-lite.json";
 import type { DeterministicGrader, Scenario } from "@/lib/contracts";
@@ -95,9 +96,33 @@ export const PUBLIC_BENCHMARKS = [{
     scenarioId: fixture.scenarioId, sourceCaseId: fixture.sourceCaseId, caseVersion: 1,
     contentSha256: caseHash([NATIVE_TOOL_SYSTEM_PROMPT, fixture]),
   })),
+}, {
+  id: BFCL_V3_SUITE,
+  version: BFCL_V3_VERSION,
+  language: "en",
+  modality: "native-tools",
+  officiallyComparable: false,
+  dataset: {
+    project: "Berkeley Function Calling Leaderboard V3",
+    revision: "61fc0608cfd831fcfbbaa676ebdfef0ed963eeda",
+    url: "https://huggingface.co/datasets/gorilla-llm/Berkeley-Function-Calling-Leaderboard/tree/61fc0608cfd831fcfbbaa676ebdfef0ed963eeda",
+    split: "simple, multiple, parallel, parallel_multiple",
+    license: "Apache-2.0",
+    caseCount: 1000,
+  },
+  grader: {
+    type: "BFCL_V3_NATIVE_SUBSET",
+    version: 1,
+    upstreamRevision: "6ea57973c7a6097fd7c5915698c54c17c5b1b6c8",
+  },
+  systemPrompt: BFCL_V3_SYSTEM_PROMPT,
+  caseIdsSha256: caseHash(BFCL_V3_CASES.map(({ sourceCaseId }) => sourceCaseId)),
+  cases: BFCL_V3_CASES.map(({ scenarioId, sourceCaseId, category, contentSha256 }) => ({
+    scenarioId, sourceCaseId, category, caseVersion: 1, contentSha256,
+  })),
 }] as const;
 
-export const PUBLIC_BENCHMARK_SCENARIOS = [...cases.map(({ scenario }) => scenario), ...nativeToolScenarios];
+export const PUBLIC_BENCHMARK_SCENARIOS = [...cases.map(({ scenario }) => scenario), ...nativeToolScenarios, ...BFCL_V3_CASES.map(({ scenario }) => scenario)];
 
 export function isPublicBenchmarkSuite(key?: string | null) {
   return PUBLIC_BENCHMARKS.some((suite) => suite.id === key);

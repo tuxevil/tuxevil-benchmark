@@ -1,0 +1,648 @@
+[
+  {
+    "id": "simple_0",
+    "vector": "reference",
+    "calls": [
+      {
+        "calculate_triangle_area": {
+          "base": 10,
+          "height": 5
+        }
+      }
+    ],
+    "valid": true
+  },
+  {
+    "id": "simple_0",
+    "vector": "reversed",
+    "calls": [
+      {
+        "calculate_triangle_area": {
+          "base": 10,
+          "height": 5
+        }
+      }
+    ],
+    "valid": true
+  },
+  {
+    "id": "simple_0",
+    "vector": "missing_call",
+    "calls": [],
+    "valid": false
+  },
+  {
+    "id": "simple_0",
+    "vector": "extra_call",
+    "calls": [
+      {
+        "calculate_triangle_area": {
+          "base": 10,
+          "height": 5
+        }
+      },
+      {
+        "calculate_triangle_area": {
+          "base": 10,
+          "height": 5
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "simple_0",
+    "vector": "wrong_tool",
+    "calls": [
+      {
+        "unknown_function": {
+          "base": 10,
+          "height": 5
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "simple_0",
+    "vector": "missing_argument",
+    "calls": [
+      {
+        "calculate_triangle_area": {
+          "height": 5
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "simple_0",
+    "vector": "extra_argument",
+    "calls": [
+      {
+        "calculate_triangle_area": {
+          "base": 10,
+          "height": 5,
+          "unexpected": true
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "simple_0",
+    "vector": "wrong_type",
+    "calls": [
+      {
+        "calculate_triangle_area": {
+          "base": "10",
+          "height": 5
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "simple_0",
+    "vector": "wrong_value",
+    "calls": [
+      {
+        "calculate_triangle_area": {
+          "base": 99999,
+          "height": 5
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "simple_0",
+    "vector": "normalized_string",
+    "calls": [
+      {
+        "calculate_triangle_area": {
+          "base": 10,
+          "height": 5,
+          "unit": "U-N I.TS"
+        }
+      }
+    ],
+    "valid": true
+  },
+  {
+    "id": "multiple_0",
+    "vector": "reference",
+    "calls": [
+      {
+        "triangle_properties_get": {
+          "side1": 5,
+          "side2": 4,
+          "side3": 3
+        }
+      }
+    ],
+    "valid": true
+  },
+  {
+    "id": "multiple_0",
+    "vector": "reversed",
+    "calls": [
+      {
+        "triangle_properties_get": {
+          "side1": 5,
+          "side2": 4,
+          "side3": 3
+        }
+      }
+    ],
+    "valid": true
+  },
+  {
+    "id": "multiple_0",
+    "vector": "missing_call",
+    "calls": [],
+    "valid": false
+  },
+  {
+    "id": "multiple_0",
+    "vector": "extra_call",
+    "calls": [
+      {
+        "triangle_properties_get": {
+          "side1": 5,
+          "side2": 4,
+          "side3": 3
+        }
+      },
+      {
+        "triangle_properties_get": {
+          "side1": 5,
+          "side2": 4,
+          "side3": 3
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "multiple_0",
+    "vector": "wrong_tool",
+    "calls": [
+      {
+        "unknown_function": {
+          "side1": 5,
+          "side2": 4,
+          "side3": 3
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "multiple_0",
+    "vector": "missing_argument",
+    "calls": [
+      {
+        "triangle_properties_get": {
+          "side2": 4,
+          "side3": 3
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "multiple_0",
+    "vector": "extra_argument",
+    "calls": [
+      {
+        "triangle_properties_get": {
+          "side1": 5,
+          "side2": 4,
+          "side3": 3,
+          "unexpected": true
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "multiple_0",
+    "vector": "wrong_type",
+    "calls": [
+      {
+        "triangle_properties_get": {
+          "side1": "5",
+          "side2": 4,
+          "side3": 3
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "multiple_0",
+    "vector": "wrong_value",
+    "calls": [
+      {
+        "triangle_properties_get": {
+          "side1": 99999,
+          "side2": 4,
+          "side3": 3
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "parallel_1",
+    "vector": "reference",
+    "calls": [
+      {
+        "calculate_em_force": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 4
+        }
+      },
+      {
+        "calculate_em_force": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 10
+        }
+      }
+    ],
+    "valid": true
+  },
+  {
+    "id": "parallel_1",
+    "vector": "reversed",
+    "calls": [
+      {
+        "calculate_em_force": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 10
+        }
+      },
+      {
+        "calculate_em_force": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 4
+        }
+      }
+    ],
+    "valid": true
+  },
+  {
+    "id": "parallel_1",
+    "vector": "missing_call",
+    "calls": [
+      {
+        "calculate_em_force": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 10
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "parallel_1",
+    "vector": "extra_call",
+    "calls": [
+      {
+        "calculate_em_force": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 4
+        }
+      },
+      {
+        "calculate_em_force": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 10
+        }
+      },
+      {
+        "calculate_em_force": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 4
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "parallel_1",
+    "vector": "wrong_tool",
+    "calls": [
+      {
+        "unknown_function": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 4
+        }
+      },
+      {
+        "calculate_em_force": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 10
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "parallel_1",
+    "vector": "missing_argument",
+    "calls": [
+      {
+        "calculate_em_force": {
+          "area": 2,
+          "d_time": 4
+        }
+      },
+      {
+        "calculate_em_force": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 10
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "parallel_1",
+    "vector": "extra_argument",
+    "calls": [
+      {
+        "calculate_em_force": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 4,
+          "unexpected": true
+        }
+      },
+      {
+        "calculate_em_force": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 10
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "parallel_1",
+    "vector": "wrong_type",
+    "calls": [
+      {
+        "calculate_em_force": {
+          "b_field": "5",
+          "area": 2,
+          "d_time": 4
+        }
+      },
+      {
+        "calculate_em_force": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 10
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "parallel_1",
+    "vector": "wrong_value",
+    "calls": [
+      {
+        "calculate_em_force": {
+          "b_field": 99999,
+          "area": 2,
+          "d_time": 4
+        }
+      },
+      {
+        "calculate_em_force": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 10
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "parallel_1",
+    "vector": "duplicate_call",
+    "calls": [
+      {
+        "calculate_em_force": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 4
+        }
+      },
+      {
+        "calculate_em_force": {
+          "b_field": 5,
+          "area": 2,
+          "d_time": 4
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "parallel_multiple_1",
+    "vector": "reference",
+    "calls": [
+      {
+        "area_rectangle_calculate": {
+          "length": 7.0,
+          "breadth": 3.0
+        }
+      },
+      {
+        "area_circle_calculate": {
+          "radius": 5.0
+        }
+      }
+    ],
+    "valid": true
+  },
+  {
+    "id": "parallel_multiple_1",
+    "vector": "reversed",
+    "calls": [
+      {
+        "area_circle_calculate": {
+          "radius": 5.0
+        }
+      },
+      {
+        "area_rectangle_calculate": {
+          "length": 7.0,
+          "breadth": 3.0
+        }
+      }
+    ],
+    "valid": true
+  },
+  {
+    "id": "parallel_multiple_1",
+    "vector": "missing_call",
+    "calls": [
+      {
+        "area_circle_calculate": {
+          "radius": 5.0
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "parallel_multiple_1",
+    "vector": "extra_call",
+    "calls": [
+      {
+        "area_rectangle_calculate": {
+          "length": 7.0,
+          "breadth": 3.0
+        }
+      },
+      {
+        "area_circle_calculate": {
+          "radius": 5.0
+        }
+      },
+      {
+        "area_rectangle_calculate": {
+          "length": 7.0,
+          "breadth": 3.0
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "parallel_multiple_1",
+    "vector": "wrong_tool",
+    "calls": [
+      {
+        "unknown_function": {
+          "length": 7.0,
+          "breadth": 3.0
+        }
+      },
+      {
+        "area_circle_calculate": {
+          "radius": 5.0
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "parallel_multiple_1",
+    "vector": "missing_argument",
+    "calls": [
+      {
+        "area_rectangle_calculate": {
+          "breadth": 3.0
+        }
+      },
+      {
+        "area_circle_calculate": {
+          "radius": 5.0
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "parallel_multiple_1",
+    "vector": "extra_argument",
+    "calls": [
+      {
+        "area_rectangle_calculate": {
+          "length": 7.0,
+          "breadth": 3.0,
+          "unexpected": true
+        }
+      },
+      {
+        "area_circle_calculate": {
+          "radius": 5.0
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "parallel_multiple_1",
+    "vector": "wrong_type",
+    "calls": [
+      {
+        "area_rectangle_calculate": {
+          "length": "7.0",
+          "breadth": 3.0
+        }
+      },
+      {
+        "area_circle_calculate": {
+          "radius": 5.0
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "parallel_multiple_1",
+    "vector": "wrong_value",
+    "calls": [
+      {
+        "area_rectangle_calculate": {
+          "length": 99999,
+          "breadth": 3.0
+        }
+      },
+      {
+        "area_circle_calculate": {
+          "radius": 5.0
+        }
+      }
+    ],
+    "valid": false
+  },
+  {
+    "id": "parallel_multiple_1",
+    "vector": "duplicate_call",
+    "calls": [
+      {
+        "area_rectangle_calculate": {
+          "length": 7.0,
+          "breadth": 3.0
+        }
+      },
+      {
+        "area_rectangle_calculate": {
+          "length": 7.0,
+          "breadth": 3.0
+        }
+      }
+    ],
+    "valid": false
+  }
+]

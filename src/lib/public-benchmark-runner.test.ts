@@ -4,6 +4,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { expect, it, vi } from "vitest";
+import { BFCL_V3_CASES } from "@/lib/bfcl-v3-pilot";
+import bfclOracle from "@/lib/benchmark-data/bfcl-v3-oracle.json";
 import { NATIVE_TOOL_FIXTURES } from "@/lib/native-tool-fixtures";
 import { PUBLIC_BENCHMARKS } from "@/lib/public-benchmarks";
 
@@ -33,6 +35,16 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
       return;
     }
     if (body.tools?.length) {
+      const bfcl = BFCL_V3_CASES.find((item) => item.tools[0].function.name === body.tools[0].function.name);
+      if (bfcl) {
+        const oracle = bfclOracle.find((item) => item.id === bfcl.sourceCaseId && item.vector === "reference")!;
+        const calls = body.model === "correct" ? oracle.calls.map((call) => {
+          const [name, args] = Object.entries(call)[0];
+          return { function: { name, arguments: args } };
+        }) : [];
+        response.end(JSON.stringify({ message: { tool_calls: calls }, done: true, done_reason: "stop" }));
+        return;
+      }
       const fixture = NATIVE_TOOL_FIXTURES.find((item) => item.name === body.tools[0].function.name);
       if (!fixture) {
         response.writeHead(400).end();
@@ -152,9 +164,28 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
     const calculator = continuation.find((item) => item.messages.at(-1)?.content === '{"sum":42}');
     expect(turns?.[1].requestBody?.messages).toEqual(calculator?.messages);
     expect(calculator?.messages.at(-1)).toEqual({ role: "tool", tool_name: "add_numbers", content: '{"sum":42}' });
+
+    const bfcl = await startExperimentExecution(experiment.id, {
+      scenarioIds: PUBLIC_BENCHMARKS[2].cases.map((item) => item.scenarioId), successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(experiment.id, bfcl.execution.id);
+      expect(report.publicBenchmarkResults).toHaveLength(4);
+      const entries = variants.map((variant) => report.publicBenchmarkResults!.find((item) => item.variantId === variant.id)!);
+      expect(entries.map((item) => item.accuracy)).toEqual([1, 0, 0, null]);
+      const details = entries[0].observations.map((item) => item.metadata.deterministicGrade);
+      expect(details).toHaveLength(4);
+      for (const category of ["simple", "multiple", "parallel", "parallel_multiple"]) {
+        expect(details).toContainEqual(expect.objectContaining({
+          passed: true,
+          details: { category, formatValid: true, selectionCorrect: true, argumentsValid: true, unnecessaryCalls: 0 },
+        }));
+      }
+    }, { timeout: 6_000 });
+    expect(chatRequests.filter((item) => item.messages.at(-1)?.role === "tool")).toHaveLength(2);
   } finally {
     server.close();
     vi.unstubAllEnvs();
     rmSync(tmp, { force: true, recursive: true });
   }
-}, 10_000);
+}, 20_000);

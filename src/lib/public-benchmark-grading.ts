@@ -1,3 +1,4 @@
+import { findBfclV3Case, gradeBfclV3 } from "@/lib/bfcl-v3-pilot";
 import { checkFixtureCall, findNativeToolFixture } from "@/lib/native-tool-fixtures";
 import type { DeterministicGrader, ModelResult } from "@/lib/contracts";
 import { gradeDeterministicResponse, type DeterministicGrade } from "@/lib/deterministic-grader";
@@ -24,6 +25,14 @@ export function gradePublicBenchmarkResult(
     if (/\bout of memory\b|\boom\b/i.test(message)) return { outcome: "OOM", grade: null };
     if (/\btimeout\b|\btimed? out\b/i.test(message)) return { outcome: "TIMEOUT", grade: null };
     return { outcome: "PROVIDER_ERROR", grade: null };
+  }
+  const bfcl = toolFixture && findBfclV3Case(toolFixture.scenarioId);
+  if (bfcl && toolFixture) {
+    const first = toolFixture.turns[0];
+    if (!first) return { outcome: "PROVIDER_ERROR", grade: null };
+    if (first.truncated) return { outcome: "TRUNCATED", grade: null };
+    const grade = gradeBfclV3(bfcl, first.toolCalls);
+    return { outcome: grade.passed ? "PASS" : "WRONG_ANSWER", grade };
   }
   const fixture = toolFixture && findNativeToolFixture(toolFixture.scenarioId);
   if (fixture && toolFixture) {

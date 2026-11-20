@@ -1,3 +1,4 @@
+import { findBfclV3Case } from "@/lib/bfcl-v3-pilot";
 import { resourceSummary } from "@/lib/resource-telemetry";
 import { loadResourceMeasurements } from "@/lib/resource-measurement-store";
 import type { BenchmarkParameters, ModelResult, TestRun } from "@/lib/contracts";
@@ -447,7 +448,7 @@ export async function startExperimentExecution(
     throw new Error("Public benchmarks require a dedicated standard execution with deterministic scoring and no judge.");
   }
   if (parsed.successPolicy === "DETERMINISTIC") {
-    const ungraded = scenarios.filter((scenario) => !scenario?.grader);
+    const ungraded = scenarios.filter((scenario) => scenario && !scenario.grader && !findBfclV3Case(scenario.id));
     if (ungraded.length > 0) {
       throw new Error(
         `Deterministic success policy requires a grader on every selected scenario. Missing: ${ungraded.map((scenario) => scenario?.name ?? "unknown").join(", ")}.`,

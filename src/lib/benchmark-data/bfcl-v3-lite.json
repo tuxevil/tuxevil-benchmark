@@ -1,0 +1,329 @@
+[
+  {
+    "category": "simple",
+    "id": "simple_0",
+    "question": [
+      [
+        {
+          "role": "user",
+          "content": "Find the area of a triangle with a base of 10 units and height of 5 units."
+        }
+      ]
+    ],
+    "function": [
+      {
+        "name": "calculate_triangle_area",
+        "description": "Calculate the area of a triangle given its base and height.",
+        "parameters": {
+          "type": "dict",
+          "properties": {
+            "base": {
+              "type": "integer",
+              "description": "The base of the triangle."
+            },
+            "height": {
+              "type": "integer",
+              "description": "The height of the triangle."
+            },
+            "unit": {
+              "type": "string",
+              "description": "The unit of measure (defaults to 'units' if not specified)"
+            }
+          },
+          "required": [
+            "base",
+            "height"
+          ]
+        }
+      }
+    ],
+    "ground_truth": [
+      {
+        "calculate_triangle_area": {
+          "base": [
+            10
+          ],
+          "height": [
+            5
+          ],
+          "unit": [
+            "units",
+            ""
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "category": "multiple",
+    "id": "multiple_0",
+    "question": [
+      [
+        {
+          "role": "user",
+          "content": "Can I find the dimensions and properties of a triangle, if I know its three sides are 5 units, 4 units and 3 units long?"
+        }
+      ]
+    ],
+    "function": [
+      {
+        "name": "triangle_properties.get",
+        "description": "Retrieve the dimensions, such as area and perimeter, of a triangle if lengths of three sides are given.",
+        "parameters": {
+          "type": "dict",
+          "properties": {
+            "side1": {
+              "type": "integer",
+              "description": "The length of first side of the triangle."
+            },
+            "side2": {
+              "type": "integer",
+              "description": "The length of second side of the triangle."
+            },
+            "side3": {
+              "type": "integer",
+              "description": "The length of third side of the triangle."
+            },
+            "get_area": {
+              "type": "boolean",
+              "description": "A flag to determine whether to calculate the area of triangle. Default is true.",
+              "default": true,
+              "optional": true
+            },
+            "get_perimeter": {
+              "type": "boolean",
+              "description": "A flag to determine whether to calculate the perimeter of triangle. Default is true.",
+              "default": true,
+              "optional": true
+            },
+            "get_angles": {
+              "type": "boolean",
+              "description": "A flag to determine whether to calculate the internal angles of triangle. Default is true.",
+              "default": true,
+              "optional": true
+            }
+          },
+          "required": [
+            "side1",
+            "side2",
+            "side3"
+          ]
+        }
+      },
+      {
+        "name": "circle_properties.get",
+        "description": "Retrieve the dimensions, such as area and circumference, of a circle if radius is given.",
+        "parameters": {
+          "type": "dict",
+          "properties": {
+            "radius": {
+              "type": "float",
+              "description": "The length of radius of the circle."
+            },
+            "get_area": {
+              "type": "boolean",
+              "description": "A flag to determine whether to calculate the area of circle. Default is true.",
+              "default": true,
+              "optional": true
+            },
+            "get_circumference": {
+              "type": "boolean",
+              "description": "A flag to determine whether to calculate the circumference of circle. Default is true.",
+              "default": true,
+              "optional": true
+            }
+          },
+          "required": [
+            "radius"
+          ]
+        }
+      }
+    ],
+    "ground_truth": [
+      {
+        "triangle_properties.get": {
+          "side1": [
+            5
+          ],
+          "side2": [
+            4
+          ],
+          "side3": [
+            3
+          ],
+          "get_area": [
+            "",
+            true
+          ],
+          "get_perimeter": [
+            "",
+            true
+          ],
+          "get_angles": [
+            "",
+            true
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "category": "parallel",
+    "id": "parallel_1",
+    "question": [
+      [
+        {
+          "role": "user",
+          "content": "Calculate the induced electromagnetic force for a magnetic field of 5 Tesla, area of 2 square meters and change in time of 4 seconds, then repeat with a change in time of 10 seconds."
+        }
+      ]
+    ],
+    "function": [
+      {
+        "name": "calculate_em_force",
+        "description": "Calculate the induced electromagnetic force based on Faraday's Law of Electromagnetic Induction, given the magnetic field (in Tesla), change in magnetic field area (in square meters), and the change in time (in seconds).",
+        "parameters": {
+          "type": "dict",
+          "properties": {
+            "b_field": {
+              "type": "integer",
+              "description": "The magnetic field in Tesla."
+            },
+            "area": {
+              "type": "integer",
+              "description": "The change in area of magnetic field in square meters."
+            },
+            "d_time": {
+              "type": "integer",
+              "description": "The change in time in seconds."
+            }
+          },
+          "required": [
+            "b_field",
+            "area",
+            "d_time"
+          ]
+        }
+      }
+    ],
+    "ground_truth": [
+      {
+        "calculate_em_force": {
+          "b_field": [
+            5
+          ],
+          "area": [
+            2
+          ],
+          "d_time": [
+            4
+          ]
+        }
+      },
+      {
+        "calculate_em_force": {
+          "b_field": [
+            5
+          ],
+          "area": [
+            2
+          ],
+          "d_time": [
+            10
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "category": "parallel_multiple",
+    "id": "parallel_multiple_1",
+    "question": [
+      [
+        {
+          "role": "user",
+          "content": "Find the area of a rectangle with length 7 and breadth 3. Also, calculate the area of a circle with radius 5."
+        }
+      ]
+    ],
+    "function": [
+      {
+        "name": "volume_cylinder.calculate",
+        "description": "Calculate the volume of a cylinder given the radius and the height.",
+        "parameters": {
+          "type": "dict",
+          "properties": {
+            "radius": {
+              "type": "float",
+              "description": "The radius of the cylinder."
+            },
+            "height": {
+              "type": "float",
+              "description": "The height of the cylinder."
+            }
+          },
+          "required": [
+            "radius",
+            "height"
+          ]
+        }
+      },
+      {
+        "name": "area_rectangle.calculate",
+        "description": "Calculate the area of a rectangle given the length and breadth.",
+        "parameters": {
+          "type": "dict",
+          "properties": {
+            "length": {
+              "type": "float",
+              "description": "The length of the rectangle."
+            },
+            "breadth": {
+              "type": "float",
+              "description": "The breadth of the rectangle."
+            }
+          },
+          "required": [
+            "length",
+            "breadth"
+          ]
+        }
+      },
+      {
+        "name": "area_circle.calculate",
+        "description": "Calculate the area of a circle given the radius.",
+        "parameters": {
+          "type": "dict",
+          "properties": {
+            "radius": {
+              "type": "float",
+              "description": "The radius of the circle."
+            }
+          },
+          "required": [
+            "radius"
+          ]
+        }
+      }
+    ],
+    "ground_truth": [
+      {
+        "area_rectangle.calculate": {
+          "length": [
+            7.0
+          ],
+          "breadth": [
+            3.0
+          ]
+        }
+      },
+      {
+        "area_circle.calculate": {
+          "radius": [
+            5.0
+          ]
+        }
+      }
+    ]
+  }
+]
