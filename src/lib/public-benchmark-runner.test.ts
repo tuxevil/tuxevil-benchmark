@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { expect, it, vi } from "vitest";
+import { MATH500_CASES, MATH500_PROMPT } from "@/lib/math500-pilot";
 import { IFSTRUCT_CASES } from "@/lib/ifstruct-pilot";
 import { BFCL_V3_CASES } from "@/lib/bfcl-v3-pilot";
 import bfclOracle from "@/lib/benchmark-data/bfcl-v3-oracle.json";
@@ -64,6 +65,13 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
           }],
         };
       response.end(JSON.stringify({ message, done: true, done_reason: "stop" }));
+      return;
+    }
+    if (body.messages[0].content === MATH500_PROMPT) {
+      response.end(JSON.stringify({
+        message: { content: body.model === "correct" ? String.raw`\boxed{6/112}` : String.raw`\boxed{3/57}` },
+        done: true, done_reason: body.model === "truncated" ? "length" : "stop",
+      }));
       return;
     }
     if (body.messages[0].role === "user" && body.messages[0].content === IFSTRUCT_CASES[0].fixture.prompt) {
@@ -268,9 +276,23 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
     }, { timeout: 5_000 });
     const structuredRequest = chatRequests.find((item) => item.messages[0].content === IFSTRUCT_CASES[0].fixture.prompt);
     expect(structuredRequest?.messages).toEqual([{ role: "user", content: IFSTRUCT_CASES[0].fixture.prompt }]);
+
+    const math = await startExperimentExecution(experiment.id, {
+      scenarioIds: [MATH500_CASES[0].scenarioId], successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(experiment.id, math.execution.id);
+      expect(report.publicBenchmarkResults).toHaveLength(4);
+      const items = variants.map((variant) =>
+        report.publicBenchmarkResults!.find((item) => item.variantId === variant.id)!.observations[0]);
+      expect(items.map((item) => item.metadata.outcome)).toEqual(["PASS", "WRONG_ANSWER", "TRUNCATED", "PROVIDER_ERROR"]);
+      expect(items[0].metadata.deterministicGrade).toMatchObject({
+        reason: "EQUIVALENT", details: { boxedAnswer: "6/112", evaluatorVersion: "0.9.0" },
+      });
+    }, { timeout: 6_000 });
   } finally {
     server.close();
     vi.unstubAllEnvs();
     rmSync(tmp, { force: true, recursive: true });
   }
-}, 20_000);
+}, 25_000);

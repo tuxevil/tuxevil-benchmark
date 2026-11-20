@@ -154,6 +154,7 @@ export function ExperimentRunnerPanel({
     { key: "mgsm-es-tuxevil-lite", label: "MGSM ES tuxevil-lite" },
     { key: "ifeval-tuxevil-lite", label: "IFEval tuxevil-lite" },
     { key: "ifstruct-tuxevil-lite", label: "IFStruct tuxevil-lite" },
+    { key: "math500-tuxevil-lite", label: "MATH-500 tuxevil-lite" },
   ].map((suite) => ({ ...suite, scenarios: scenarios.filter((scenario) => scenario.suiteKey === suite.key) }));
 
   const saveBindings = async () => {

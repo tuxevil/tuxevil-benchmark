@@ -8,6 +8,9 @@ RUN npm ci
 COPY scripts/ifstruct/requirements.txt /tmp/ifstruct-requirements.txt
 RUN python3 -m venv /opt/ifstruct && /opt/ifstruct/bin/pip install --no-cache-dir -r /tmp/ifstruct-requirements.txt
 ENV IFSTRUCT_PYTHON=/opt/ifstruct/bin/python
+COPY scripts/math500/requirements.txt /tmp/math500-requirements.txt
+RUN python3 -m venv /opt/math500 && /opt/math500/bin/pip install --no-cache-dir -r /tmp/math500-requirements.txt
+ENV MATH500_PYTHON=/opt/math500/bin/python
 COPY . .
 RUN npm run build
 ENV NODE_ENV=production
