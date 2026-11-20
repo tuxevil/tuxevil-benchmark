@@ -188,24 +188,42 @@ export async function updateExecutionTarget(id: string, input: ExecutionTargetUp
 
   if (!experimentUsesPostgres()) {
     ensureExperimentSqliteSchema();
-    getSqliteDb().prepare(`
+    const db = getSqliteDb();
+    const result = db.prepare(`
       UPDATE execution_targets
       SET label = ?, provider = ?, endpoint = ?, api_key_encrypted = ?, updated_at = ?
       WHERE id = ?
-    `).run(label, provider, endpoint, encrypted, now, id);
+        AND ((provider = ? AND endpoint = ?) OR NOT EXISTS (
+          SELECT 1 FROM execution_target_leases WHERE target_id = execution_targets.id
+        ))
+    `).run(label, provider, endpoint, encrypted, now, id, provider, endpoint);
+    if (result.changes === 0 && db.prepare("SELECT 1 FROM execution_targets WHERE id = ?").get(id)) {
+      throw new Error("Cannot change a leased execution target's provider or endpoint.");
+    }
     return getExecutionTarget(id);
   }
 
   const sql = getExperimentPostgresClient();
   if (!sql) return null;
-  const rows = await sql`
-    UPDATE execution_targets
-    SET label = ${label}, provider = ${provider}, endpoint = ${endpoint},
-        api_key_encrypted = ${encrypted}, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ${id}
-    RETURNING *
-  `;
-  return rows[0] ? restoreTarget(rows[0] as Row) : null;
+  return sql.begin(async (tx) => {
+    // Lease acquisition uses the same lock to serialize physical endpoint changes.
+    await tx`SELECT pg_advisory_xact_lock(hashtextextended('benchmark-physical-reservations',0))`;
+    const rows = await tx`
+      UPDATE execution_targets
+      SET label = ${label}, provider = ${provider}, endpoint = ${endpoint},
+          api_key_encrypted = ${encrypted}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${id}
+        AND ((provider = ${provider} AND endpoint = ${endpoint}) OR NOT EXISTS (
+          SELECT 1 FROM execution_target_leases WHERE target_id = execution_targets.id
+        ))
+      RETURNING *
+    `;
+    if (rows[0]) return restoreTarget(rows[0] as Row);
+    if ((await tx`SELECT 1 FROM execution_targets WHERE id = ${id}`).length) {
+      throw new Error("Cannot change a leased execution target's provider or endpoint.");
+    }
+    return null;
+  });
 }
 
 export async function deleteExecutionTarget(id: string): Promise<boolean> {
