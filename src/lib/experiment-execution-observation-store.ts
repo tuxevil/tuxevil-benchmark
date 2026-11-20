@@ -124,8 +124,8 @@ export async function upsertExperimentExecutionObservations(
         ) VALUES (
           ${id}, ${executionId}, ${variantId}, ${observation.caseId},
           ${observation.comparisonKind}, ${observation.canonicalValue},
-          ${observation.success}, ${JSON.stringify(observation.telemetry)}::jsonb,
-          ${JSON.stringify(observation.metadata)}::jsonb,
+          ${observation.success}, ${JSON.stringify(observation.telemetry)}::text::jsonb,
+          ${JSON.stringify(observation.metadata)}::text::jsonb,
           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
         )
         ON CONFLICT (execution_id, variant_id, case_id) DO UPDATE SET

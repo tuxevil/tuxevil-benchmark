@@ -754,3 +754,10 @@ RAM and VRAM retain the collector's scope. Watt-hours integrate observed
 power samples only when coverage is sufficient for every wave on the same
 source and scope. When that condition fails, energy and energy per correct
 answer remain `null`.
+
+## PostgreSQL observations
+
+New observations store telemetry and metadata as JSONB objects. Existing
+observations stored as JSON strings remain readable through the application,
+with their original IDs and timestamps. Direct SQL over historical rows can
+check `jsonb_typeof(metadata)` before reading fields.
