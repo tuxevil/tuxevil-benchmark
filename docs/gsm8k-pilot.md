@@ -87,3 +87,22 @@ consumes jobs. In Churn Lab, select one GSM8K case against an idle target and
 check that the stored turn includes its completion status and that the report
 counts it once. If deployment fails, redeploy the previous healthy revision
 through Coolify. Leave the additive columns in place.
+
+## MGSM in Spanish
+
+Select **MGSM ES tuxevil-lite** in Churn Lab to run three cases from the
+original Spanish MGSM test split. The source is
+[Google Research's pinned MGSM TSV](https://github.com/google-research/url-nlp/blob/452a21ad3dae5668c06ceeac21ff073e1e40f9be/mgsm/mgsm_es.tsv),
+by the authors of *Language Models Are Multilingual Chain-of-Thought
+Reasoners* (Shi et al., ICLR 2023). The bundled data is attributed to
+the MGSM authors and distributed under CC BY 4.0 with the accompanying
+`src/lib/benchmark-data/mgsm-es.LICENSE`.
+
+The adapter packages unchanged Spanish questions and source answers from
+zero-based rows 0, 124, and 230. The TSV has 250 rows. Its digest and the
+selected case IDs are in the benchmark catalog. The adapter removes source
+thousands separators from the grading key. It requests a standalone integer
+without separators and compares the trimmed answer exactly. For example,
+the source answer `276,000` requires `276000` in this protocol. The prompt is an
+adapted zero-shot direct-answer prompt. This score has no official MGSM or
+LightEval comparability and describes only the selected cases.

@@ -65,6 +65,13 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
       response.end(JSON.stringify({ message, done: true, done_reason: "stop" }));
       return;
     }
+    if (body.messages[0].content === PUBLIC_BENCHMARKS[3].systemPrompt) {
+      response.end(JSON.stringify({
+        message: { content: body.model === "correct" ? "276000" : "276,000" },
+        done: true, done_reason: body.model === "truncated" ? "length" : "stop",
+      }));
+      return;
+    }
     response.end(JSON.stringify({
       message: body.model === "incorrect"
         ? { content: "#### 19", tool_calls: unexpectedCalls }
@@ -183,6 +190,26 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
       }
     }, { timeout: 6_000 });
     expect(chatRequests.filter((item) => item.messages.at(-1)?.role === "tool")).toHaveLength(2);
+
+    const spanish = PUBLIC_BENCHMARKS[3];
+    const spanishCase = spanish.cases[2];
+    const spanishRun = await startExperimentExecution(experiment.id, {
+      scenarioIds: [spanishCase.scenarioId], successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(experiment.id, spanishRun.execution.id);
+      expect(report.publicBenchmarkResults).toHaveLength(4);
+      const observations = variants.map((variant) =>
+        report.publicBenchmarkResults!.find((item) => item.variantId === variant.id)!.observations[0]);
+      expect(observations.map((item) => item.metadata.outcome))
+        .toEqual(["PASS", "WRONG_ANSWER", "TRUNCATED", "PROVIDER_ERROR"]);
+      expect(observations[0].metadata).toMatchObject({
+        benchmark: { sourceCaseId: "es:test:230", suite: { language: "es", dataset: { license: "CC-BY-4.0" } } },
+      });
+    }, { timeout: 5_000 });
+    const spanishBaseline = spanishRun.runs.find((run) => run.variantId === variants[0].id)!;
+    const spanishStored = await loadPersistedState(spanishBaseline.testRunId);
+    expect(spanishStored?.runs[0].run.results[0].responseText).toBe("276000");
   } finally {
     server.close();
     vi.unstubAllEnvs();

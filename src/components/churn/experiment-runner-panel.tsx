@@ -139,6 +139,7 @@ export function ExperimentRunnerPanel({
     { key: "gsm8k-tuxevil-lite", label: "GSM8K tuxevil-lite" },
     { key: "native-tool-smoke-es", label: "Native tool smoke ES" },
     { key: "bfcl-v3-tuxevil-lite", label: "BFCL V3 tuxevil-lite" },
+    { key: "mgsm-es-tuxevil-lite", label: "MGSM ES tuxevil-lite" },
   ].map((suite) => ({ ...suite, scenarios: scenarios.filter((scenario) => scenario.suiteKey === suite.key) }));
 
   const saveBindings = async () => {
