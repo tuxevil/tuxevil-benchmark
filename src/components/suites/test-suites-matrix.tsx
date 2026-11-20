@@ -94,7 +94,7 @@ export function TestSuitesMatrix({
         const list = data.models ?? [];
         setAvailableModels(list);
         if (list.length > 0) {
-          if (activeProvider === "freetoken" || activeProvider === "llamacpp") {
+          if (activeProvider !== "ollama") {
             setOnboardingModel(list[0].name);
             setSelectedModels([list[0].name]);
           } else {
@@ -133,7 +133,7 @@ export function TestSuitesMatrix({
           const list = modData.models ?? [];
           setAvailableModels(list);
           if (list.length > 0) {
-            if (activeProvider === "freetoken" || activeProvider === "llamacpp") {
+            if (activeProvider !== "ollama") {
               setOnboardingModel(list[0].name);
               setSelectedModels([list[0].name]);
             } else {
@@ -534,12 +534,12 @@ export function TestSuitesMatrix({
               onClick={fetchOllamaModels}
               disabled={isRefreshingModels}
             >
-              {isRefreshingModels ? "🔄 Loading..." : `🔄 Refresh ${activeProvider === "freetoken" ? "FreeToken" : activeProvider === "llamacpp" ? "llama.cpp" : "Ollama"}`}
+              {isRefreshingModels ? "🔄 Loading..." : `🔄 Refresh ${activeProvider === "freetoken" ? "FreeToken" : activeProvider === "strata" ? "Strata" : activeProvider === "llamacpp" ? "llama.cpp" : "Ollama"}`}
             </button>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", marginBottom: "0.25rem" }}>
-            {(["ollama", "freetoken", "llamacpp"] as const).map((p) => {
-              const label = p === "freetoken" ? "⚡ FreeToken" : p === "llamacpp" ? "🦙 llama.cpp" : "🦙 Ollama";
+            {(["ollama", "freetoken", "llamacpp", "strata"] as const).map((p) => {
+              const label = p === "freetoken" ? "⚡ FreeToken" : p === "strata" ? "Strata" : p === "llamacpp" ? "🦙 llama.cpp" : "🦙 Ollama";
               const isSelected = activeProvider === p;
               return (
                 <button

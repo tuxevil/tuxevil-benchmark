@@ -12,7 +12,20 @@ describe("normalizeChatEndpoint", () => {
 });
 
 describe("streamOpenAICompatibleChat", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
+
+  it("allows a longer inference timeout for slow models", async () => {
+    vi.stubEnv("BENCHMARK_INFERENCE_TIMEOUT_MS", "900000");
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response('data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n')));
+    await streamOpenAICompatibleChat({
+      endpoint: "http://localhost:8000/v1", model: "model", provider: "strata",
+      messages: [{ role: "user", content: "Hello" }],
+      parameters: { temperature: 0.2, numCtx: 8192, topP: 0.9, repeatPenalty: 1.1, numPredict: 512 },
+      signal: new AbortController().signal,
+    });
+    expect(timeout).toHaveBeenCalledWith(900_000);
+  });
 
   it("parses streamed SSE chunks and calculates telemetry", async () => {
     vi.stubGlobal(

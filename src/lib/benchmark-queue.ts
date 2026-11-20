@@ -140,9 +140,11 @@ async function executeModel(runId: string, resultId: string) {
       const apiKey =
         provider === "freetoken"
           ? await benchmarkStore.getFreetokenApiKey()
-          : provider === "llamacpp"
-            ? await benchmarkStore.getLlamacppApiKey()
-            : null;
+          : provider === "strata"
+            ? await benchmarkStore.getStrataApiKey()
+            : provider === "llamacpp"
+              ? await benchmarkStore.getLlamacppApiKey()
+              : null;
 
       const response = await retryTransient(
         () =>
@@ -168,8 +170,8 @@ async function executeModel(runId: string, resultId: string) {
                 messages: conversation,
                 parameters: activeRun.parameters,
                 apiKey,
-                provider: provider === "llamacpp" ? "llamacpp" : "freetoken",
-                providerName: provider === "freetoken" ? "FreeToken" : "llama.cpp",
+                provider,
+                providerName: provider === "strata" ? "Strata" : provider === "freetoken" ? "FreeToken" : "llama.cpp",
                 signal: activeRun.cancelController.signal,
                 onToken: (token) => {
                   partialResponse += token;

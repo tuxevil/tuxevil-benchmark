@@ -1,0 +1,32 @@
+import { afterAll, beforeAll, expect, it, vi } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { getSqliteDb } from './sqlite-db';
+import { createBackup, clearResults, restoreBackup, loadBackup } from './result-backups';
+let directory: string;
+beforeAll(async()=>{
+ directory = await mkdtemp(path.join(os.tmpdir(),'result-backups-'));
+ vi.stubEnv('DATABASE_URL','');vi.stubEnv('SQLITE_PATH',path.join(directory,'test.db'));vi.stubEnv('RESULT_BACKUP_DIR',path.join(directory,'backups'));
+ const db=getSqliteDb();
+ db.prepare(`INSERT INTO test_runs (id,status,system_prompt,ollama_url,user_messages,selected_models,parameters,created_at,updated_at) VALUES ('run','COMPLETED','system','http://localhost','[]','["a","b"]','{}','today','today')`).run();
+ for(const model of ['a','b']) db.prepare(`INSERT INTO model_results (id,test_run_id,model_name,status,eval_status,response_text,created_at) VALUES (?, 'run', ?, 'COMPLETED','COMPLETED','answer','today')`).run(model,model);
+ db.prepare(`INSERT INTO model_result_turns (id,model_result_id,step_order,user_message,response_text) VALUES ('turn','a',1,'question','answer')`).run();
+});
+afterAll(async()=>{getSqliteDb().close();vi.unstubAllEnvs();await rm(directory,{recursive:true,force:true});});
+it('backs up, prevents stale cleanup, restores selected models and preserves turns without duplication',async()=>{
+ const backup=await createBackup('test');
+ expect(backup.results).toBe(2);
+ expect((await loadBackup(backup.id)).data.model_result_turns).toHaveLength(1);
+ getSqliteDb().prepare("UPDATE model_results SET response_text='changed' WHERE id='a'").run();
+ await expect(clearResults(backup.id)).rejects.toThrow('cambiaron');
+ getSqliteDb().prepare("UPDATE model_results SET response_text='answer' WHERE id='a'").run();
+ expect(await clearResults(backup.id)).toEqual({deleted:2});
+ expect(await restoreBackup(backup.id,['a'])).toEqual({restored:1,skipped:0});
+ expect(getSqliteDb().prepare('SELECT count(*) AS n FROM model_result_turns').get()).toEqual({n:1});
+ expect(await restoreBackup(backup.id,['a'])).toEqual({restored:0,skipped:1});
+ expect(await restoreBackup(backup.id,['b'])).toEqual({restored:1,skipped:0});
+ expect(JSON.parse((getSqliteDb().prepare('SELECT selected_models FROM test_runs').get() as {selected_models:string}).selected_models).sort()).toEqual(['a','b']);
+ getSqliteDb().prepare("UPDATE test_runs SET status='RUNNING'").run();
+ await expect(createBackup('active')).rejects.toThrow('pendientes');
+});

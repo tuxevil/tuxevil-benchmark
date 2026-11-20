@@ -10,6 +10,7 @@ export default function SuitesPage() {
   const router = useRouter();
   const [ollamaUrl, setOllamaUrl] = useState("http://127.0.0.1:11434");
   const [freetokenUrl, setFreetokenUrl] = useState("http://localhost:8000/v1");
+  const [strataUrl, setStrataUrl] = useState("http://10.128.128.254:8081/v1");
   const [llamacppUrl, setLlamacppUrl] = useState("http://localhost:8080");
   const [activeProvider, setActiveProvider] = useState<ModelProvider>("ollama");
   const [activeRun, setActiveRun] = useState<TestRun | null>(null);
@@ -23,6 +24,7 @@ export default function SuitesPage() {
           if (data.settings) {
             if (data.settings.ollamaUrl) setOllamaUrl(data.settings.ollamaUrl);
             if (data.settings.freetokenUrl) setFreetokenUrl(data.settings.freetokenUrl);
+            if (data.settings.strataUrl) setStrataUrl(data.settings.strataUrl);
             if (data.settings.llamacppUrl) setLlamacppUrl(data.settings.llamacppUrl);
             if (data.settings.activeProvider) setActiveProvider(data.settings.activeProvider);
           }
@@ -37,6 +39,8 @@ export default function SuitesPage() {
   const currentEndpoint =
     activeProvider === "freetoken"
       ? freetokenUrl
+      : activeProvider === "strata"
+        ? strataUrl
       : activeProvider === "llamacpp"
         ? llamacppUrl
         : ollamaUrl;
@@ -54,7 +58,7 @@ export default function SuitesPage() {
   }) => {
     const provider = params.provider ?? activeProvider;
     const providerUrl =
-      provider === "freetoken" ? freetokenUrl : provider === "llamacpp" ? llamacppUrl : ollamaUrl;
+      provider === "freetoken" ? freetokenUrl : provider === "strata" ? strataUrl : provider === "llamacpp" ? llamacppUrl : ollamaUrl;
 
     try {
       const res = await fetch("/api/runs", {

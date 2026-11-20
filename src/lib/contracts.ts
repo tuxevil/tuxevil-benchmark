@@ -72,9 +72,9 @@ export type EvaluatorEntry = {
   apiKeyConfigured: boolean;
 };
 
-export const modelProviderSchema = z.enum(["ollama", "freetoken", "llamacpp"]);
+export const modelProviderSchema = z.enum(["ollama", "freetoken", "llamacpp", "strata"]);
 export type ModelProvider = z.infer<typeof modelProviderSchema>;
-export const MODEL_PROVIDERS = ["ollama", "freetoken", "llamacpp"] as const;
+export const MODEL_PROVIDERS = ["ollama", "freetoken", "llamacpp", "strata"] as const;
 
 export const createRunSchema = z
   .object({
@@ -141,12 +141,15 @@ export const settingsUpdateSchema = z.object({
     .transform((value) => value ?? undefined),
   clearFreetokenApiKey: z.boolean().default(false),
   llamacppUrl: httpUrlSchema.optional(),
-  llamacppApiKey: z
+  llamacppApiKey: z.string().max(4_096).nullish().transform((value) => value ?? undefined),
+  strataUrl: httpUrlSchema.optional(),
+  strataApiKey: z
     .string()
     .max(4_096)
     .nullish()
     .transform((value) => value ?? undefined),
   clearLlamacppApiKey: z.boolean().default(false),
+  clearStrataApiKey: z.boolean().default(false),
   activeProvider: modelProviderSchema.optional(),
   evaluatorBaseUrl: z
     .union([
@@ -270,6 +273,8 @@ export type AppSettings = {
   freetokenApiKeyConfigured: boolean;
   llamacppUrl: string;
   llamacppApiKeyConfigured: boolean;
+  strataUrl: string;
+  strataApiKeyConfigured: boolean;
   activeProvider: ModelProvider;
   evaluatorBaseUrl: string;
   evaluatorModel: string;

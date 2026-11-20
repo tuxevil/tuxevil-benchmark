@@ -27,6 +27,12 @@ interface SettingsPanelProps {
   onLlamacppApiKeyChange?: (key: string) => void;
   llamacppApiKeyConfigured?: boolean;
   onClearLlamacppApiKey?: () => void;
+  strataUrl?: string;
+  onStrataUrlChange?: (url: string) => void;
+  strataApiKey?: string;
+  onStrataApiKeyChange?: (key: string) => void;
+  strataApiKeyConfigured?: boolean;
+  onClearStrataApiKey?: () => void;
   activeProvider?: ModelProvider;
   onActiveProviderChange?: (provider: ModelProvider) => void;
   evaluators: EvaluatorEntry[];
@@ -59,6 +65,12 @@ export function SettingsPanel({
   onLlamacppApiKeyChange,
   llamacppApiKeyConfigured = false,
   onClearLlamacppApiKey,
+  strataUrl = "http://10.128.128.254:8081/v1",
+  onStrataUrlChange,
+  strataApiKey = "",
+  onStrataApiKeyChange,
+  strataApiKeyConfigured = false,
+  onClearStrataApiKey,
   activeProvider = "ollama",
   onActiveProviderChange,
   evaluators,
@@ -140,7 +152,7 @@ export function SettingsPanel({
     <form className="settings-panel-form" onSubmit={handleSave}>
       <div className="settings-header">
         <h3>⚙️ System Configuration &amp; Integrations</h3>
-        <p>Adjust local model providers (Ollama, FreeToken, llama.cpp), the LLM Judge evaluator catalog, and default parameters.</p>
+        <p>Adjust local model providers (Ollama, FreeToken, llama.cpp, Strata), the LLM Judge evaluator catalog, and default parameters.</p>
       </div>
 
       {notice && <div className="notice-banner">{notice}</div>}
@@ -256,6 +268,46 @@ export function SettingsPanel({
             </div>
             <span className="field-help" style={{ fontSize: "0.8rem" }}>High-performance llama-server with telemetry timings.</span>
           </div>
+          {/* Strata Provider */}
+          <div className={`evaluator-card ${activeProvider === "strata" ? "active" : ""}`} style={{ padding: "1rem" }}>
+            <label className="evaluator-radio" style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <input
+                type="radio"
+                name="default-provider"
+                checked={activeProvider === "strata"}
+                onChange={() => onActiveProviderChange?.("strata")}
+              />
+              <strong style={{ fontSize: "1rem" }}>🦙 Strata</strong>
+              {activeProvider === "strata" && <span className="key-badge configured" style={{ marginLeft: "auto" }}>Active Default</span>}
+            </label>
+            <div className="input-group" style={{ marginBottom: "0.5rem" }}>
+              <label style={{ fontSize: "0.85rem" }}>Server URL:</label>
+              <input
+                type="url"
+                value={strataUrl}
+                onChange={(e) => onStrataUrlChange?.(e.target.value)}
+                placeholder="http://10.128.128.254:8081/v1"
+              />
+            </div>
+            <div className="input-group" style={{ marginBottom: "0.5rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <label style={{ fontSize: "0.85rem" }}>API Key (optional):</label>
+                {strataApiKeyConfigured && onClearStrataApiKey && (
+                  <button type="button" className="btn-ghost-sm danger" style={{ padding: "0 0.25rem", fontSize: "0.75rem" }} onClick={onClearStrataApiKey}>
+                    Clear key
+                  </button>
+                )}
+              </div>
+              <input
+                type="password"
+                value={strataApiKey}
+                onChange={(e) => onStrataApiKeyChange?.(e.target.value)}
+                placeholder={strataApiKeyConfigured ? "•••••••••••••••• (Configured)" : "Strata API key"}
+              />
+            </div>
+            <span className="field-help" style={{ fontSize: "0.8rem" }}>Local OpenAI-compatible model server.</span>
+          </div>
+
         </div>
       </div>
 

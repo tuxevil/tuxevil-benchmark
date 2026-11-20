@@ -42,6 +42,8 @@ function initSqliteTables(db: Database.Database) {
       freetoken_api_key_encrypted TEXT,
       llamacpp_url TEXT,
       llamacpp_api_key_encrypted TEXT,
+      strata_url TEXT,
+      strata_api_key_encrypted TEXT,
       active_provider TEXT,
       evaluator_base_url TEXT,
       evaluator_model TEXT,
@@ -338,8 +340,14 @@ function initSqliteTables(db: Database.Database) {
   if (!settingsColumns.some((column) => column.name === "llamacpp_url")) {
     migrationDb.exec("ALTER TABLE app_settings ADD COLUMN llamacpp_url TEXT");
   }
+  if (!settingsColumns.some((column) => column.name === "strata_url")) {
+    migrationDb.exec("ALTER TABLE app_settings ADD COLUMN strata_url TEXT");
+  }
   if (!settingsColumns.some((column) => column.name === "llamacpp_api_key_encrypted")) {
     migrationDb.exec("ALTER TABLE app_settings ADD COLUMN llamacpp_api_key_encrypted TEXT");
+  }
+  if (!settingsColumns.some((column) => column.name === "strata_api_key_encrypted")) {
+    migrationDb.exec("ALTER TABLE app_settings ADD COLUMN strata_api_key_encrypted TEXT");
   }
   if (!settingsColumns.some((column) => column.name === "active_provider")) {
     migrationDb.exec("ALTER TABLE app_settings ADD COLUMN active_provider TEXT");
@@ -595,6 +603,9 @@ export function sqliteLoadSettings(): {
   llamacppUrl: string;
   llamacppApiKey: string | null;
   llamacppApiKeyConfigured: boolean;
+  strataUrl: string;
+  strataApiKey: string | null;
+  strataApiKeyConfigured: boolean;
   activeProvider: import("@/lib/contracts").ModelProvider;
   evaluators: EvaluatorEntry[];
   activeEvaluatorId: string | null;
@@ -633,6 +644,12 @@ export function sqliteLoadSettings(): {
       llamacppApiKey = decryptSecret(String(row.llamacpp_api_key_encrypted));
     } catch {}
   }
+  let strataApiKey: string | null = null;
+  if (row.strata_api_key_encrypted) {
+    try {
+      strataApiKey = decryptSecret(String(row.strata_api_key_encrypted));
+    } catch {}
+  }
 
   return {
     ollamaUrl: String(row.ollama_url || "http://localhost:11434"),
@@ -642,6 +659,9 @@ export function sqliteLoadSettings(): {
     llamacppUrl: String(row.llamacpp_url || "http://localhost:8080"),
     llamacppApiKey,
     llamacppApiKeyConfigured: Boolean(row.llamacpp_api_key_encrypted),
+    strataUrl: String(row.strata_url || "http://10.128.128.254:8081/v1"),
+    strataApiKey,
+    strataApiKeyConfigured: Boolean(row.strata_api_key_encrypted),
     activeProvider: (String(row.active_provider || "ollama") as import("@/lib/contracts").ModelProvider),
     evaluators,
     activeEvaluatorId,
@@ -658,6 +678,9 @@ export function sqlitePersistSettings(settings: {
   llamacppUrl?: string;
   llamacppApiKey?: string | null;
   clearLlamacppApiKey?: boolean;
+  strataUrl?: string;
+  strataApiKey?: string | null;
+  clearStrataApiKey?: boolean;
   activeProvider?: import("@/lib/contracts").ModelProvider;
   evaluators: EvaluatorEntry[];
   activeEvaluatorId: string | null;
@@ -681,16 +704,24 @@ export function sqlitePersistSettings(settings: {
   } else if (settings.llamacppApiKey) {
     llamacppEncrypted = encryptSecret(settings.llamacppApiKey);
   }
+  let strataEncrypted = existing?.strata_api_key_encrypted ? String(existing.strata_api_key_encrypted) : null;
+  if (settings.clearStrataApiKey) {
+    strataEncrypted = null;
+  } else if (settings.strataApiKey) {
+    strataEncrypted = encryptSecret(settings.strataApiKey);
+  }
 
   getSqliteDb().prepare(`
-    INSERT INTO app_settings (id, ollama_url, freetoken_url, freetoken_api_key_encrypted, llamacpp_url, llamacpp_api_key_encrypted, active_provider, evaluator_base_url, evaluator_model, evaluator_api_key_encrypted, active_evaluator_id, parameters_json, updated_at)
-    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO app_settings (id, ollama_url, freetoken_url, freetoken_api_key_encrypted, llamacpp_url, llamacpp_api_key_encrypted, strata_url, strata_api_key_encrypted, active_provider, evaluator_base_url, evaluator_model, evaluator_api_key_encrypted, active_evaluator_id, parameters_json, updated_at)
+    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       ollama_url = excluded.ollama_url,
       freetoken_url = excluded.freetoken_url,
       freetoken_api_key_encrypted = excluded.freetoken_api_key_encrypted,
       llamacpp_url = excluded.llamacpp_url,
       llamacpp_api_key_encrypted = excluded.llamacpp_api_key_encrypted,
+      strata_url = excluded.strata_url,
+      strata_api_key_encrypted = excluded.strata_api_key_encrypted,
       active_provider = excluded.active_provider,
       evaluator_base_url = excluded.evaluator_base_url,
       evaluator_model = excluded.evaluator_model,
@@ -704,6 +735,8 @@ export function sqlitePersistSettings(settings: {
     freetokenEncrypted,
     settings.llamacppUrl ?? (existing?.llamacpp_url ? String(existing.llamacpp_url) : "http://localhost:8080"),
     llamacppEncrypted,
+    settings.strataUrl ?? (existing?.strata_url ? String(existing.strata_url) : "http://10.128.128.254:8081/v1"),
+    strataEncrypted,
     settings.activeProvider ?? (existing?.active_provider ? String(existing.active_provider) : "ollama"),
     active?.baseUrl ?? null,
     active?.model ?? null,

@@ -29,6 +29,8 @@ type SettingsPayload = {
     freetokenApiKeyConfigured?: boolean;
     llamacppUrl?: string;
     llamacppApiKeyConfigured?: boolean;
+    strataUrl?: string;
+    strataApiKeyConfigured?: boolean;
     activeProvider?: ModelProvider;
     evaluators?: Array<{ id: string; label: string; baseUrl: string; model: string; apiKeyConfigured: boolean }>;
     activeEvaluatorId?: string | null;
@@ -50,6 +52,9 @@ export function BenchmarkDashboard() {
   const [llamacppUrl, setLlamacppUrl] = useState("http://localhost:8080");
   const [llamacppApiKey, setLlamacppApiKey] = useState("");
   const [llamacppApiKeyConfigured, setLlamacppApiKeyConfigured] = useState(false);
+  const [strataUrl, setStrataUrl] = useState("http://10.128.128.254:8081/v1");
+  const [strataApiKey, setStrataApiKey] = useState("");
+  const [strataApiKeyConfigured, setStrataApiKeyConfigured] = useState(false);
   const [activeProvider, setActiveProvider] = useState<ModelProvider>("ollama");
 
   const [evaluators, setEvaluators] = useState<Array<{ id: string; label: string; baseUrl: string; model: string; apiKeyConfigured: boolean }>>([]);
@@ -137,6 +142,8 @@ export function BenchmarkDashboard() {
           if (payload.settings.freetokenApiKeyConfigured !== undefined) setFreetokenApiKeyConfigured(payload.settings.freetokenApiKeyConfigured);
           if (payload.settings.llamacppUrl) setLlamacppUrl(payload.settings.llamacppUrl);
           if (payload.settings.llamacppApiKeyConfigured !== undefined) setLlamacppApiKeyConfigured(payload.settings.llamacppApiKeyConfigured);
+          if (payload.settings.strataUrl) setStrataUrl(payload.settings.strataUrl);
+          if (payload.settings.strataApiKeyConfigured !== undefined) setStrataApiKeyConfigured(payload.settings.strataApiKeyConfigured);
           if (payload.settings.activeProvider) setActiveProvider(payload.settings.activeProvider);
           if (payload.settings.evaluators) setEvaluators(payload.settings.evaluators);
           if (payload.settings.activeEvaluatorId !== undefined) setActiveEvaluatorId(payload.settings.activeEvaluatorId);
@@ -294,12 +301,12 @@ export function BenchmarkDashboard() {
   };
 
   const currentEndpoint =
-    activeProvider === "freetoken" ? freetokenUrl : activeProvider === "llamacpp" ? llamacppUrl : ollamaUrl;
+    activeProvider === "freetoken" ? freetokenUrl : activeProvider === "strata" ? strataUrl : activeProvider === "llamacpp" ? llamacppUrl : ollamaUrl;
 
   // Other Handlers
   const discoverModels = async (providerOverride?: ModelProvider) => {
     const provider = providerOverride ?? activeProvider;
-    const endpoint = provider === "freetoken" ? freetokenUrl : provider === "llamacpp" ? llamacppUrl : ollamaUrl;
+    const endpoint = provider === "freetoken" ? freetokenUrl : provider === "strata" ? strataUrl : provider === "llamacpp" ? llamacppUrl : ollamaUrl;
     setIsDiscovering(true);
     setNotice("");
     try {
@@ -327,7 +334,7 @@ export function BenchmarkDashboard() {
   }) => {
     const provider = input.provider ?? activeProvider;
     const providerUrl =
-      provider === "freetoken" ? freetokenUrl : provider === "llamacpp" ? llamacppUrl : ollamaUrl;
+      provider === "freetoken" ? freetokenUrl : provider === "strata" ? strataUrl : provider === "llamacpp" ? llamacppUrl : ollamaUrl;
 
     setIsStarting(true);
     setNotice("");
@@ -418,6 +425,7 @@ export function BenchmarkDashboard() {
         ollamaUrl,
         freetokenUrl,
         llamacppUrl,
+        strataUrl,
         activeProvider,
         parameters: {
           temperature: Number(parameters.temperature),
@@ -434,6 +442,9 @@ export function BenchmarkDashboard() {
       if (llamacppApiKey.trim()) {
         payload.llamacppApiKey = llamacppApiKey.trim();
       }
+      if (strataApiKey.trim()) {
+        payload.strataApiKey = strataApiKey.trim();
+      }
 
       const res = await fetch("/api/settings", {
         method: "PATCH",
@@ -446,8 +457,10 @@ export function BenchmarkDashboard() {
       if (data.settings.activeEvaluatorId !== undefined) setActiveEvaluatorId(data.settings.activeEvaluatorId);
       if (data.settings.freetokenApiKeyConfigured !== undefined) setFreetokenApiKeyConfigured(data.settings.freetokenApiKeyConfigured);
       if (data.settings.llamacppApiKeyConfigured !== undefined) setLlamacppApiKeyConfigured(data.settings.llamacppApiKeyConfigured);
+      if (data.settings.strataApiKeyConfigured !== undefined) setStrataApiKeyConfigured(data.settings.strataApiKeyConfigured);
       setFreetokenApiKey("");
       setLlamacppApiKey("");
+      setStrataApiKey("");
       setNotice("Settings saved successfully.");
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Error saving settings.");
@@ -657,6 +670,11 @@ export function BenchmarkDashboard() {
               llamacppApiKey={llamacppApiKey}
               onLlamacppApiKeyChange={setLlamacppApiKey}
               llamacppApiKeyConfigured={llamacppApiKeyConfigured}
+              strataUrl={strataUrl}
+              onStrataUrlChange={setStrataUrl}
+              strataApiKey={strataApiKey}
+              onStrataApiKeyChange={setStrataApiKey}
+              strataApiKeyConfigured={strataApiKeyConfigured}
               activeProvider={activeProvider}
               onActiveProviderChange={setActiveProvider}
               evaluators={evaluators}

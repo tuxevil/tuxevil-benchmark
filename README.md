@@ -338,6 +338,7 @@ For multi-user or background worker processing:
 | `SQLITE_PATH` | File path for SQLite database in local mode. | `./tuxevil-benchmark.db` (legacy `compare.db` auto-detected when unset) |
 | `DATABASE_URL` | PostgreSQL connection string. Enables Postgres persistence. | Empty |
 | `REDIS_URL` | Redis connection string. Enables BullMQ queuing and SSE events. | Empty |
+| `BENCHMARK_INFERENCE_TIMEOUT_MS` | Per-request timeout in milliseconds for OpenAI-compatible inference; set on the worker in durable mode. | `120000` |
 | `POSTGRES_PORT` | Host port exposed by the docker-compose PostgreSQL service. | `55432` |
 | `POSTGRES_PASSWORD` | Password for the docker-compose PostgreSQL service. | `local-development-only` |
 | `REDIS_PASSWORD` | Password for the docker-compose Redis service. | `local-development-only` |
@@ -599,3 +600,18 @@ Contributions are welcome! Please review [CONTRIBUTING.md](CONTRIBUTING.md) for 
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+### Respaldos de resultados
+
+Abre **Respaldos** en la navegación (`/backups`) para crear un respaldo con nombre,
+explorar respuestas y evaluaciones y restaurar todos sus modelos o solo los seleccionados.
+La restauración conserva los resultados existentes y omite duplicados. Para empezar de
+cero, selecciona un respaldo que coincida con los datos actuales y escribe
+`LIMPIAR RESULTADOS`; se conservan los escenarios, ajustes y respaldos. Estas operaciones
+requieren que no haya ejecuciones pendientes o en curso.
+
+Los archivos se guardan en `.backups/results` (configurable con `RESULT_BACKUP_DIR`),
+fuera del control de versiones. Son respaldos locales del servidor: conserva también
+una copia de ese directorio en tu sistema de respaldo externo. Incluyen configuración de
+las ejecuciones y deben tratarse como datos privados. No incluyen configuración global,
+catálogos de escenarios ni las bases de datos de otros módulos como Churn Lab.

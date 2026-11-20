@@ -70,6 +70,9 @@ export type PersistedSettings = {
   llamacppUrl?: string;
   llamacppApiKey?: string | null;
   llamacppApiKeyConfigured?: boolean;
+  strataUrl?: string;
+  strataApiKey?: string | null;
+  strataApiKeyConfigured?: boolean;
   activeProvider?: import("@/lib/contracts").ModelProvider;
   evaluators: EvaluatorEntry[];
   activeEvaluatorId: string | null;
@@ -866,6 +869,12 @@ export async function loadPersistedSettings(): Promise<PersistedSettings | null>
       llamacppApiKey = decryptSecret(String(row.llamacpp_api_key_encrypted));
     } catch {}
   }
+  let strataApiKey: string | null = null;
+  if (row.strata_api_key_encrypted) {
+    try {
+      strataApiKey = decryptSecret(String(row.strata_api_key_encrypted));
+    } catch {}
+  }
 
   return {
     ollamaUrl: String(row.ollama_url || "http://localhost:11434"),
@@ -875,6 +884,9 @@ export async function loadPersistedSettings(): Promise<PersistedSettings | null>
     llamacppUrl: String(row.llamacpp_url || "http://localhost:8080"),
     llamacppApiKey,
     llamacppApiKeyConfigured: Boolean(row.llamacpp_api_key_encrypted),
+    strataUrl: String(row.strata_url || "http://10.128.128.254:8081/v1"),
+    strataApiKey,
+    strataApiKeyConfigured: Boolean(row.strata_api_key_encrypted),
     activeProvider: (String(row.active_provider || "ollama") as import("@/lib/contracts").ModelProvider),
     evaluators,
     activeEvaluatorId,
@@ -995,6 +1007,9 @@ export async function persistSettings(settings: {
   llamacppUrl?: string;
   llamacppApiKey?: string | null;
   clearLlamacppApiKey?: boolean;
+  strataUrl?: string;
+  strataApiKey?: string | null;
+  clearStrataApiKey?: boolean;
   activeProvider?: import("@/lib/contracts").ModelProvider;
   evaluators: EvaluatorEntry[];
   activeEvaluatorId: string | null;
@@ -1007,7 +1022,7 @@ export async function persistSettings(settings: {
   }
   const active = settings.evaluators.find((evaluator) => evaluator.id === settings.activeEvaluatorId) ?? null;
   const encrypted = settings.evaluatorApiKey ? encryptSecret(settings.evaluatorApiKey) : null;
-  const [existing] = (await getClient()!`SELECT freetoken_api_key_encrypted, llamacpp_api_key_encrypted, freetoken_url, llamacpp_url, active_provider FROM app_settings WHERE id = 1`) as [Record<string, unknown> | undefined];
+  const [existing] = (await getClient()!`SELECT freetoken_api_key_encrypted, llamacpp_api_key_encrypted, strata_api_key_encrypted, freetoken_url, llamacpp_url, strata_url, active_provider FROM app_settings WHERE id = 1`) as [Record<string, unknown> | undefined];
 
   let freetokenEncrypted = existing?.freetoken_api_key_encrypted ? String(existing.freetoken_api_key_encrypted) : null;
   if (settings.clearFreetokenApiKey) {
@@ -1022,9 +1037,15 @@ export async function persistSettings(settings: {
   } else if (settings.llamacppApiKey) {
     llamacppEncrypted = encryptSecret(settings.llamacppApiKey);
   }
+  let strataEncrypted = existing?.strata_api_key_encrypted ? String(existing.strata_api_key_encrypted) : null;
+  if (settings.clearStrataApiKey) {
+    strataEncrypted = null;
+  } else if (settings.strataApiKey) {
+    strataEncrypted = encryptSecret(settings.strataApiKey);
+  }
 
   await getClient()!`
-    INSERT INTO app_settings (id, ollama_url, freetoken_url, freetoken_api_key_encrypted, llamacpp_url, llamacpp_api_key_encrypted, active_provider, evaluator_base_url, evaluator_model, evaluator_api_key_encrypted, active_evaluator_id, parameters_json, updated_at)
+    INSERT INTO app_settings (id, ollama_url, freetoken_url, freetoken_api_key_encrypted, llamacpp_url, llamacpp_api_key_encrypted, strata_url, strata_api_key_encrypted, active_provider, evaluator_base_url, evaluator_model, evaluator_api_key_encrypted, active_evaluator_id, parameters_json, updated_at)
     VALUES (
       1,
       ${settings.ollamaUrl},
@@ -1032,6 +1053,8 @@ export async function persistSettings(settings: {
       ${freetokenEncrypted},
       ${settings.llamacppUrl ?? (existing?.llamacpp_url ? String(existing.llamacpp_url) : "http://localhost:8080")},
       ${llamacppEncrypted},
+      ${settings.strataUrl ?? (existing?.strata_url ? String(existing.strata_url) : "http://10.128.128.254:8081/v1")},
+      ${strataEncrypted},
       ${settings.activeProvider ?? (existing?.active_provider ? String(existing.active_provider) : "ollama")},
       ${active?.baseUrl ?? null},
       ${active?.model ?? null},
@@ -1046,6 +1069,8 @@ export async function persistSettings(settings: {
       freetoken_api_key_encrypted = EXCLUDED.freetoken_api_key_encrypted,
       llamacpp_url = EXCLUDED.llamacpp_url,
       llamacpp_api_key_encrypted = EXCLUDED.llamacpp_api_key_encrypted,
+      strata_url = EXCLUDED.strata_url,
+      strata_api_key_encrypted = EXCLUDED.strata_api_key_encrypted,
       active_provider = EXCLUDED.active_provider,
       evaluator_base_url = EXCLUDED.evaluator_base_url,
       evaluator_model = EXCLUDED.evaluator_model,
@@ -1543,6 +1568,8 @@ function getClient() {
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS freetoken_api_key_encrypted TEXT;
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS llamacpp_url TEXT;
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS llamacpp_api_key_encrypted TEXT;
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS strata_url TEXT;
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS strata_api_key_encrypted TEXT;
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS active_provider VARCHAR(32) DEFAULT 'ollama';
       ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS provider VARCHAR(32) DEFAULT 'ollama';
       ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS provider_url TEXT;

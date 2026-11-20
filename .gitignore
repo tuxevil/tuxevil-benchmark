@@ -30,3 +30,27 @@ test-results/
 
 # Diagnostic scratch scripts
 diag_*.ts
+
+# Local result backups
+.backups/
+
+# Private telemetry configuration
+.env.telemetry
+.env.resources
+__pycache__/
+
+# Private local state and generated benchmark data
+.beads/interactions.jsonl
+.env.*
+!.env.example
+*.jsonl
+worker.log
+BENCHMARK_REPORT_*.md
+landing/public/data/public-snapshot.json
+*_wire_diagnostic*
+*_reasoning_bug_report.md
+enqueue_one.ts
+enqueue_priority.ts
+run_one.ts
+
+admin-access.txt

@@ -24,6 +24,8 @@ ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS freetoken_url TEXT;
 ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS freetoken_api_key_encrypted TEXT;
 ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS llamacpp_url TEXT;
 ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS llamacpp_api_key_encrypted TEXT;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS strata_url TEXT;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS strata_api_key_encrypted TEXT;
 ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS active_provider VARCHAR(32) DEFAULT 'ollama';
 
 CREATE TABLE IF NOT EXISTS evaluators (

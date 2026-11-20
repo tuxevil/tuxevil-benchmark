@@ -113,6 +113,11 @@ export const benchmarkStore = {
     return snapshot(run);
   },
 
+  invalidateResultCache() {
+    state.runs.clear();
+    state.hydrated = false;
+  },
+
   async hydrate() {
     if (state.hydrationPromise) return state.hydrationPromise;
     state.hydrationPromise = (async () => {
@@ -142,6 +147,8 @@ export const benchmarkStore = {
       freetokenApiKeyConfigured: Boolean(state.settings.freetokenApiKeyConfigured || state.settings.freetokenApiKey),
       llamacppUrl: state.settings.llamacppUrl ?? "http://localhost:8080",
       llamacppApiKeyConfigured: Boolean(state.settings.llamacppApiKeyConfigured || state.settings.llamacppApiKey),
+      strataUrl: state.settings.strataUrl ?? "http://10.128.128.254:8081/v1",
+      strataApiKeyConfigured: Boolean(state.settings.strataApiKeyConfigured || state.settings.strataApiKey),
       activeProvider: state.settings.activeProvider ?? "ollama",
       evaluatorBaseUrl: active?.baseUrl ?? "",
       evaluatorModel: active?.model ?? "",
@@ -158,6 +165,9 @@ export const benchmarkStore = {
 
   async getLlamacppApiKey(): Promise<string | null> {
     return state.settings.llamacppApiKey ?? null;
+  },
+  async getStrataApiKey(): Promise<string | null> {
+    return state.settings.strataApiKey ?? null;
   },
 
   getEvaluatorConfig(): CreateRunInput["evaluator"] {
@@ -382,6 +392,9 @@ export const benchmarkStore = {
     llamacppUrl?: string;
     llamacppApiKey?: string;
     clearLlamacppApiKey?: boolean;
+    strataUrl?: string;
+    strataApiKey?: string;
+    clearStrataApiKey?: boolean;
     activeProvider?: import("@/lib/contracts").ModelProvider;
     evaluatorBaseUrl?: string;
     evaluatorModel?: string;
@@ -434,6 +447,12 @@ export const benchmarkStore = {
     } else if (input.llamacppApiKey !== undefined) {
       llamacppApiKey = input.llamacppApiKey.trim() || null;
     }
+    let strataApiKey = state.settings.strataApiKey ?? null;
+    if (input.clearStrataApiKey) {
+      strataApiKey = null;
+    } else if (input.strataApiKey !== undefined) {
+      strataApiKey = input.strataApiKey.trim() || null;
+    }
 
     const nextSettings: PersistedSettings = {
       ollamaUrl: input.ollamaUrl ?? state.settings.ollamaUrl,
@@ -443,6 +462,9 @@ export const benchmarkStore = {
       llamacppUrl: input.llamacppUrl ?? state.settings.llamacppUrl,
       llamacppApiKey,
       llamacppApiKeyConfigured: Boolean(llamacppApiKey),
+      strataUrl: input.strataUrl ?? state.settings.strataUrl,
+      strataApiKey,
+      strataApiKeyConfigured: Boolean(strataApiKey),
       activeProvider: input.activeProvider ?? state.settings.activeProvider ?? "ollama",
       evaluators,
       activeEvaluatorId,
@@ -850,6 +872,9 @@ function normalizePersistedSettings(settings: PersistedSettings): PersistedSetti
     llamacppUrl: legacy.llamacppUrl || "http://localhost:8080",
     llamacppApiKey: legacy.llamacppApiKey ?? null,
     llamacppApiKeyConfigured: Boolean(legacy.llamacppApiKeyConfigured || legacy.llamacppApiKey),
+    strataUrl: legacy.strataUrl || "http://10.128.128.254:8081/v1",
+    strataApiKey: legacy.strataApiKey ?? null,
+    strataApiKeyConfigured: Boolean(legacy.strataApiKeyConfigured || legacy.strataApiKey),
     activeProvider: legacy.activeProvider ?? "ollama",
     evaluators,
     activeEvaluatorId: legacy.activeEvaluatorId ?? (evaluators.length > 0 ? evaluators[0].id : null),
@@ -874,6 +899,9 @@ function defaultSettings(): PersistedSettings {
     llamacppUrl: process.env.LLAMACPP_URL ?? "http://localhost:8080",
     llamacppApiKey: process.env.LLAMACPP_API_KEY ?? null,
     llamacppApiKeyConfigured: Boolean(process.env.LLAMACPP_API_KEY),
+    strataUrl: process.env.STRATA_URL ?? "http://10.128.128.254:8081/v1",
+    strataApiKey: process.env.STRATA_API_KEY ?? null,
+    strataApiKeyConfigured: Boolean(process.env.STRATA_API_KEY),
     activeProvider: "ollama",
     evaluators,
     activeEvaluatorId: evaluators.length > 0 ? "env-evaluator" : null,

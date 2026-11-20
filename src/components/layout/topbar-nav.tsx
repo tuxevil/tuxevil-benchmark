@@ -5,7 +5,7 @@ import type { ModelProvider, TestRun } from "@/lib/contracts";
 import { useTheme } from "@/components/theme-provider";
 import { PROJECT_BRAND } from "@/lib/brand";
 
-export type ActiveTab = "analytics" | "suites" | "churn" | "monitor" | "settings" | "wizard" | "history";
+export type ActiveTab = "backups" | "analytics" | "suites" | "churn" | "monitor" | "settings" | "wizard" | "history";
 
 interface TopbarNavProps {
   activeTab: ActiveTab;
@@ -33,7 +33,7 @@ export function TopbarNav({
   const isSettingsActive = activeTab === "settings";
 
   const providerLabel =
-    activeProvider === "freetoken" ? "FreeToken" : activeProvider === "llamacpp" ? "llama.cpp" : "Ollama";
+    activeProvider === "freetoken" ? "FreeToken" : activeProvider === "strata" ? "Strata" : activeProvider === "llamacpp" ? "llama.cpp" : "Ollama";
 
   const handleNav = (tab: ActiveTab) => {
     if (onTabChange) {
@@ -54,6 +54,7 @@ export function TopbarNav({
       </div>
 
       <nav className="topbar-menu">
+        <Link href="/backups" className={`topbar-item ${activeTab === "backups" ? "active" : ""}`}><span className="nav-icon">▣</span><span className="nav-label">Respaldos</span></Link>
         <Link
           href="/"
           className={`topbar-item ${isAnalyticsActive ? "active" : ""}`}

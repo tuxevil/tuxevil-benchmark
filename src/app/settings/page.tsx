@@ -11,8 +11,11 @@ export default function SettingsPage() {
   const [freetokenApiKey, setFreetokenApiKey] = useState("");
   const [freetokenApiKeyConfigured, setFreetokenApiKeyConfigured] = useState(false);
   const [llamacppUrl, setLlamacppUrl] = useState("http://localhost:8080");
+  const [strataUrl, setStrataUrl] = useState("http://10.128.128.254:8081/v1");
   const [llamacppApiKey, setLlamacppApiKey] = useState("");
+  const [strataApiKey, setStrataApiKey] = useState("");
   const [llamacppApiKeyConfigured, setLlamacppApiKeyConfigured] = useState(false);
+  const [strataApiKeyConfigured, setStrataApiKeyConfigured] = useState(false);
   const [activeProvider, setActiveProvider] = useState<ModelProvider>("ollama");
 
   const [evaluators, setEvaluators] = useState<EvaluatorEntry[]>([]);
@@ -38,7 +41,9 @@ export default function SettingsPage() {
             setFreetokenUrl(data.settings.freetokenUrl || "http://localhost:8000/v1");
             setFreetokenApiKeyConfigured(Boolean(data.settings.freetokenApiKeyConfigured));
             setLlamacppUrl(data.settings.llamacppUrl || "http://localhost:8080");
+            setStrataUrl(data.settings.strataUrl || "http://10.128.128.254:8081/v1");
             setLlamacppApiKeyConfigured(Boolean(data.settings.llamacppApiKeyConfigured));
+            setStrataApiKeyConfigured(Boolean(data.settings.strataApiKeyConfigured));
             setActiveProvider(data.settings.activeProvider || "ollama");
 
             setEvaluators(data.settings.evaluators ?? []);
@@ -125,6 +130,7 @@ export default function SettingsPage() {
         ollamaUrl,
         freetokenUrl,
         llamacppUrl,
+        strataUrl,
         activeProvider,
         parameters: {
           temperature: Number(parameters.temperature),
@@ -141,6 +147,9 @@ export default function SettingsPage() {
       if (llamacppApiKey.trim()) {
         payload.llamacppApiKey = llamacppApiKey.trim();
       }
+      if (strataApiKey.trim()) {
+        payload.strataApiKey = strataApiKey.trim();
+      }
 
       const res = await fetch("/api/settings", {
         method: "PATCH",
@@ -156,8 +165,10 @@ export default function SettingsPage() {
         if (data.settings) {
           setFreetokenApiKeyConfigured(Boolean(data.settings.freetokenApiKeyConfigured));
           setLlamacppApiKeyConfigured(Boolean(data.settings.llamacppApiKeyConfigured));
+          setStrataApiKeyConfigured(Boolean(data.settings.strataApiKeyConfigured));
           setFreetokenApiKey("");
           setLlamacppApiKey("");
+          setStrataApiKey("");
         }
       }
     } catch (err) {
@@ -169,7 +180,7 @@ export default function SettingsPage() {
   };
 
   const currentEndpoint =
-    activeProvider === "freetoken" ? freetokenUrl : activeProvider === "llamacpp" ? llamacppUrl : ollamaUrl;
+    activeProvider === "freetoken" ? freetokenUrl : activeProvider === "strata" ? strataUrl : activeProvider === "llamacpp" ? llamacppUrl : ollamaUrl;
 
   return (
     <main className="shell">
@@ -183,10 +194,15 @@ export default function SettingsPage() {
         onFreetokenApiKeyChange={setFreetokenApiKey}
         freetokenApiKeyConfigured={freetokenApiKeyConfigured}
         llamacppUrl={llamacppUrl}
+        strataUrl={strataUrl}
         onLlamacppUrlChange={setLlamacppUrl}
+        onStrataUrlChange={setStrataUrl}
         llamacppApiKey={llamacppApiKey}
+        strataApiKey={strataApiKey}
         onLlamacppApiKeyChange={setLlamacppApiKey}
+        onStrataApiKeyChange={setStrataApiKey}
         llamacppApiKeyConfigured={llamacppApiKeyConfigured}
+        strataApiKeyConfigured={strataApiKeyConfigured}
         activeProvider={activeProvider}
         onActiveProviderChange={setActiveProvider}
         evaluators={evaluators}
