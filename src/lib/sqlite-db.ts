@@ -1,3 +1,4 @@
+import { parsePersistedParameters } from "@/lib/persisted-parameters";
 import Database from "better-sqlite3";
 import type {
   BenchmarkParameters,
@@ -650,20 +651,7 @@ export function sqliteLoadSettings(): {
   const evaluators = sqliteListEvaluators();
   const activeEvaluatorId = row.active_evaluator_id ? String(row.active_evaluator_id) : null;
   const active = evaluators.find((evaluator) => evaluator.id === activeEvaluatorId) ?? null;
-  let params: BenchmarkParameters = { temperature: 0.2, numCtx: 8192, topP: 0.9, repeatPenalty: 1.1, numPredict: 4096 };
-  if (row.parameters_json) {
-    try {
-      const parsed = JSON.parse(String(row.parameters_json));
-      params = {
-        temperature: Number(parsed.temperature ?? params.temperature),
-        numCtx: Number(parsed.numCtx ?? params.numCtx),
-        topP: Number(parsed.topP ?? params.topP),
-        repeatPenalty: Number(parsed.repeatPenalty ?? params.repeatPenalty),
-        numPredict: Number(parsed.numPredict ?? params.numPredict),
-        seed: parsed.seed === undefined || parsed.seed === null ? undefined : Number(parsed.seed),
-      };
-    } catch {}
-  }
+  const params = parsePersistedParameters(row.parameters_json);
 
   let freetokenApiKey: string | null = null;
   if (row.freetoken_api_key_encrypted) {

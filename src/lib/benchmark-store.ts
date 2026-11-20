@@ -465,6 +465,10 @@ export const benchmarkStore = {
       strataApiKey = input.strataApiKey.trim() || null;
     }
 
+    const reasoningEffort = input.parameters?.reasoningEffort ?? state.settings.parameters.reasoningEffort;
+    const parameters = input.parameters
+      ? { ...input.parameters, ...(reasoningEffort === undefined ? {} : { reasoningEffort }) }
+      : state.settings.parameters;
     const nextSettings: PersistedSettings = {
       ollamaUrl: input.ollamaUrl ?? state.settings.ollamaUrl,
       freetokenUrl: input.freetokenUrl ?? state.settings.freetokenUrl,
@@ -480,7 +484,7 @@ export const benchmarkStore = {
       evaluators,
       activeEvaluatorId,
       evaluatorApiKey,
-      parameters: input.parameters ?? state.settings.parameters,
+      parameters,
     };
     await persistSettings(nextSettings);
     state.settings = nextSettings;
