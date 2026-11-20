@@ -8,8 +8,8 @@ export const experimentObservationInputSchema = z.object({
   comparisonKind: comparisonKindSchema.default("EXACT"),
   canonicalValue: z.string().max(1_000_000),
   success: z.boolean().nullable().default(null),
-  telemetry: z.record(z.unknown()).default({}),
-  metadata: z.record(z.unknown()).default({}),
+  telemetry: z.record(z.string(), z.unknown()).default({}),
+  metadata: z.record(z.string(), z.unknown()).default({}),
 });
 
 export type ExperimentObservationInput = z.input<typeof experimentObservationInputSchema>;

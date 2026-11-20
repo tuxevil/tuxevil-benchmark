@@ -39,7 +39,7 @@ export const benchmarkParametersSchema = z.object({
   repeatPenalty: z.number().min(0).max(3),
   numPredict: z.number().int().min(1).max(32_768),
   seed: z.number().int().min(0).max(2_147_483_647).optional(),
-  reasoningEffort: reasoningEffortSchema.default("off").optional(),
+  reasoningEffort: reasoningEffortSchema.optional(),
 });
 
 export const evaluatorConfigSchema = z.object({
