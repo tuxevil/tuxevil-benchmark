@@ -14,6 +14,9 @@ COPY scripts/math500/requirements.txt /tmp/math500-requirements.txt
 RUN python3 -m venv /opt/math500 && /opt/math500/bin/pip install --no-cache-dir -r /tmp/math500-requirements.txt
 COPY . .
 RUN npm run build && npm prune --omit=dev --no-audit
+# npm retains Playwright through Next.js's optional peer dependency.
+RUN rm -rf node_modules/@playwright/test node_modules/playwright node_modules/playwright-core \
+    node_modules/.bin/playwright node_modules/.bin/playwright-core
 
 FROM base AS runtime
 ENV NODE_ENV=production
