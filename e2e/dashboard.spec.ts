@@ -428,13 +428,16 @@ test("Churn Lab exposes automatic Experiment Runner for a selected experiment", 
   await expect(runner.getByRole("button", { name: "Run 1 scenario", exact: true })).toBeVisible();
 });
 
-test("lists GSM8K provenance and protects opt-in scenarios", async ({ request, baseURL }) => {
+test("lists GSM8K and native tool provenance and protects opt-in scenarios", async ({ request, baseURL }) => {
   const external = await fetch(new URL("/api/scenarios?includePublicBenchmarks=true", baseURL));
   expect(external.status).toBe(401);
 
   const catalog = await request.get("/api/experiments/benchmarks");
   expect(catalog.ok()).toBeTruthy();
-  const { benchmarks: [suite] } = await catalog.json();
+  const { benchmarks: [suite, nativeTools] } = await catalog.json();
+  expect(nativeTools).toMatchObject({ id: "native-tool-smoke-es", modality: "native-tools", officiallyComparable: false });
+  expect(nativeTools.cases.map((entry: { sourceCaseId: string }) => entry.sourceCaseId))
+    .toEqual(["calculator-es", "battery-soc-es"]);
   expect(suite).toMatchObject({
     id: "gsm8k-tuxevil-lite",
     version: "1.0.0",

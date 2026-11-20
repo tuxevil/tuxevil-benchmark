@@ -199,8 +199,9 @@ export type TurnResult = Telemetry & {
   wireDiagnostics?: import("@/lib/providers/openai-client").WireDiagnostics | null;
   /** Protocol-level anomaly flags derived from the SSE stream. Always populated for OpenAI-compatible providers. */
   protocolDiagnostics?: import("@/lib/providers/openai-client").ProtocolDiagnostics | null;
-  /** Exact request body sent to the provider (no API key). Populated for OpenAI-compatible providers. */
+  /** Request diagnostics without credentials. Ollama tool continuations retain messages and tool schemas. */
   requestBody?: Record<string, unknown> | null;
+  toolCalls?: import("@/lib/providers/chat-tools").OpenAIToolCall[] | import("@/lib/providers/chat-tools").OllamaToolCall[] | null;
 };
 
 export type Evaluation = {

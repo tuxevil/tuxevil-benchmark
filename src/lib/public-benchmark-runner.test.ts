@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { expect, it, vi } from "vitest";
+import { NATIVE_TOOL_FIXTURES } from "@/lib/native-tool-fixtures";
 import { PUBLIC_BENCHMARKS } from "@/lib/public-benchmarks";
 
 it("runs a selected public case via the Ollama queue and persists scored and technical observations", async () => {
@@ -12,6 +13,7 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
   vi.stubEnv("DATABASE_URL", undefined);
   vi.stubEnv("REDIS_URL", undefined);
 
+  const unexpectedCalls = [{ function: { name: "add_numbers", arguments: { a: 17, b: 25 } } }];
   const chatRequests: Array<{ model: string; messages: Array<{ role: string; content: string }> }> = [];
   const server = createServer(async (request, response) => {
     if (request.url === "/api/tags") {
@@ -30,8 +32,31 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
       response.writeHead(400).end();
       return;
     }
+    if (body.tools?.length) {
+      const fixture = NATIVE_TOOL_FIXTURES.find((item) => item.name === body.tools[0].function.name);
+      if (!fixture) {
+        response.writeHead(400).end();
+        return;
+      }
+      const continuation = body.messages.at(-1).role === "tool";
+      const message = continuation
+        ? { content: fixture.expected }
+        : {
+          content: body.model === "correct" ? "" : fixture.expected,
+          tool_calls: [{
+            function: {
+              name: fixture.name,
+              arguments: body.model === "correct" ? fixture.args : { ...fixture.args, extra: true },
+            },
+          }],
+        };
+      response.end(JSON.stringify({ message, done: true, done_reason: "stop" }));
+      return;
+    }
     response.end(JSON.stringify({
-      message: { content: body.model === "incorrect" ? "#### 19" : "9 x 2\n#### 18" },
+      message: body.model === "incorrect"
+        ? { content: "#### 19", tool_calls: unexpectedCalls }
+        : { content: "9 x 2\n#### 18" },
       done: true,
       done_reason: body.model === "truncated" ? "length" : "stop",
       eval_count: 8,
@@ -96,6 +121,37 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
     const baselineRun = started.runs.find((run) => run.variantId === variants[0].id)!;
     const stored = await loadPersistedState(baselineRun.testRunId);
     expect(stored?.runs[0].run.results[0].responseText).toBe("9 x 2\n#### 18");
+    const wrongRun = started.runs.find((run) => run.variantId === variants[1].id)!;
+    const wrongStored = await loadPersistedState(wrongRun.testRunId);
+    expect(wrongStored?.runs[0].run.results[0].turns[0].toolCalls).toEqual(unexpectedCalls);
+
+    const nativeId = PUBLIC_BENCHMARKS[1].cases[0].scenarioId;
+    await expect(startExperimentExecution(experiment.id, {
+      scenarioIds: [selected.scenarioId, nativeId], successPolicy: "DETERMINISTIC",
+    })).rejects.toThrow("dedicated standard");
+    const native = await startExperimentExecution(experiment.id, {
+      scenarioIds: PUBLIC_BENCHMARKS[1].cases.map((item) => item.scenarioId), successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(experiment.id, native.execution.id);
+      expect(report.publicBenchmarkResults).toHaveLength(4);
+      const entries = variants.map((variant) => report.publicBenchmarkResults!.find((item) => item.variantId === variant.id)!);
+      expect(entries.map((item) => item.accuracy)).toEqual([1, 0, 0, null]);
+      expect(entries[1].observations[0].metadata.deterministicGrade).toMatchObject({ reason: "INVALID_ARGUMENTS" });
+    }, { timeout: 4_000 });
+    const continuation = chatRequests.filter((item) => item.messages.at(-1)?.role === "tool");
+    expect(continuation).toHaveLength(2);
+    expect(continuation.map((item) => item.messages.at(-1))).toContainEqual({
+      role: "tool", tool_name: "read_sensor", content: '{"sensor_id":"battery_soc","value":67,"unit":"%"}',
+    });
+    const nativeRun = native.runs.find((run) => run.variantId === variants[0].id && run.scenarioId === nativeId)!;
+    const nativeStored = await loadPersistedState(nativeRun.testRunId);
+    const turns = nativeStored?.runs[0].run.results[0].turns;
+    expect(turns).toHaveLength(2);
+    expect(turns?.[0].toolCalls).toEqual(unexpectedCalls);
+    const calculator = continuation.find((item) => item.messages.at(-1)?.content === '{"sum":42}');
+    expect(turns?.[1].requestBody?.messages).toEqual(calculator?.messages);
+    expect(calculator?.messages.at(-1)).toEqual({ role: "tool", tool_name: "add_numbers", content: '{"sum":42}' });
   } finally {
     server.close();
     vi.unstubAllEnvs();

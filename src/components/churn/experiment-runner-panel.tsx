@@ -135,7 +135,10 @@ export function ExperimentRunnerPanel({
     [scenarios],
   );
 
-  const publicScenarios = scenarios.filter((scenario) => scenario.suiteKey === "gsm8k-tuxevil-lite");
+  const publicSuites = [
+    { key: "gsm8k-tuxevil-lite", label: "GSM8K tuxevil-lite" },
+    { key: "native-tool-smoke-es", label: "Native tool smoke ES" },
+  ].map((suite) => ({ ...suite, scenarios: scenarios.filter((scenario) => scenario.suiteKey === suite.key) }));
 
   const saveBindings = async () => {
     const baseline = variants.find((variant) => variant.role === "BASELINE");
@@ -338,17 +341,17 @@ export function ExperimentRunnerPanel({
                 Select Practical SLM
               </button>
             )}
-            {publicScenarios.length > 0 && (
-              <button className="quiet-button" type="button" onClick={() => {
-                setSelectedScenarios(publicScenarios.map((scenario) => scenario.id));
+            {publicSuites.filter((suite) => suite.scenarios.length > 0).map((suite) => (
+              <button key={suite.key} className="quiet-button" type="button" onClick={() => {
+                setSelectedScenarios(suite.scenarios.map((scenario) => scenario.id));
                 setSuccessPolicy("DETERMINISTIC");
                 setUseEvaluator(false);
               }}>
-                Select GSM8K tuxevil-lite
+                Select {suite.label}
               </button>
-            )}
+            ))}
             <button className="quiet-button" type="button" onClick={() => setSelectedScenarios(
-              scenarios.filter((scenario) => !publicScenarios.includes(scenario)).map((scenario) => scenario.id),
+              scenarios.filter((scenario) => !publicSuites.some((suite) => suite.key === scenario.suiteKey)).map((scenario) => scenario.id),
             )}>
               Select all
             </button>

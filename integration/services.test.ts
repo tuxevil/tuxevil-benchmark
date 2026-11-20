@@ -211,6 +211,8 @@ serviceSuite("local infrastructure", () => {
           userMessage: "test",
           responseText: "#### 18",
           thinking: null,
+          toolCalls: [{ id: "call_1", type: "function", function: { name: "add_numbers", arguments: '{"a":17' } }],
+          requestBody: { messages: [{ role: "tool", content: '{"sum":42}', tool_call_id: "call_1" }] },
           finishReason: "length",
           truncated: true,
           inputTokens: 12,
@@ -242,6 +244,8 @@ serviceSuite("local infrastructure", () => {
     const state = await loadPersistedState(run.id);
     expect(state?.runs[0]?.run.results[0]?.turns[0]).toMatchObject({
       responseText: "#### 18", finishReason: "length", truncated: true,
+      requestBody: { messages: [{ role: "tool", content: '{"sum":42}', tool_call_id: "call_1" }] },
+      toolCalls: [{ id: "call_1", type: "function", function: { name: "add_numbers", arguments: '{"a":17' } }],
     });
     await sql`DELETE FROM test_runs WHERE id = ${run.id}`;
   }, 30_000);

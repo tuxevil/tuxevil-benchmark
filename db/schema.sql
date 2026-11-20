@@ -137,6 +137,7 @@ ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS truncated BOOLEAN;
 ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS wire_diagnostics JSONB;
 ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS protocol_diagnostics JSONB;
 ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS request_body JSONB;
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS tool_calls JSONB;
 
 CREATE TABLE IF NOT EXISTS evaluations (
   id UUID PRIMARY KEY,
