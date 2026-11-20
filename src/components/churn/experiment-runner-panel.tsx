@@ -52,6 +52,14 @@ type ExecutionView = {
     gradedSamples: number;
     accuracy: number | null;
     outcomes: Record<string, number>;
+    ifeval?: {
+      prompts: number;
+      instructions: number;
+      promptStrict: number | null;
+      promptLoose: number | null;
+      instructionStrict: number | null;
+      instructionLoose: number | null;
+    };
   }>;
 };
 
@@ -59,6 +67,10 @@ type Binding = {
   executionTargetId: string;
   executionModelName: string;
 };
+
+function formatAccuracy(value: number | null) {
+  return value === null ? "N/A" : `${(value * 100).toFixed(1)}%`;
+}
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -140,6 +152,7 @@ export function ExperimentRunnerPanel({
     { key: "native-tool-smoke-es", label: "Native tool smoke ES" },
     { key: "bfcl-v3-tuxevil-lite", label: "BFCL V3 tuxevil-lite" },
     { key: "mgsm-es-tuxevil-lite", label: "MGSM ES tuxevil-lite" },
+    { key: "ifeval-tuxevil-lite", label: "IFEval tuxevil-lite" },
   ].map((suite) => ({ ...suite, scenarios: scenarios.filter((scenario) => scenario.suiteKey === suite.key) }));
 
   const saveBindings = async () => {
@@ -438,7 +451,14 @@ export function ExperimentRunnerPanel({
             <div key={result.variantId}>
               <span>{variantNameById.get(result.variantId) ?? result.variantId}</span>
               <span>{result.gradedSamples}/{result.plannedSamples} graded</span>
-              <strong>{result.accuracy === null ? "N/A" : `${(result.accuracy * 100).toFixed(1)}%`}</strong>
+              <strong>{formatAccuracy(result.accuracy)}</strong>
+              {result.ifeval && (
+                <small>
+                  Prompt strict {formatAccuracy(result.ifeval.promptStrict)} · Prompt loose {formatAccuracy(result.ifeval.promptLoose)}
+                  {" · "}Instruction strict {formatAccuracy(result.ifeval.instructionStrict)} · Instruction loose {formatAccuracy(result.ifeval.instructionLoose)}
+                  {" · "}{result.ifeval.instructions} instructions graded
+                </small>
+              )}
               <small>{Object.entries(result.outcomes).filter(([, count]) => count > 0)
                 .map(([outcome, count]) => `${outcome} ${count}`).join(" · ")}</small>
             </div>

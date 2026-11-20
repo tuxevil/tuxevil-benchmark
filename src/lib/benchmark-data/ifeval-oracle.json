@@ -1,0 +1,674 @@
+[
+  {
+    "key": 1001,
+    "response": "",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 1001,
+    "response": "  \u001c\n",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 1001,
+    "response": "A plain response",
+    "strict": [
+      true
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 1001,
+    "response": "Sure, here it is:\nA plain response",
+    "strict": [
+      false
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 1001,
+    "response": "A plain response\nExtra, line",
+    "strict": [
+      false
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 1001,
+    "response": "A, comma",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 1001,
+    "response": "**\"Quoted answer\"**",
+    "strict": [
+      true
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 1001,
+    "response": "Sure:\n\"Quoted answer\"\nThanks",
+    "strict": [
+      true
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 1001,
+    "response": "\"Quoted answer\"\u001c",
+    "strict": [
+      true
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 1001,
+    "response": "“Smart quotes”",
+    "strict": [
+      true
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 1001,
+    "response": "* Pepper\n- Domino\n* Oreo",
+    "strict": [
+      true
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 1001,
+    "response": "**Pepper**\n- Domino\n* Oreo",
+    "strict": [
+      true
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 1001,
+    "response": "\n  * Pepper\r\n- Domino\n\t* Oreo",
+    "strict": [
+      true
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 1001,
+    "response": "* Pepper\r- Domino\n* Oreo",
+    "strict": [
+      true
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 1001,
+    "response": "* Pepper\n*\n- Oreo",
+    "strict": [
+      true
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 1001,
+    "response": "\"Here are eight ideas\n* one\n* two\n* three\n* four\n* five\n* six\n* seven\n* eight\"",
+    "strict": [
+      true
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 2015,
+    "response": "",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2015,
+    "response": "  \u001c\n",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2015,
+    "response": "A plain response",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2015,
+    "response": "Sure, here it is:\nA plain response",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2015,
+    "response": "A plain response\nExtra, line",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2015,
+    "response": "A, comma",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2015,
+    "response": "**\"Quoted answer\"**",
+    "strict": [
+      false
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 2015,
+    "response": "Sure:\n\"Quoted answer\"\nThanks",
+    "strict": [
+      false
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 2015,
+    "response": "\"Quoted answer\"\u001c",
+    "strict": [
+      true
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 2015,
+    "response": "“Smart quotes”",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2015,
+    "response": "* Pepper\n- Domino\n* Oreo",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2015,
+    "response": "**Pepper**\n- Domino\n* Oreo",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2015,
+    "response": "\n  * Pepper\r\n- Domino\n\t* Oreo",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2015,
+    "response": "* Pepper\r- Domino\n* Oreo",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2015,
+    "response": "* Pepper\n*\n- Oreo",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2015,
+    "response": "\"Here are eight ideas\n* one\n* two\n* three\n* four\n* five\n* six\n* seven\n* eight\"",
+    "strict": [
+      true
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 2314,
+    "response": "",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2314,
+    "response": "  \u001c\n",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2314,
+    "response": "A plain response",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2314,
+    "response": "Sure, here it is:\nA plain response",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2314,
+    "response": "A plain response\nExtra, line",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2314,
+    "response": "A, comma",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2314,
+    "response": "**\"Quoted answer\"**",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2314,
+    "response": "Sure:\n\"Quoted answer\"\nThanks",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2314,
+    "response": "\"Quoted answer\"\u001c",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2314,
+    "response": "“Smart quotes”",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2314,
+    "response": "* Pepper\n- Domino\n* Oreo",
+    "strict": [
+      true
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 2314,
+    "response": "**Pepper**\n- Domino\n* Oreo",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2314,
+    "response": "\n  * Pepper\r\n- Domino\n\t* Oreo",
+    "strict": [
+      true
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 2314,
+    "response": "* Pepper\r- Domino\n* Oreo",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 2314,
+    "response": "* Pepper\n*\n- Oreo",
+    "strict": [
+      true
+    ],
+    "loose": [
+      true
+    ]
+  },
+  {
+    "key": 2314,
+    "response": "\"Here are eight ideas\n* one\n* two\n* three\n* four\n* five\n* six\n* seven\n* eight\"",
+    "strict": [
+      false
+    ],
+    "loose": [
+      false
+    ]
+  },
+  {
+    "key": 1325,
+    "response": "",
+    "strict": [
+      false,
+      false
+    ],
+    "loose": [
+      false,
+      false
+    ]
+  },
+  {
+    "key": 1325,
+    "response": "  \u001c\n",
+    "strict": [
+      false,
+      false
+    ],
+    "loose": [
+      false,
+      false
+    ]
+  },
+  {
+    "key": 1325,
+    "response": "A plain response",
+    "strict": [
+      false,
+      false
+    ],
+    "loose": [
+      false,
+      false
+    ]
+  },
+  {
+    "key": 1325,
+    "response": "Sure, here it is:\nA plain response",
+    "strict": [
+      false,
+      false
+    ],
+    "loose": [
+      false,
+      false
+    ]
+  },
+  {
+    "key": 1325,
+    "response": "A plain response\nExtra, line",
+    "strict": [
+      false,
+      false
+    ],
+    "loose": [
+      false,
+      false
+    ]
+  },
+  {
+    "key": 1325,
+    "response": "A, comma",
+    "strict": [
+      false,
+      false
+    ],
+    "loose": [
+      false,
+      false
+    ]
+  },
+  {
+    "key": 1325,
+    "response": "**\"Quoted answer\"**",
+    "strict": [
+      false,
+      false
+    ],
+    "loose": [
+      true,
+      false
+    ]
+  },
+  {
+    "key": 1325,
+    "response": "Sure:\n\"Quoted answer\"\nThanks",
+    "strict": [
+      false,
+      false
+    ],
+    "loose": [
+      true,
+      false
+    ]
+  },
+  {
+    "key": 1325,
+    "response": "\"Quoted answer\"\u001c",
+    "strict": [
+      true,
+      false
+    ],
+    "loose": [
+      true,
+      false
+    ]
+  },
+  {
+    "key": 1325,
+    "response": "“Smart quotes”",
+    "strict": [
+      false,
+      false
+    ],
+    "loose": [
+      false,
+      false
+    ]
+  },
+  {
+    "key": 1325,
+    "response": "* Pepper\n- Domino\n* Oreo",
+    "strict": [
+      false,
+      false
+    ],
+    "loose": [
+      false,
+      false
+    ]
+  },
+  {
+    "key": 1325,
+    "response": "**Pepper**\n- Domino\n* Oreo",
+    "strict": [
+      false,
+      false
+    ],
+    "loose": [
+      false,
+      false
+    ]
+  },
+  {
+    "key": 1325,
+    "response": "\n  * Pepper\r\n- Domino\n\t* Oreo",
+    "strict": [
+      false,
+      false
+    ],
+    "loose": [
+      false,
+      false
+    ]
+  },
+  {
+    "key": 1325,
+    "response": "* Pepper\r- Domino\n* Oreo",
+    "strict": [
+      false,
+      false
+    ],
+    "loose": [
+      false,
+      false
+    ]
+  },
+  {
+    "key": 1325,
+    "response": "* Pepper\n*\n- Oreo",
+    "strict": [
+      false,
+      false
+    ],
+    "loose": [
+      false,
+      false
+    ]
+  },
+  {
+    "key": 1325,
+    "response": "\"Here are eight ideas\n* one\n* two\n* three\n* four\n* five\n* six\n* seven\n* eight\"",
+    "strict": [
+      true,
+      true
+    ],
+    "loose": [
+      true,
+      true
+    ]
+  }
+]

@@ -1,3 +1,4 @@
+import { IFEVAL_CASES, IFEVAL_SUITE, IFEVAL_VERSION } from "@/lib/ifeval-pilot";
 import { BFCL_V3_CASES, BFCL_V3_SUITE, BFCL_V3_SYSTEM_PROMPT, BFCL_V3_VERSION } from "@/lib/bfcl-v3-pilot";
 import { createHash } from "node:crypto";
 import fixtures from "@/lib/benchmark-data/gsm8k-lite.json";
@@ -160,6 +161,27 @@ export const PUBLIC_BENCHMARKS = [{
   cases: mgsmCases.map(({ scenarioId, sourceCaseId, caseVersion, contentSha256 }) => ({
     scenarioId, sourceCaseId, caseVersion, contentSha256,
   })),
+}, {
+  id: IFEVAL_SUITE,
+  version: IFEVAL_VERSION,
+  language: "en",
+  modality: "chat",
+  officiallyComparable: false,
+  dataset: {
+    project: "Instruction Following Evaluation",
+    revision: "26d8ccdab6fec61b5c83ad6327ea8bda9e580288",
+    url: "https://github.com/google-research/google-research/blob/26d8ccdab6fec61b5c83ad6327ea8bda9e580288/instruction_following_eval/data/input_data.jsonl",
+    sha256: "67ffeee0fcb87c317c5b08a2de85557b4a7e96ada6178aa645b4954fe4b53d49",
+    split: "test",
+    license: "Apache-2.0",
+    caseCount: 541,
+  },
+  grader: { type: "IFEVAL_NATIVE_SUBSET", version: 1, upstreamRevision: "c878a53ec1764bcb91a6178dc5c315202a3b5fa2" },
+  systemPrompt: "",
+  caseIdsSha256: caseHash(IFEVAL_CASES.map(({ sourceCaseId }) => sourceCaseId)),
+  cases: IFEVAL_CASES.map(({ scenarioId, sourceCaseId, contentSha256 }) => ({
+    scenarioId, sourceCaseId, caseVersion: 1, contentSha256,
+  })),
 }] as const;
 
 export const PUBLIC_BENCHMARK_SCENARIOS = [
@@ -167,6 +189,7 @@ export const PUBLIC_BENCHMARK_SCENARIOS = [
   ...nativeToolScenarios,
   ...BFCL_V3_CASES.map(({ scenario }) => scenario),
   ...mgsmCases.map(({ scenario }) => scenario),
+  ...IFEVAL_CASES.map(({ scenario }) => scenario),
 ];
 
 export function isPublicBenchmarkSuite(key?: string | null) {
