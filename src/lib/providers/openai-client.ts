@@ -5,6 +5,7 @@ import { appendOpenAIToolDeltas, type ChatTool, type OpenAIChatMessage, type Ope
 type OpenAIUsage = {
   prompt_tokens?: number;
   completion_tokens?: number;
+  completion_tokens_details?: { reasoning_tokens?: number };
   total_tokens?: number;
 };
 
@@ -125,6 +126,8 @@ export type OpenAIChatResult = {
   finishReason: string | null;
   truncated: boolean;
   ttftMs: number | null;
+  firstVisibleTokenMs: number | null;
+  reasoningTokens: number | null;
   inputTokens: number | null;
   outputTokens: number | null;
   tokPerSec: number | null;
@@ -257,10 +260,12 @@ export async function streamOpenAICompatibleChat({
   let buffer = "";
   let rawResponseText = "";
   let thinking = "";
-  let firstTokenAt: number | null = null;
-  let usage: OpenAIUsage | null = null;
-  let timings: LlamaCppTimings | null = null;
-  let finishReason: string | null = null;
+  const streamMetadata: {
+    firstTokenAt: number | null;
+    usage: OpenAIUsage | null;
+    timings: LlamaCppTimings | null;
+    finishReason: string | null;
+  } = { firstTokenAt: null, usage: null, timings: null, finishReason: null };
   const toolCalls = new Map<number, OpenAIToolCall>();
 
   // Wire capture state
@@ -271,6 +276,63 @@ export async function streamOpenAICompatibleChat({
   let contentDeltaCount = 0;
   let reasoningChars = 0;
   let contentChars = 0;
+
+  const contentOffsets: Array<{ end: number; at: number }> = [];
+  let streamEnded = false;
+  const acceptLine = (line: string) => {
+    if (streamEnded) return;
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("data:")) return;
+    const dataPayload = trimmed.replace(/^data:\s*/, "");
+    if (dataPayload === "[DONE]") {
+      streamEnded = true;
+      return;
+    }
+    eventCount++;
+
+    let parsed: OpenAIChunk;
+    try {
+      parsed = JSON.parse(dataPayload) as OpenAIChunk;
+    } catch {
+      return;
+    }
+
+    if (!parsed || typeof parsed !== "object") return;
+    if (parsed.usage) {
+      streamMetadata.usage = parsed.usage;
+    }
+    if (parsed.timings) {
+      streamMetadata.timings = parsed.timings;
+    }
+
+    const choice = parsed.choices?.[0];
+    if (choice?.finish_reason) {
+      streamMetadata.finishReason = choice.finish_reason;
+    }
+
+    const delta = choice?.delta;
+    if (!delta) return;
+
+    const reasoningToken = delta.reasoning_content ?? delta.reasoning ?? delta.thinking ?? "";
+    const textToken = delta.content ?? "";
+
+    if (Array.isArray(delta.tool_calls)) appendOpenAIToolDeltas(toolCalls, delta.tool_calls);
+    const emittedAt = reasoningToken || textToken || delta.tool_calls?.length ? performance.now() : null;
+    streamMetadata.firstTokenAt ??= emittedAt;
+
+    if (reasoningToken) {
+      thinking += reasoningToken;
+      reasoningDeltaCount++;
+      reasoningChars += reasoningToken.length;
+    }
+    if (textToken && emittedAt !== null) {
+      contentOffsets.push({ end: rawResponseText.length + textToken.length, at: emittedAt });
+      rawResponseText += textToken;
+      contentDeltaCount++;
+      contentChars += textToken.length;
+      onToken?.(textToken);
+    }
+  };
 
   while (true) {
     const { done, value } = await reader.read();
@@ -293,93 +355,27 @@ export async function streamOpenAICompatibleChat({
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith(":") || !trimmed.startsWith("data:")) continue;
-
-      const dataPayload = trimmed.replace(/^data:\s*/, "");
-      if (dataPayload === "[DONE]") {
-        break;
-      }
-
-      eventCount++;
-
-      let parsed: OpenAIChunk;
-      try {
-        parsed = JSON.parse(dataPayload) as OpenAIChunk;
-      } catch {
-        continue;
-      }
-
-      if (parsed.usage) {
-        usage = parsed.usage;
-      }
-      if (parsed.timings) {
-        timings = parsed.timings;
-      }
-
-      const choice = parsed.choices?.[0];
-      if (choice?.finish_reason) {
-        finishReason = choice.finish_reason;
-      }
-
-      const delta = choice?.delta;
-      if (!delta) continue;
-
-      const reasoningToken = delta.reasoning_content ?? delta.reasoning ?? delta.thinking ?? "";
-      const textToken = delta.content ?? "";
-
-      if (Array.isArray(delta.tool_calls)) appendOpenAIToolDeltas(toolCalls, delta.tool_calls);
-      if (reasoningToken || textToken || delta.tool_calls?.length) {
-        firstTokenAt ??= performance.now();
-      }
-
-      if (reasoningToken) {
-        thinking += reasoningToken;
-        reasoningDeltaCount++;
-        reasoningChars += reasoningToken.length;
-      }
-      if (textToken) {
-        rawResponseText += textToken;
-        contentDeltaCount++;
-        contentChars += textToken.length;
-        onToken?.(textToken);
-      }
-    }
+    for (const line of lines) acceptLine(line);
   }
-
-  // Check remaining buffer
-  const finalTrimmed = buffer.trim();
-  if (finalTrimmed && finalTrimmed.startsWith("data:") && !finalTrimmed.includes("[DONE]")) {
-    // Capture remaining buffer too if wire capture enabled
-    if (debugWireCapture && !rawSseTruncated) {
-      const remaining = RAW_SSE_MAX_BYTES - rawSseBuffer.length;
-      if (remaining > 0) rawSseBuffer += finalTrimmed.slice(0, remaining);
-    }
-    try {
-      const chunk = JSON.parse(finalTrimmed.replace(/^data:\s*/, "")) as OpenAIChunk;
-      const toolDeltas = chunk.choices?.[0]?.delta?.tool_calls;
-      if (Array.isArray(toolDeltas) && toolDeltas.length) {
-        appendOpenAIToolDeltas(toolCalls, toolDeltas);
-        firstTokenAt ??= performance.now();
-      }
-      if (chunk.usage) usage = chunk.usage;
-      if (chunk.timings) timings = chunk.timings;
-      if (chunk.choices?.[0]?.finish_reason) {
-        finishReason = chunk.choices[0].finish_reason;
-      }
-    } catch {
-      // Ignore
-    }
-  }
+  acceptLine(buffer + decoder.decode());
+  const { firstTokenAt, usage, timings, finishReason } = streamMetadata;
 
   // Handle embedded <think>...</think> tags if reasoning was not separated by provider
   let responseText = rawResponseText;
+  let visibleOffset = rawResponseText.length > 0 ? 0 : -1;
   if (!thinking && responseText.includes("<think>")) {
     const thinkMatch = responseText.match(/<think>([\s\S]*?)<\/think>/);
     if (thinkMatch) {
       thinking = thinkMatch[1].trim();
-      responseText = responseText.replace(/<think>[\s\S]*?<\/think>/, "").trim();
+      const prefix = rawResponseText.slice(0, thinkMatch.index);
+      const suffixOffset = (thinkMatch.index ?? 0) + thinkMatch[0].length;
+      const suffix = rawResponseText.slice(suffixOffset);
+      responseText = (prefix + suffix).trim();
+      const prefixText = prefix.search(/\S/);
+      const suffixText = suffix.search(/\S/);
+      visibleOffset = prefixText >= 0 ? prefixText : suffixText < 0 ? -1 : suffixOffset + suffixText;
+    } else {
+      visibleOffset = rawResponseText.slice(0, rawResponseText.indexOf("<think>")).search(/\S/);
     }
   }
 
@@ -392,6 +388,10 @@ export async function streamOpenAICompatibleChat({
         ? Math.round(finishedAt - firstTokenAt)
         : totalDurationMs;
 
+  const visibleAt = visibleOffset < 0 ? null : contentOffsets.find(({ end }) => end > visibleOffset)?.at ?? null;
+  const reportedReasoningTokens = usage?.completion_tokens_details?.reasoning_tokens;
+  const reasoningTokens = typeof reportedReasoningTokens === "number"
+    && Number.isSafeInteger(reportedReasoningTokens) && reportedReasoningTokens >= 0 ? reportedReasoningTokens : null;
   const inputTokens = usage?.prompt_tokens ?? timings?.prompt_n ?? null;
   const outputTokens = usage?.completion_tokens ?? timings?.predicted_n ?? null;
 
@@ -442,6 +442,8 @@ export async function streamOpenAICompatibleChat({
     finishReason,
     truncated,
     ttftMs: firstTokenAt === null ? null : Math.round(firstTokenAt - startedAt),
+    firstVisibleTokenMs: visibleAt === null ? null : Math.round(visibleAt - startedAt),
+    reasoningTokens,
     inputTokens,
     outputTokens,
     tokPerSec,

@@ -992,3 +992,54 @@ describe("streamOpenAICompatibleChat", () => {
   });
 
 });
+
+it.each([
+  {
+    label: "separate reasoning and a final event without a newline",
+    deltas: [{ reasoning_content: "analysis" }, { content: "answer" }],
+    output: "answer",
+    visible: true,
+    tokens: 7,
+  },
+  {
+    label: "embedded reasoning tags split across SSE deltas",
+    deltas: [{ content: "<thi" }, { content: "nk>analysis</think>" }, { content: "answer" }],
+    output: "answer",
+    visible: true,
+    tokens: 0,
+  },
+  {
+    label: "reasoning without visible text and missing usage detail",
+    deltas: [{ reasoning_content: "analysis" }],
+    output: "",
+    visible: false,
+    tokens: undefined,
+  },
+])("measures visible timing from $label", async ({ deltas, output, visible, tokens }) => {
+  let time = 0;
+  vi.spyOn(performance, "now").mockImplementation(() => (time += 20));
+  const events = deltas.map((delta, index) => JSON.stringify({
+    choices: [{ delta, finish_reason: index === deltas.length - 1 ? "stop" : null }],
+    ...(index === deltas.length - 1 && {
+      usage: { completion_tokens: 20, completion_tokens_details: { reasoning_tokens: tokens } },
+    }),
+  }));
+  vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response(
+    events.map((event) => `data: ${event}`).join("\n\n"),
+  )));
+  try {
+    const result = await streamOpenAICompatibleChat({
+      endpoint: "http://localhost:8000/v1", model: "fixture", provider: "llamacpp",
+      messages: [{ role: "user", content: "Test" }],
+      parameters: { temperature: 0, numCtx: 2048, topP: 1, repeatPenalty: 1, numPredict: 128 },
+      signal: new AbortController().signal,
+    });
+    expect(result.responseText).toBe(output);
+    expect(result.reasoningTokens).toBe(tokens ?? null);
+    if (visible) expect(result.firstVisibleTokenMs).toBeGreaterThan(result.ttftMs!);
+    else expect(result.firstVisibleTokenMs).toBeNull();
+  } finally {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  }
+});

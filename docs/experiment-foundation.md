@@ -487,3 +487,14 @@ or tool calls. These fields record the request and observed timing. A
 model that cannot disable thinking may still reason, and a runtime may
 choose its default for an unsupported named level. Check the selected
 model's `/api/show` capabilities before comparing effects.
+
+### OpenAI-compatible stream telemetry
+
+For llama.cpp, FreeToken and Strata, the inference diagnostics record
+`ttftMs` at the first reasoning, content or tool-call delta and
+`firstVisibleTokenMs` at the first answer content. A recognized leading
+`<think>` block is excluded from visible timing when reasoning arrives
+inline. For tool-only or reasoning-only responses, visible timing is null.
+`reasoningTokens` is read from the provider's
+`usage.completion_tokens_details.reasoning_tokens` when present, including
+a reported zero. The Runner leaves the count null when the provider omits it.
