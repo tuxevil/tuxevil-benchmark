@@ -15,6 +15,8 @@ describe("streamOllamaChat", () => {
             JSON.stringify({
               done: true,
               prompt_eval_count: 12,
+              prompt_eval_cached_count: 2,
+              prompt_eval_duration: 500_000_000,
               eval_count: 20,
               eval_duration: 2_000_000_000,
               total_duration: 2_500_000_000,
@@ -45,6 +47,8 @@ describe("streamOllamaChat", () => {
     expect(result.evalDurationMs).toBe(2_000);
     expect(result.totalDurationMs).toBe(2_500);
     expect(result.tokPerSec).toBe(10);
+    expect(result.prefillRate).toEqual({ tokensPerSecond: 20, source: "engine_duration" });
+    expect(result.decodeRate).toEqual({ tokensPerSecond: 10, source: "engine_duration" });
   });
 
   it("separates thinking from the final response content", async () => {

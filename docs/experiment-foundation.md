@@ -498,3 +498,16 @@ inline. For tool-only or reasoning-only responses, visible timing is null.
 `reasoningTokens` is read from the provider's
 `usage.completion_tokens_details.reasoning_tokens` when present, including
 a reported zero. The Runner leaves the count null when the provider omits it.
+
+### Prefill and decode throughput
+
+The per-turn inference event includes `prefillRate` and `decodeRate`.
+Each rate carries `tokensPerSecond` and its source. `engine_reported` is
+the backend's own rate. `engine_duration` divides backend-reported
+token counts by the backend's phase time. Ollama subtracts cached prompt
+tokens from the prefill count when it reports a cache count. For SSE
+backends without decode timing, `client_elapsed` estimates decode using
+the interval from the first observed emission to stream completion.
+The client estimate includes provider transport and buffering. A phase
+without enough information remains null. Historical Arena throughput
+retains its existing formula.

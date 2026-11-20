@@ -405,6 +405,8 @@ async function executeModel(runId: string, resultId: string) {
           turn: stepOrder,
           ttftMs: response.ttftMs,
           firstVisibleTokenMs: response.firstVisibleTokenMs,
+          prefillRate: response.prefillRate,
+          decodeRate: response.decodeRate,
           ...("requestedThinking" in response && { requestedThinking: response.requestedThinking }),
           ...("reasoningTokens" in response && { reasoningTokens: response.reasoningTokens }),
           durationMs: response.totalDurationMs,

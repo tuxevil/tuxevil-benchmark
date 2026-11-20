@@ -1,3 +1,4 @@
+import { inferencePhaseRate, type InferencePhaseRate } from "@/lib/providers/inference-phase-rates";
 import type { BenchmarkParameters } from "@/lib/contracts";
 
 import { appendOpenAIToolDeltas, type ChatTool, type OpenAIChatMessage, type OpenAIToolCall, type OpenAIToolDelta } from "@/lib/providers/chat-tools";
@@ -127,6 +128,8 @@ export type OpenAIChatResult = {
   truncated: boolean;
   ttftMs: number | null;
   firstVisibleTokenMs: number | null;
+  prefillRate: InferencePhaseRate | null;
+  decodeRate: InferencePhaseRate | null;
   reasoningTokens: number | null;
   inputTokens: number | null;
   outputTokens: number | null;
@@ -404,6 +407,10 @@ export async function streamOpenAICompatibleChat({
     tokPerSec = Number((outputTokens / (evalDurationMs / 1_000)).toFixed(2));
   }
 
+  const prefillRate = inferencePhaseRate(timings?.prompt_per_second, timings?.prompt_n, timings?.prompt_ms);
+  const decodeRate = inferencePhaseRate(timings?.predicted_per_second, timings?.predicted_n, timings?.predicted_ms)
+    ?? (firstTokenAt === null ? null : inferencePhaseRate(null, outputTokens, finishedAt - firstTokenAt, "client_elapsed"));
+
   // Build wire diagnostics
   const wireDiagnostics: WireDiagnostics | null = debugWireCapture
     ? {
@@ -444,6 +451,8 @@ export async function streamOpenAICompatibleChat({
     ttftMs: firstTokenAt === null ? null : Math.round(firstTokenAt - startedAt),
     firstVisibleTokenMs: visibleAt === null ? null : Math.round(visibleAt - startedAt),
     reasoningTokens,
+    prefillRate,
+    decodeRate,
     inputTokens,
     outputTokens,
     tokPerSec,

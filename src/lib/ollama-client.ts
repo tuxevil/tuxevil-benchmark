@@ -1,3 +1,4 @@
+import { inferencePhaseRate, type InferencePhaseRate } from "@/lib/providers/inference-phase-rates";
 import type { BenchmarkParameters, Telemetry } from "@/lib/contracts";
 
 import type { ChatTool, OllamaChatMessage, OllamaToolCall } from "@/lib/providers/chat-tools";
@@ -7,6 +8,8 @@ type OllamaChunk = {
   done?: boolean;
   done_reason?: string;
   prompt_eval_count?: number;
+  prompt_eval_cached_count?: number;
+  prompt_eval_duration?: number;
   eval_count?: number;
   eval_duration?: number;
   total_duration?: number;
@@ -27,6 +30,8 @@ export type OllamaChatResult = Telemetry & {
   thinking: string;
   evalDurationMs: number | null;
   firstVisibleTokenMs: number | null;
+  prefillRate: InferencePhaseRate | null;
+  decodeRate: InferencePhaseRate | null;
   requestedThinking: false | "low" | "medium" | "high" | "max" | null;
   finishReason: string | null;
   truncated: boolean;
@@ -62,8 +67,12 @@ export async function streamOllamaChat({
   const finishReason = streamed.finalChunk.done_reason ?? (streamed.finalChunk.done ? "stop" : null);
   const truncated = finishReason === "length" || (outputTokens !== null && outputTokens >= parameters.numPredict);
 
+  const { prompt_eval_count, prompt_eval_cached_count, prompt_eval_duration, eval_duration } = streamed.finalChunk;
+  const prefillTokens = prompt_eval_count === undefined ? null : prompt_eval_count - (prompt_eval_cached_count ?? 0);
   return {
     responseText: streamed.responseText,
+    prefillRate: inferencePhaseRate(null, prefillTokens, prompt_eval_duration === undefined ? null : prompt_eval_duration / 1e6),
+    decodeRate: inferencePhaseRate(null, outputTokens, eval_duration === undefined ? null : eval_duration / 1e6),
     toolCalls: streamed.toolCalls,
     thinking: streamed.thinking,
     finishReason,
