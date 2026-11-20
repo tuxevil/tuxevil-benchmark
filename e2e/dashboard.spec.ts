@@ -437,7 +437,7 @@ test("lists public benchmark provenance and protects opt-in scenarios", async ({
   const { benchmarks: [suite, nativeTools, bfcl, mgsm, ifeval, ifstruct, math500, ptBr, stateful, irrelevance] } = await catalog.json();
   expect(irrelevance).toMatchObject({
     id: "bfcl-v3-irrelevance-tuxevil-lite", modality: "native-tools", officiallyComparable: false,
-    dataset: { split: "irrelevance", license: "Apache-2.0", caseCount: 239 },
+    dataset: { split: "irrelevance", license: "Apache-2.0", caseCount: 240 },
   });
   expect(irrelevance.cases.map((entry: { sourceCaseId: string }) => entry.sourceCaseId))
     .toEqual(["irrelevance_0", "irrelevance_3", "irrelevance_5"]);

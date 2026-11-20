@@ -325,7 +325,7 @@ export const PUBLIC_BENCHMARKS = [{
     url: "https://huggingface.co/datasets/gorilla-llm/Berkeley-Function-Calling-Leaderboard/blob/61fc0608cfd831fcfbbaa676ebdfef0ed963eeda/BFCL_v3_irrelevance.json",
     split: "irrelevance",
     license: "Apache-2.0",
-    caseCount: 239,
+    caseCount: 240,
   },
   grader: {
     type: "BFCL_V3_NATIVE_IRRELEVANCE",
