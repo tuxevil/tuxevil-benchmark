@@ -7,8 +7,8 @@ import { appendResultDiagnosticEvent, type DiagnosticSeverity, type DiagnosticSt
 import { sanitizeDiagnosticText } from "@/lib/diagnostic-safety";
 import { evaluateModelResponse, resolveEvaluationMode } from "@/lib/frontier-evaluator";
 import { benchmarkStore } from "@/lib/benchmark-store";
-import { streamOllamaChat } from "@/lib/ollama-client";
-import { streamOpenAICompatibleChat } from "@/lib/providers/openai-client";
+import { streamOllamaChat, type OllamaChatResult } from "@/lib/ollama-client";
+import { streamOpenAICompatibleChat, type OpenAIChatResult } from "@/lib/providers/openai-client";
 import { retryTransient, isTransient } from "@/lib/retry";
 import type { Queue as BullQueue } from "bullmq";
 import { redisConnection } from "@/lib/redis-connection";
@@ -324,7 +324,7 @@ async function executeModel(runId: string, resultId: string) {
         await recordDiagnostic("resources", "measurement_started", { model: result.modelName });
       }
       const response = await retryTransient(
-        () => recordInferenceAttempt(
+        () => recordInferenceAttempt<OllamaChatResult | OpenAIChatResult>(
           attempts,
           () => provider === "ollama"
             ? streamOllamaChat({

@@ -1,9 +1,6 @@
 import type { BenchmarkParameters } from "@/lib/contracts";
 
-type ChatMessage = {
-  role: "system" | "user" | "assistant";
-  content: string;
-};
+import { appendOpenAIToolDeltas, type ChatTool, type OpenAIChatMessage, type OpenAIToolCall, type OpenAIToolDelta } from "@/lib/providers/chat-tools";
 
 type OpenAIUsage = {
   prompt_tokens?: number;
@@ -28,6 +25,7 @@ type OpenAIChunk = {
       reasoning_content?: string | null;
       reasoning?: string | null;
       thinking?: string | null;
+      tool_calls?: OpenAIToolDelta[];
     };
     finish_reason?: string | null;
   }>;
@@ -121,6 +119,7 @@ export type ProtocolDiagnostics = {
 const RAW_SSE_MAX_BYTES = 256 * 1024;
 
 export type OpenAIChatResult = {
+  toolCalls: OpenAIToolCall[];
   responseText: string;
   thinking: string;
   finishReason: string | null;
@@ -141,6 +140,7 @@ export async function streamOpenAICompatibleChat({
   endpoint,
   model,
   messages,
+  tools,
   parameters,
   apiKey,
   signal,
@@ -151,7 +151,8 @@ export async function streamOpenAICompatibleChat({
 }: {
   endpoint: string;
   model: string;
-  messages: ChatMessage[];
+  messages: OpenAIChatMessage[];
+  tools?: ChatTool[];
   parameters: BenchmarkParameters;
   apiKey?: string | null;
   signal: AbortSignal;
@@ -183,6 +184,7 @@ export async function streamOpenAICompatibleChat({
   const body: Record<string, unknown> = {
     model,
     messages,
+    ...(tools?.length ? { tools } : {}),
     stream: true,
     stream_options: { include_usage: true },
     temperature: parameters.temperature,
@@ -259,6 +261,7 @@ export async function streamOpenAICompatibleChat({
   let usage: OpenAIUsage | null = null;
   let timings: LlamaCppTimings | null = null;
   let finishReason: string | null = null;
+  const toolCalls = new Map<number, OpenAIToolCall>();
 
   // Wire capture state
   let rawSseBuffer = "";
@@ -326,7 +329,8 @@ export async function streamOpenAICompatibleChat({
       const reasoningToken = delta.reasoning_content ?? delta.reasoning ?? delta.thinking ?? "";
       const textToken = delta.content ?? "";
 
-      if (reasoningToken || textToken) {
+      if (Array.isArray(delta.tool_calls)) appendOpenAIToolDeltas(toolCalls, delta.tool_calls);
+      if (reasoningToken || textToken || delta.tool_calls?.length) {
         firstTokenAt ??= performance.now();
       }
 
@@ -354,6 +358,11 @@ export async function streamOpenAICompatibleChat({
     }
     try {
       const chunk = JSON.parse(finalTrimmed.replace(/^data:\s*/, "")) as OpenAIChunk;
+      const toolDeltas = chunk.choices?.[0]?.delta?.tool_calls;
+      if (Array.isArray(toolDeltas) && toolDeltas.length) {
+        appendOpenAIToolDeltas(toolCalls, toolDeltas);
+        firstTokenAt ??= performance.now();
+      }
       if (chunk.usage) usage = chunk.usage;
       if (chunk.timings) timings = chunk.timings;
       if (chunk.choices?.[0]?.finish_reason) {
@@ -422,12 +431,13 @@ export async function streamOpenAICompatibleChat({
     emptyWireResponse: thinking.length === 0 && responseText.length === 0,
     reasoningDeltaSeen: hasReasoningDeltas,
     contentDeltaSeen: hasContentDeltas,
-    stoppedWithEmptyContent: finishReason === "stop" && responseText.length === 0,
+    stoppedWithEmptyContent: finishReason === "stop" && responseText.length === 0 && toolCalls.size === 0,
     outputTokensWithoutVisibleDeltas: hasOutputTokens && !hasReasoningDeltas && !hasContentDeltas,
   };
 
   return {
     responseText,
+    toolCalls: [...toolCalls.entries()].sort(([a], [b]) => a - b).map(([, call]) => call),
     thinking,
     finishReason,
     truncated,

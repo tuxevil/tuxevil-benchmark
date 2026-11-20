@@ -1,12 +1,9 @@
 import type { BenchmarkParameters, Telemetry } from "@/lib/contracts";
 
-type ChatMessage = {
-  role: "system" | "user" | "assistant";
-  content: string;
-};
+import type { ChatTool, OllamaChatMessage, OllamaToolCall } from "@/lib/providers/chat-tools";
 
 type OllamaChunk = {
-  message?: { content?: string; thinking?: string };
+  message?: { content?: string; thinking?: string; tool_calls?: OllamaToolCall[] };
   done?: boolean;
   done_reason?: string;
   prompt_eval_count?: number;
@@ -17,6 +14,7 @@ type OllamaChunk = {
 
 type StreamedChat = {
   responseText: string;
+  toolCalls: OllamaToolCall[];
   thinking: string;
   firstTokenAt: number | null;
   finalChunk: OllamaChunk;
@@ -24,6 +22,7 @@ type StreamedChat = {
 
 export type OllamaChatResult = Telemetry & {
   responseText: string;
+  toolCalls: OllamaToolCall[];
   thinking: string;
   evalDurationMs: number | null;
   finishReason: string | null;
@@ -34,6 +33,7 @@ export async function streamOllamaChat({
   endpoint,
   model,
   messages,
+  tools,
   parameters,
   signal,
   onToken,
@@ -41,14 +41,15 @@ export async function streamOllamaChat({
 }: {
   endpoint: string;
   model: string;
-  messages: ChatMessage[];
+  messages: OllamaChatMessage[];
+  tools?: ChatTool[];
   parameters: BenchmarkParameters;
   signal: AbortSignal;
   onToken?: (token: string) => void;
   apiKey?: string | null;
 }): Promise<OllamaChatResult> {
   const startedAt = performance.now();
-  const streamed = await requestChat({ endpoint, model, messages, parameters, signal, onToken, apiKey });
+  const streamed = await requestChat({ endpoint, model, messages, tools, parameters, signal, onToken, apiKey });
 
   const evalDurationMs = durationMs(streamed.finalChunk.eval_duration);
   const outputTokens = streamed.finalChunk.eval_count ?? null;
@@ -58,6 +59,7 @@ export async function streamOllamaChat({
 
   return {
     responseText: streamed.responseText,
+    toolCalls: streamed.toolCalls,
     thinking: streamed.thinking,
     finishReason,
     truncated,
@@ -77,6 +79,7 @@ async function requestChat({
   endpoint,
   model,
   messages,
+  tools,
   parameters,
   signal,
   onToken,
@@ -84,7 +87,8 @@ async function requestChat({
 }: {
   endpoint: string;
   model: string;
-  messages: ChatMessage[];
+  messages: OllamaChatMessage[];
+  tools?: ChatTool[];
   parameters: BenchmarkParameters;
   signal: AbortSignal;
   onToken?: (token: string) => void;
@@ -102,6 +106,7 @@ async function requestChat({
     body: JSON.stringify({
       model,
       messages,
+      ...(tools?.length ? { tools } : {}),
       stream: true,
       options: {
         temperature: parameters.temperature,
@@ -130,6 +135,22 @@ async function requestChat({
   let thinking = "";
   let firstTokenAt: number | null = null;
   let finalChunk: OllamaChunk | null = null;
+  const toolCalls: OllamaToolCall[] = [];
+
+  const acceptChunk = (chunk: OllamaChunk) => {
+    if (chunk.done) finalChunk = chunk;
+    const chunkThinking = chunk.message?.thinking ?? "";
+    const token = chunk.message?.content ?? "";
+    const calls = chunk.message?.tool_calls;
+    if (Array.isArray(calls)) toolCalls.push(...calls);
+    if (chunkThinking || token || calls?.length) firstTokenAt ??= performance.now();
+    if (chunkThinking) thinking += chunkThinking;
+    if (token) {
+      responseText += token;
+      onToken?.(token);
+    }
+    return finalChunk;
+  };
 
   while (true) {
     const { done, value } = await reader.read();
@@ -142,27 +163,18 @@ async function requestChat({
     for (const line of lines) {
       const chunk = parseChunk(line);
       if (!chunk) continue;
-      finalChunk = chunk.done ? chunk : finalChunk;
-
-      const chunkThinking = chunk.message?.thinking ?? "";
-      const token = chunk.message?.content ?? "";
-      if (chunkThinking || token) firstTokenAt ??= performance.now();
-      if (chunkThinking) thinking += chunkThinking;
-      if (token) {
-        responseText += token;
-        onToken?.(token);
-      }
+      finalChunk = acceptChunk(chunk);
     }
   }
 
-  const finalLine = parseChunk(buffer);
-  if (finalLine?.done) finalChunk = finalLine;
+  const finalLine = parseChunk(buffer + decoder.decode());
+  if (finalLine) finalChunk = acceptChunk(finalLine);
 
   if (!finalChunk?.done) {
     throw new Error("Ollama closed the stream before sending telemetry.");
   }
 
-  return { responseText, thinking, firstTokenAt, finalChunk };
+  return { responseText, toolCalls, thinking, firstTokenAt, finalChunk };
 }
 
 export class OllamaRequestError extends Error {
