@@ -69,3 +69,21 @@ On this stack, Ollama does not send `think`. The OpenAI-compatible client sends
 These wire choices do not establish runtime support. Current TTFT includes the
 first reasoning token. This pilot does not claim Thinking ON/OFF, visible TTFT,
 hardware, energy or concurrency results.
+
+## Coolify release
+
+The production candidate is based on `integration/performance-telemetry`.
+Before deploying it, capture the current healthy deployment reference and
+take a PostgreSQL backup. Run `npm run db:migrate` from the candidate checkout
+against the production database through its existing private connection.
+Use the existing credential configuration. The turn migration only adds
+nullable columns and can run again against an already migrated database.
+It preserves existing turns and results. Apply the migration before upgrading
+the web process or worker.
+
+Deploy via the existing Coolify application and verify that the public root
+returns HTTP 200, administration requires authentication, and the worker
+consumes jobs. In Churn Lab, select one GSM8K case against an idle target and
+check that the stored turn includes its completion status and that the report
+counts it once. If deployment fails, redeploy the previous healthy revision
+through Coolify. Leave the additive columns in place.

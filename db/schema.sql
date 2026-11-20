@@ -132,6 +132,12 @@ CREATE TABLE IF NOT EXISTS model_result_turns (
   UNIQUE (model_result_id, step_order)
 );
 
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS finish_reason TEXT;
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS truncated BOOLEAN;
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS wire_diagnostics JSONB;
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS protocol_diagnostics JSONB;
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS request_body JSONB;
+
 CREATE TABLE IF NOT EXISTS evaluations (
   id UUID PRIMARY KEY,
   model_result_id UUID NOT NULL REFERENCES model_results(id) ON DELETE CASCADE,

@@ -164,7 +164,7 @@ serviceSuite("local infrastructure", () => {
     await sql`DELETE FROM scenarios WHERE id = ${scenarioId}`;
   }, 30_000);
 
-  it("round-trips executionTargetId through PostgreSQL TestRun persistence", async () => {
+  it("round-trips executionTargetId and turn completion metadata through PostgreSQL", async () => {
     sql ??= postgres(databaseUrl!);
     const targetId = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -189,7 +189,37 @@ serviceSuite("local infrastructure", () => {
         reasoningEffort: "off",
       },
       evaluatorModel: null,
-      results: [],
+      results: [{
+        id: crypto.randomUUID(),
+        modelName: "test-model",
+        sampleIndex: 0,
+        status: "COMPLETED",
+        evalStatus: "SKIPPED",
+        responseText: "#### 18",
+        evaluation: null,
+        humanStatus: "UNREVIEWED",
+        humanNotes: "",
+        errorMessage: null,
+        inputTokens: 12,
+        outputTokens: 8,
+        ttftMs: 5,
+        tokPerSec: 30,
+        totalDurationMs: 20,
+        turns: [{
+          id: crypto.randomUUID(),
+          stepOrder: 1,
+          userMessage: "test",
+          responseText: "#### 18",
+          thinking: null,
+          finishReason: "length",
+          truncated: true,
+          inputTokens: 12,
+          outputTokens: 8,
+          ttftMs: 5,
+          tokPerSec: 30,
+          totalDurationMs: 20,
+        }],
+      }],
       createdAt: now,
       updatedAt: now,
       startedAt: null,
@@ -209,6 +239,10 @@ serviceSuite("local infrastructure", () => {
 
     const rows = await sql`SELECT execution_target_id FROM test_runs WHERE id = ${run.id}`;
     expect(String(rows[0].execution_target_id)).toBe(targetId);
+    const state = await loadPersistedState(run.id);
+    expect(state?.runs[0]?.run.results[0]?.turns[0]).toMatchObject({
+      responseText: "#### 18", finishReason: "length", truncated: true,
+    });
     await sql`DELETE FROM test_runs WHERE id = ${run.id}`;
   }, 30_000);
 });
