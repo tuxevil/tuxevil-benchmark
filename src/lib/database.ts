@@ -1,5 +1,6 @@
 import { resultIdentity } from "./run-identity";
 import { loadRunManifests, loadVramPeaks } from "./resource-measurement-store";
+import { publicBenchmarkCase } from "@/lib/public-benchmarks";
 import postgres, { type TransactionSql } from "postgres";
 import { createHash } from "node:crypto";
 import type {
@@ -334,7 +335,8 @@ export async function aggregateLeaderboard(options?: {
     speed: options?.weights?.speed ?? 20,
   };
 
-  if (!state || state.runs.length === 0) {
+  const arenaRuns = state?.runs.filter(({ run }) => !run.scenarioId || !publicBenchmarkCase(run.scenarioId)) ?? [];
+  if (arenaRuns.length === 0) {
     return {
       kpis: {
         totalBenchmarkRuns: 0,
@@ -354,7 +356,7 @@ export async function aggregateLeaderboard(options?: {
   const scenarioTier = new Map<string, ScenarioDifficulty>();
   {
     const scenarioSecurity = new Map<string, { attacks: number; failures: number }>();
-    for (const entry of state.runs) {
+    for (const entry of arenaRuns) {
       if (entry.run.category !== "SECURITY") continue;
       const key = scenarioKeyFor(entry.run);
       for (const res of entry.run.results) {
@@ -369,7 +371,7 @@ export async function aggregateLeaderboard(options?: {
       const asr = bucket.attacks > 0 ? (bucket.failures / bucket.attacks) * 100 : 0;
       scenarioTier.set(key, securityDifficultyFor(asr));
     }
-    for (const entry of state.runs) {
+    for (const entry of arenaRuns) {
       const run = entry.run;
       if (run.category === "SECURITY") {
         runTier.set(run.id, scenarioTier.get(scenarioKeyFor(run)) ?? "easy");
@@ -383,7 +385,7 @@ export async function aggregateLeaderboard(options?: {
     }
   }
 
-  let filteredRuns = state.runs;
+  let filteredRuns = arenaRuns;
   if (options?.category && options.category !== "ALL") {
     filteredRuns = filteredRuns.filter((r) => r.run.category === options.category);
   }

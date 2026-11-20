@@ -4,6 +4,9 @@ import type { BenchmarkParameters, ModelResult, TestRun } from "@/lib/contracts"
 import { benchmarkParametersSchema, reasoningEffortSchema } from "@/lib/contracts";
 import { benchmarkStore } from "@/lib/benchmark-store";
 import { gradeDeterministicResponse, type DeterministicGrade } from "@/lib/deterministic-grader";
+import { publicBenchmarkCase } from "@/lib/public-benchmarks";
+import { gradePublicBenchmarkResult } from "@/lib/public-benchmark-grading";
+import { wilsonInterval } from "@/lib/experiments";
 import { enqueueBenchmark } from "@/lib/benchmark-queue";
 import {
   acquireExecutionTargetLeases,
@@ -38,6 +41,7 @@ import {
   type ExperimentComparison,
 } from "@/lib/experiment-observation-store";
 import {
+  type ExperimentExecutionObservation,
   listExperimentExecutionObservations,
   upsertExperimentExecutionObservations,
 } from "@/lib/experiment-execution-observation-store";
@@ -63,6 +67,17 @@ export type ExperimentExecutionView = ExperimentExecutionWithRuns & {
     errorMessage: string | null;
   }>;
   comparisons: ExperimentComparison[];
+  publicBenchmarkResults?: PublicBenchmarkResult[];
+};
+
+type PublicBenchmarkResult = {
+  variantId: string;
+  observations: ExperimentExecutionObservation[];
+  plannedSamples: number;
+  gradedSamples: number;
+  accuracy: number | null;
+  wilson95: ReturnType<typeof wilsonInterval> | null;
+  outcomes: Record<string, number>;
 };
 
 function stableRecord(value: Record<string, unknown>) {
@@ -332,20 +347,29 @@ async function importRunObservations(
   run: TestRun,
 ) {
   const scenario = benchmarkStore.getScenario(mapping.scenarioId);
+  const publicCase = publicBenchmarkCase(mapping.scenarioId);
   const resources = await loadResourceMeasurements(run.id);
   const observations = run.results.flatMap((result) => {
     const sample = performanceSampleIdentity(execution, mapping.scenarioId, result.sampleIndex);
     if (!sample.measured) return [];
 
-    const deterministicGrade =
-      scenario?.grader && result.responseText !== null
+    const lastTurn = result.turns.at(-1);
+    const finishReason = lastTurn?.finishReason ?? result.finishReason ?? null;
+    const benchmarkGrade = publicCase ? gradePublicBenchmarkResult({
+      ...result,
+      finishReason,
+      truncated: result.truncated || lastTurn?.truncated,
+    }, scenario?.grader) : null;
+    const deterministicGrade = benchmarkGrade
+      ? benchmarkGrade.grade
+      : scenario?.grader && result.responseText !== null
         ? gradeDeterministicResponse(result.responseText, scenario.grader)
         : null;
     return [{
       caseId: sample.caseId,
       comparisonKind: deterministicGrade?.comparisonKind ?? ("EXACT" as const),
       canonicalValue: deterministicGrade?.canonicalValue ?? canonicalValue(result),
-      success: observationSuccess(
+      success: benchmarkGrade ? benchmarkGrade.grade?.passed ?? null : observationSuccess(
         result,
         execution.successPolicy,
         execution.successThreshold,
@@ -374,6 +398,13 @@ async function importRunObservations(
         evalStatus: result.evalStatus,
         scoreStars: result.evaluation?.scoreStars ?? null,
         deterministicGrade,
+        ...(benchmarkGrade && {
+          benchmark: publicCase,
+          outcome: benchmarkGrade.outcome,
+          provider: run.provider,
+          parameters: run.parameters,
+          finishReason,
+        }),
         errorMessage: result.errorMessage,
       },
     }];
@@ -406,6 +437,13 @@ export async function startExperimentExecution(
 
   const scenarios = parsed.scenarioIds.map((id) => benchmarkStore.getScenario(id));
   if (scenarios.some((scenario) => !scenario)) throw new Error("One or more scenarios were not found.");
+  const publicCaseCount = parsed.scenarioIds.filter(publicBenchmarkCase).length;
+  if (publicCaseCount && (
+    publicCaseCount !== scenarios.length || parsed.executionMode !== "STANDARD"
+    || parsed.useEvaluator || parsed.successPolicy !== "DETERMINISTIC"
+  )) {
+    throw new Error("Public benchmarks require a dedicated standard execution with deterministic scoring and no judge.");
+  }
   if (parsed.successPolicy === "DETERMINISTIC") {
     const ungraded = scenarios.filter((scenario) => !scenario?.grader);
     if (ungraded.length > 0) {
@@ -582,19 +620,44 @@ export async function reconcileExperimentExecution(
   }
 
   const comparisons: ExperimentComparison[] = [];
+  const publicBenchmarkResults: PublicBenchmarkResult[] = [];
+  const isPublicRun = stored.execution.scenarioIds.every(publicBenchmarkCase);
   if (allTerminal) {
     const experiment = await getExperiment(experimentId);
     if (!experiment) throw new Error("Experiment not found.");
 
     const baselineVariantId = experiment.experiment.baselineVariantId!;
     const repeatId = experiment.variants.find((item) => item.role === "BASELINE_REPEAT")?.id ?? null;
-    const baselineObservations = await listExperimentExecutionObservations(executionId, baselineVariantId);
-    const repeatObservations = repeatId
-      ? await listExperimentExecutionObservations(executionId, repeatId)
-      : null;
+    const observationsByVariant = new Map<string, ExperimentExecutionObservation[]>();
+    for (const variantId of new Set(stored.runs.map((mapping) => mapping.variantId))) {
+      const observations = await listExperimentExecutionObservations(executionId, variantId);
+      if (isPublicRun) {
+        const outcomes: Record<string, number> = {};
+        for (const item of observations) {
+          const key = String(item.metadata.outcome);
+          outcomes[key] = (outcomes[key] ?? 0) + 1;
+        }
+        const plannedSamples = stored.execution.scenarioIds.length * stored.execution.samplesPerModel;
+        const correct = outcomes.PASS ?? 0;
+        const gradedSamples = correct + (outcomes.WRONG_ANSWER ?? 0);
+        outcomes["N/A"] = (outcomes["N/A"] ?? 0) + Math.max(0, plannedSamples - observations.length);
+        publicBenchmarkResults.push({
+          variantId, observations, plannedSamples, gradedSamples, outcomes,
+          accuracy: gradedSamples ? correct / gradedSamples : null,
+          wilson95: gradedSamples && stored.execution.samplesPerModel === 1
+            ? wilsonInterval(correct, gradedSamples)
+            : null,
+        });
+      }
+      observationsByVariant.set(variantId, isPublicRun
+        ? observations.filter((item) => typeof item.success === "boolean")
+        : observations);
+    }
+    const baselineObservations = observationsByVariant.get(baselineVariantId) ?? [];
+    const repeatObservations = repeatId ? observationsByVariant.get(repeatId) ?? [] : null;
 
     for (const variant of experiment.variants.filter((item) => item.role === "VARIANT" || item.role === "CONTROL")) {
-      const variantObservations = await listExperimentExecutionObservations(executionId, variant.id);
+      const variantObservations = observationsByVariant.get(variant.id) ?? [];
       comparisons.push(buildExperimentComparisonFromObservations({
         experimentId,
         baselineVariantId,
@@ -627,7 +690,7 @@ export async function reconcileExperimentExecution(
     stored.execution = updated;
   }
 
-  return { ...stored, benchmarkRuns, comparisons };
+  return { ...stored, benchmarkRuns, comparisons, ...(isPublicRun && { publicBenchmarkResults }) };
 }
 
 

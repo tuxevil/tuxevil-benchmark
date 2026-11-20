@@ -27,6 +27,11 @@ function canonicalJson(value: unknown): string {
   return `{${entries.join(",")}}`;
 }
 
+// Match the first marked answer and remove commas, as in upstream dataset.py.
+export function extractGsm8kAnswer(text: string): string | null {
+  return /#### (-?[0-9.,]+)/.exec(text)?.[1].replace(/,/g, "") ?? null;
+}
+
 export function gradeDeterministicResponse(
   responseText: string,
   grader: DeterministicGrader,
@@ -84,6 +89,18 @@ export function gradeDeterministicResponse(
           ? "Numeric answer is within tolerance."
           : "Numeric answer is outside tolerance.",
       details: { expected: grader.expected, tolerance: grader.tolerance, actual: parseable ? actual : null, delta },
+    };
+  }
+
+  if (grader.type === "GSM8K") {
+    const actual = extractGsm8kAnswer(responseText);
+    const passed = actual === grader.expected;
+    return {
+      passed,
+      comparisonKind: "STRUCTURAL",
+      canonicalValue: actual ?? "[invalid]",
+      reason: passed ? "GSM8K answer matched." : "GSM8K answer missing or different.",
+      details: { actual, expected: grader.expected },
     };
   }
 

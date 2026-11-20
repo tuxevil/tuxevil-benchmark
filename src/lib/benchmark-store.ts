@@ -38,6 +38,7 @@ import { evaluateModelResponse, resolveEvaluationMode } from "@/lib/frontier-eva
 import { retryTransient } from "@/lib/retry";
 import { publishRunEvent } from "@/lib/run-events";
 import { LEGACY_SECURITY_SEED_NAMESPACE } from "@/lib/legacy-identifiers";
+import { isPublicBenchmarkSuite, PUBLIC_BENCHMARK_SCENARIOS } from "@/lib/public-benchmarks";
 import { PRACTICAL_SLM_SCENARIOS, PRACTICAL_SLM_SEED_NAMESPACE, PRACTICAL_SLM_SUITE_KEY, PRACTICAL_SLM_SUITE_VERSION } from "@/lib/practical-slm-suite";
 
 type RunListener = (event: RunEvent) => void;
@@ -136,6 +137,13 @@ export const benchmarkStore = {
       }
       await seedSecurityScenarios();
       await seedPracticalSlmScenarios();
+      for (const definition of PUBLIC_BENCHMARK_SCENARIOS) {
+        if (state.scenarios.has(definition.id)) continue;
+        const now = new Date().toISOString();
+        const scenario = { ...definition, createdAt: now, updatedAt: now };
+        await persistScenario(scenario);
+        state.scenarios.set(scenario.id, scenario);
+      }
     })().finally(() => {
       state.hydrationPromise = undefined;
     });
@@ -669,8 +677,10 @@ export const benchmarkStore = {
     };
   },
 
-  listScenarios() {
-    return [...state.scenarios.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  listScenarios({ includePublicBenchmarks = false } = {}) {
+    return [...state.scenarios.values()]
+      .filter((scenario) => includePublicBenchmarks || !isPublicBenchmarkSuite(scenario.suiteKey))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   },
 
   getScenario(id: string) {

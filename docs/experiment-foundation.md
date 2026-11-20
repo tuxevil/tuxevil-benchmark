@@ -372,3 +372,9 @@ The product should preserve independent dimensions (capability, reliability,
 efficiency, security, agentic behavior) and let workload profiles compose them
 for a particular use case. Pareto views are preferred over hiding every tradeoff
 inside a single global score.
+
+## Public benchmark pilot
+
+The [GSM8K tuxevil-lite pilot](gsm8k-pilot.md) registers a pinned public
+dataset subset on the existing Experiment Runner. It documents provenance,
+case selection, scoring, observation retrieval, and the tool-calling follow-up.

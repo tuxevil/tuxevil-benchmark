@@ -9,7 +9,7 @@ export type PracticalSlmScenarioDefinition = {
   name: string;
   systemPrompt: string;
   userMessages: string[];
-  grader: DeterministicGrader;
+  grader: Exclude<DeterministicGrader, { type: "GSM8K" }>;
 };
 
 export const PRACTICAL_SLM_SCENARIOS: PracticalSlmScenarioDefinition[] = [

@@ -46,6 +46,13 @@ type ExecutionView = {
     errorMessage: string | null;
   }>;
   comparisons: Comparison[];
+  publicBenchmarkResults?: Array<{
+    variantId: string;
+    plannedSamples: number;
+    gradedSamples: number;
+    accuracy: number | null;
+    outcomes: Record<string, number>;
+  }>;
 };
 
 type Binding = {
@@ -97,7 +104,7 @@ export function ExperimentRunnerPanel({
       try {
         const [targetRes, scenarioRes] = await Promise.all([
           fetch("/api/experiments/targets"),
-          fetch("/api/scenarios"),
+          fetch("/api/scenarios?includePublicBenchmarks=true"),
         ]);
         const [targetData, scenarioData] = await Promise.all([targetRes.json(), scenarioRes.json()]);
         if (!targetRes.ok) throw new Error(targetData.error || "Could not load execution targets.");
@@ -127,6 +134,8 @@ export function ExperimentRunnerPanel({
     () => scenarios.filter((scenario) => scenario.suiteKey === "practical-slm"),
     [scenarios],
   );
+
+  const publicScenarios = scenarios.filter((scenario) => scenario.suiteKey === "gsm8k-tuxevil-lite");
 
   const saveBindings = async () => {
     const baseline = variants.find((variant) => variant.role === "BASELINE");
@@ -329,7 +338,18 @@ export function ExperimentRunnerPanel({
                 Select Practical SLM
               </button>
             )}
-            <button className="quiet-button" type="button" onClick={() => setSelectedScenarios(scenarios.map((scenario) => scenario.id))}>
+            {publicScenarios.length > 0 && (
+              <button className="quiet-button" type="button" onClick={() => {
+                setSelectedScenarios(publicScenarios.map((scenario) => scenario.id));
+                setSuccessPolicy("DETERMINISTIC");
+                setUseEvaluator(false);
+              }}>
+                Select GSM8K tuxevil-lite
+              </button>
+            )}
+            <button className="quiet-button" type="button" onClick={() => setSelectedScenarios(
+              scenarios.filter((scenario) => !publicScenarios.includes(scenario)).map((scenario) => scenario.id),
+            )}>
               Select all
             </button>
             <button className="quiet-button" type="button" onClick={() => setSelectedScenarios([])}>
@@ -407,6 +427,15 @@ export function ExperimentRunnerPanel({
               <span>{variantNameById.get(run.variantId) ?? run.variantId}</span>
               <span>{scenarioNameById.get(run.scenarioId) ?? run.scenarioId}</span>
               <strong>{run.status}</strong>
+            </div>
+          ))}
+          {execution.publicBenchmarkResults?.map((result) => (
+            <div key={result.variantId}>
+              <span>{variantNameById.get(result.variantId) ?? result.variantId}</span>
+              <span>{result.gradedSamples}/{result.plannedSamples} graded</span>
+              <strong>{result.accuracy === null ? "N/A" : `${(result.accuracy * 100).toFixed(1)}%`}</strong>
+              <small>{Object.entries(result.outcomes).filter(([, count]) => count > 0)
+                .map(([outcome, count]) => `${outcome} ${count}`).join(" · ")}</small>
             </div>
           ))}
           {execution.execution.errorMessage && (
