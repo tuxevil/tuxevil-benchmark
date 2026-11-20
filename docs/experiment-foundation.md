@@ -606,3 +606,24 @@ and expected tool results at each checkpoint. The first response must
 contain visible text. Its wording is outside this scoring protocol. The
 case uses the local in-memory environment and the same action limit as the
 multiturn pilot. It yields a result for the adapted pilot.
+
+## BFCL V4 Memory KV tuxevil-lite
+
+Select **BFCL V4 Memory KV tuxevil-lite** in Churn Lab. The catalog pins
+`memory_138-notetaker-8` and its five-turn prerequisite
+`memory_prereq_32-notetaker-0` to the same Gorilla commit. Each result
+starts with empty core and archival memory. The model populates memory
+through the provided native tools. Before the recall question, the runner
+copies the resulting snapshot into a new in-memory store and starts a
+fresh chat with only the system message and question. The trace keeps the
+tool calls and results so the grader can rebuild the snapshot.
+
+To pass, the model must retrieve the relevant fact from that snapshot
+and return it in the JSON `answer` field. An answer guessed or written
+after the reset does not pass. The observation stores the snapshot
+SHA-256 and separate evidence and answer verdicts. The memory has no
+filesystem, network or account access.
+
+This adapted protocol selects one prerequisite conversation, keeps core
+memory behind tools and uses a strict local answer check. The result
+applies to the selected case, rather than the official BFCL V4 suite.

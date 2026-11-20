@@ -1,3 +1,4 @@
+import { BFCL_MEMORY_CASE, BFCL_MEMORY_SUITE, BFCL_MEMORY_SYSTEM, BFCL_MEMORY_VERSION } from "@/lib/bfcl-v4-memory-kv";
 import {
   BFCL_MISS_FUNC_CASES, BFCL_MISS_FUNC_SUITE, BFCL_MULTITURN_CASES, BFCL_MULTITURN_SUITE, BFCL_MULTITURN_SYSTEM, BFCL_MULTITURN_VERSION,
 } from "@/lib/bfcl-v3-multiturn";
@@ -388,6 +389,27 @@ export const PUBLIC_BENCHMARKS = [{
   cases: BFCL_MISS_FUNC_CASES.map(({ scenarioId, sourceCaseId, category, contentSha256 }) => ({
     scenarioId, sourceCaseId, category, caseVersion: 1, contentSha256,
   })),
+}, {
+  id: BFCL_MEMORY_SUITE,
+  version: BFCL_MEMORY_VERSION,
+  language: "en",
+  modality: "stateful-tools",
+  officiallyComparable: false,
+  dataset: {
+    project: "Berkeley Function Calling Leaderboard V4",
+    revision: "6ea57973c7a6097fd7c5915698c54c17c5b1b6c8",
+    url: "https://github.com/ShishirPatil/gorilla/blob/6ea57973c7a6097fd7c5915698c54c17c5b1b6c8/berkeley-function-call-leaderboard/bfcl_eval/data/BFCL_v4_memory.json",
+    split: "memory",
+    license: "Apache-2.0",
+    caseCount: 155,
+  },
+  grader: { type: "BFCL_V4_MEMORY_RECALL", version: 1 },
+  systemPrompt: BFCL_MEMORY_SYSTEM,
+  caseIdsSha256: caseHash([BFCL_MEMORY_CASE.sourceCaseId]),
+  cases: [{
+    scenarioId: BFCL_MEMORY_CASE.scenarioId, sourceCaseId: BFCL_MEMORY_CASE.sourceCaseId,
+    prerequisiteId: BFCL_MEMORY_CASE.prerequisiteId, caseVersion: 1, contentSha256: BFCL_MEMORY_CASE.contentSha256,
+  }],
 }] as const;
 
 export const PUBLIC_BENCHMARK_SCENARIOS: Array<Omit<Scenario, "createdAt" | "updatedAt">> = [
@@ -403,6 +425,7 @@ export const PUBLIC_BENCHMARK_SCENARIOS: Array<Omit<Scenario, "createdAt" | "upd
   ...BFCL_V3_IRRELEVANCE_CASES.map(({ scenario }) => scenario),
   ...BFCL_MULTITURN_CASES.map(({ scenario }) => scenario),
   ...BFCL_MISS_FUNC_CASES.map(({ scenario }) => scenario),
+  BFCL_MEMORY_CASE.scenario,
 ];
 
 export function isPublicBenchmarkSuite(key?: string | null) {

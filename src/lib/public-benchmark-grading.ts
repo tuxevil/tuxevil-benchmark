@@ -1,3 +1,4 @@
+import { BFCL_MEMORY_CASE, gradeBfclMemory } from "@/lib/bfcl-v4-memory-kv";
 import { findBfclMultiturnCase, gradeBfclMultiturn } from "@/lib/bfcl-v3-multiturn";
 import { gradeSimulatedDevice, STATEFUL_CASE } from "@/lib/stateful-tool-sandbox";
 import { findIfevalCase, gradeIfeval } from "@/lib/ifeval-pilot";
@@ -33,6 +34,20 @@ export function gradePublicBenchmarkResult(
   if (scenarioContext?.scenarioId === STATEFUL_CASE.scenarioId) {
     if (scenarioContext.turns.length === 0) return { outcome: "PROVIDER_ERROR", grade: null };
     const grade = gradeSimulatedDevice(scenarioContext.turns);
+    return { outcome: grade.passed ? "PASS" : "WRONG_ANSWER", grade };
+  }
+  if (scenarioContext?.scenarioId === BFCL_MEMORY_CASE.scenarioId) {
+    const last = scenarioContext.turns.at(-1);
+    if (!last) return { outcome: "PROVIDER_ERROR", grade: null };
+    if (scenarioContext.turns.some((turn) => turn.truncated || turn.finishReason === "length")) {
+      return { outcome: "TRUNCATED", grade: null };
+    }
+    if (last.userMessage === BFCL_MEMORY_CASE.scenario.userMessages.at(-1)
+      && !last.toolCalls?.length && last.finishReason !== "tool_calls" && !last.responseText.trim()) {
+      return { outcome: "NO_FINAL_ANSWER", grade: null };
+    }
+    const grade = gradeBfclMemory(scenarioContext.turns);
+    if (!grade) return { outcome: "GRADER_ERROR", grade: null };
     return { outcome: grade.passed ? "PASS" : "WRONG_ANSWER", grade };
   }
   const multiturn = scenarioContext && findBfclMultiturnCase(scenarioContext.scenarioId);

@@ -438,7 +438,12 @@ test("lists public benchmark provenance and protects opt-in scenarios", async ({
 
   const catalog = await request.get("/api/experiments/benchmarks");
   expect(catalog.ok()).toBeTruthy();
-  const { benchmarks: [suite, nativeTools, bfcl, mgsm, ifeval, ifstruct, math500, ptBr, stateful, irrelevance, multiturn, missFunc] } = await catalog.json();
+  const { benchmarks: [suite, nativeTools, bfcl, mgsm, ifeval, ifstruct, math500, ptBr, stateful, irrelevance, multiturn, missFunc, memory] } = await catalog.json();
+  expect(memory).toMatchObject({
+    id: "bfcl-v4-memory-kv-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
+    dataset: { split: "memory", caseCount: 155, license: "Apache-2.0" },
+    cases: [{ sourceCaseId: "memory_138-notetaker-8", prerequisiteId: "memory_prereq_32-notetaker-0" }],
+  });
   expect(missFunc).toMatchObject({
     id: "bfcl-v3-miss-func-tuxevil-lite", modality: "stateful-tools", officiallyComparable: false,
     dataset: { split: "multi_turn_miss_func", license: "Apache-2.0", caseCount: 200 },

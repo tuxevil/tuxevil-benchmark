@@ -1,3 +1,4 @@
+import { BFCL_MEMORY_CASE, BFCL_MEMORY_SYSTEM } from "@/lib/bfcl-v4-memory-kv";
 import { BFCL_MISS_FUNC_CASES, BFCL_MULTITURN_CASES, BFCL_MULTITURN_SYSTEM, BFCL_TOOL_RESTORATION_PROMPT } from "@/lib/bfcl-v3-multiturn";
 import { STATEFUL_CASE, STATEFUL_SYSTEM } from "@/lib/stateful-tool-sandbox";
 import { createServer } from "node:http";
@@ -38,6 +39,22 @@ it("runs public cases through provider transports and persists scored and techni
     chatRequests.push(body);
     if (body.model === "error") {
       response.writeHead(400).end();
+      return;
+    }
+    if (body.messages[0].content === BFCL_MEMORY_SYSTEM) {
+      const history = body.messages as Array<{ role: string; content: string }>;
+      const userIndex = history.findLastIndex(({ role }) => role === "user");
+      const prompt = history[userIndex].content;
+      const continuation = history.at(-1)?.role === "tool";
+      const recallPrompt = BFCL_MEMORY_CASE.scenario.userMessages.at(-1);
+      const shouldStore = prompt.includes("Client proposal draft ready") && !continuation && body.model === "correct";
+      const shouldRetrieve = prompt === recallPrompt && !continuation && body.model === "correct";
+      const message = shouldStore ? { tool_calls: [{ function: { name: "archival_memory_add", arguments: {
+        key: "client_proposal", value: "Send the client proposal to Legal.",
+      } } }] } : shouldRetrieve ? { tool_calls: [{ function: { name: "archival_memory_retrieve", arguments: {
+        key: "client_proposal",
+      } } }] } : { content: prompt === recallPrompt ? '{"answer":"Legal"}' : "Understood." };
+      response.end(JSON.stringify({ message, done: true, done_reason: body.model === "truncated" ? "length" : "stop" }));
       return;
     }
     if (body.messages[0].content === STATEFUL_SYSTEM) {
@@ -520,6 +537,35 @@ it("runs public cases through provider transports and persists scored and techni
     ]));
 
 
+
+
+    const memoryRun = await startExperimentExecution(experiment.id, {
+      scenarioIds: [BFCL_MEMORY_CASE.scenarioId], successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(experiment.id, memoryRun.execution.id);
+      expect(report.publicBenchmarkResults).toHaveLength(4);
+      const items = variants.map((variant) =>
+        report.publicBenchmarkResults!.find((item) => item.variantId === variant.id)!.observations[0]);
+      expect(items.map((item) => item.metadata.outcome)).toEqual(["PASS", "WRONG_ANSWER", "TRUNCATED", "PROVIDER_ERROR"]);
+      expect(items[0].metadata.deterministicGrade).toMatchObject({
+        reason: "MEMORY_RECALL_SUCCESS", details: { snapshotHash: expect.stringMatching(/^[a-f0-9]{64}$/), retrieval: true },
+      });
+      expect(items[1].metadata.deterministicGrade).toMatchObject({
+        reason: "MEMORY_EVIDENCE_MISSING", details: { answerCorrect: true, retrieval: false },
+      });
+    }, { timeout: 8_000 });
+    const memoryBaseline = memoryRun.runs.find((item) => item.variantId === variants[0].id)!;
+    const memoryStored = await loadPersistedState(memoryBaseline.testRunId);
+    const memoryTurns = memoryStored?.runs[0].run.results[0].turns ?? [];
+    const recallPrompt = BFCL_MEMORY_CASE.scenario.userMessages.at(-1);
+    const recall = memoryTurns.find(({ userMessage }) => userMessage === recallPrompt);
+    expect(recall?.requestBody?.messages).toEqual([
+      { role: "system", content: BFCL_MEMORY_SYSTEM }, { role: "user", content: recallPrompt },
+    ]);
+    expect(memoryTurns.at(-1)?.requestBody?.messages).toEqual(expect.arrayContaining([
+      { role: "tool", tool_name: "archival_memory_retrieve", content: '{"value":"Send the client proposal to Legal."}' },
+    ]));
 
   } finally {
     server.close();
