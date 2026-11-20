@@ -1,3 +1,4 @@
+import { IFSTRUCT_CASES, IFSTRUCT_SUITE, IFSTRUCT_VERSION } from "@/lib/ifstruct-pilot";
 import { IFEVAL_CASES, IFEVAL_SUITE, IFEVAL_VERSION } from "@/lib/ifeval-pilot";
 import { BFCL_V3_CASES, BFCL_V3_SUITE, BFCL_V3_SYSTEM_PROMPT, BFCL_V3_VERSION } from "@/lib/bfcl-v3-pilot";
 import { createHash } from "node:crypto";
@@ -182,6 +183,32 @@ export const PUBLIC_BENCHMARKS = [{
   cases: IFEVAL_CASES.map(({ scenarioId, sourceCaseId, contentSha256 }) => ({
     scenarioId, sourceCaseId, caseVersion: 1, contentSha256,
   })),
+}, {
+  id: IFSTRUCT_SUITE,
+  version: IFSTRUCT_VERSION,
+  language: "en",
+  modality: "chat",
+  officiallyComparable: false,
+  dataset: {
+    project: "IFStruct v1.0",
+    revision: "73e03a6d3a8508357ba430675a106d4887abedf3",
+    url: "https://github.com/Liquid4All/ifstruct/blob/73e03a6d3a8508357ba430675a106d4887abedf3/data/test.jsonl",
+    sha256: "2a62e39293040aed7db6690bfa31c764cb761f71daf0ae0bd4abc4249f5f574e",
+    split: "test",
+    license: "Apache-2.0",
+    caseCount: 2000,
+  },
+  grader: {
+    type: "IFSTRUCT_UPSTREAM",
+    version: 1,
+    upstreamRevision: "73e03a6d3a8508357ba430675a106d4887abedf3",
+    sha256: "53e8a3da887e9489f998bef0c1579bdbb5549256110187d92143c88c101233f2",
+  },
+  systemPrompt: "",
+  caseIdsSha256: caseHash(IFSTRUCT_CASES.map(({ sourceCaseId }) => sourceCaseId)),
+  cases: IFSTRUCT_CASES.map(({ scenarioId, sourceCaseId, outputFormat, contentSha256 }) => ({
+    scenarioId, sourceCaseId, outputFormat, caseVersion: 1, contentSha256,
+  })),
 }] as const;
 
 export const PUBLIC_BENCHMARK_SCENARIOS = [
@@ -190,6 +217,7 @@ export const PUBLIC_BENCHMARK_SCENARIOS = [
   ...BFCL_V3_CASES.map(({ scenario }) => scenario),
   ...mgsmCases.map(({ scenario }) => scenario),
   ...IFEVAL_CASES.map(({ scenario }) => scenario),
+  ...IFSTRUCT_CASES.map(({ scenario }) => scenario),
 ];
 
 export function isPublicBenchmarkSuite(key?: string | null) {
