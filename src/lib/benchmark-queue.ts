@@ -480,7 +480,8 @@ async function executeModel(runId: string, resultId: string) {
           const continuation: OllamaChatMessage[] = [
             ...conversation,
             { role: "assistant", content: response.responseText, tool_calls: response.toolCalls },
-            { role: "tool", content, tool_name: fixture.name },
+            { role: "tool", content, tool_name: fixture.name,
+              ...(response.toolCalls[0].id && { tool_call_id: response.toolCalls[0].id }) },
           ];
           response = await infer(continuation, []);
           await recordTurn(response, ++stepOrder, continuation);
@@ -504,7 +505,10 @@ async function executeModel(runId: string, resultId: string) {
           } else {
             ollamaHistory.push(
               { role: "assistant", content: response.responseText, tool_calls: response.toolCalls },
-              ...response.toolCalls.map((call, index) => ({ role: "tool" as const, content: results[index], tool_name: call.function.name })),
+              ...response.toolCalls.map((call, index) => ({
+                role: "tool" as const, content: results[index], tool_name: call.function.name,
+                ...(call.id && { tool_call_id: call.id }),
+              })),
             );
           }
           response = await infer(ollamaHistory.slice(), openAIHistory.slice());

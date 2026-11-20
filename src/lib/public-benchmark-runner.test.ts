@@ -83,7 +83,9 @@ it("runs public cases through provider transports and persists scored and techni
         response.end("data: [DONE]\n\n");
         return;
       }
-      const message = toolCalls.length ? { tool_calls: toolCalls.map((call) => ({ function: call })) }
+      const message = toolCalls.length ? {
+        tool_calls: toolCalls.map((call, index) => ({ id: `ollama_${index}`, function: call })),
+      }
         : { content: userTurn === 3 ? "Which file?" : "Done." };
       response.end(JSON.stringify({ message, done: true, done_reason: body.model === "truncated" ? "length" : "stop" }));
       return;
@@ -443,8 +445,8 @@ it("runs public cases through provider transports and persists scored and techni
     const recorded = multiturnStored?.runs[0].run.results[0].turns ?? [];
     expect(recorded.map(({ stepOrder }) => stepOrder)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(recorded[7].requestBody?.messages).toEqual(expect.arrayContaining([
-      { role: "tool", tool_name: "echo", content: '{"error":"INVALID_ARGUMENTS"}' },
-      { role: "tool", tool_name: "wc", content: '{"count":2,"type":"words"}' },
+      { role: "tool", tool_name: "echo", tool_call_id: "ollama_0", content: '{"error":"INVALID_ARGUMENTS"}' },
+      { role: "tool", tool_name: "wc", tool_call_id: "ollama_0", content: '{"count":2,"type":"words"}' },
       { role: "assistant", content: "Which file?" },
     ]));
     const openAITarget = await createExecutionTarget({

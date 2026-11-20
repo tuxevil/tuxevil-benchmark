@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import data from "@/lib/benchmark-data/bfcl-v3-multiturn-lite.json";
 import type { Scenario, TurnResult } from "@/lib/contracts";
 import type { DeterministicGrade } from "@/lib/deterministic-grader";
-import type { ChatTool } from "@/lib/providers/chat-tools";
+import { matchesToolFeedback, type ChatTool } from "@/lib/providers/chat-tools";
 
 export const BFCL_MULTITURN_SUITE = "bfcl-v3-multiturn-tuxevil-lite";
 export const BFCL_MULTITURN_VERSION = "1.0.0";
@@ -151,9 +151,7 @@ export function gradeBfclMultiturn(fixture: Fixture, turns: TurnResult[]): Deter
       if (feedback.length !== calls.length || !feedback.every((entry) => entry.role === "tool")) break;
       for (const [callIndex, call] of calls.entries()) {
         const tool = feedback[callIndex];
-        if (!call?.function?.name || ("id" in call
-          ? !call.id || tool.tool_call_id !== call.id
-          : tool.tool_name !== call.function.name)) return null;
+        if (!call?.function?.name || !matchesToolFeedback(call, tool)) return null;
         const result = environment.invoke(call.function.name, call.function.arguments);
         if (tool.content !== JSON.stringify(result)) return null;
         if (result && Object.hasOwn(result, "error")) failedActions++;

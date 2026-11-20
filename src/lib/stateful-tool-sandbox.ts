@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Scenario, TurnResult } from "@/lib/contracts";
 import type { DeterministicGrade } from "@/lib/deterministic-grader";
-import type { ChatTool } from "@/lib/providers/chat-tools";
+import { matchesToolFeedback, type ChatTool } from "@/lib/providers/chat-tools";
 
 export const STATEFUL_SUITE = "toolsandbox-local-adapted";
 export const STATEFUL_VERSION = "1.0.0";
@@ -91,8 +91,7 @@ export function gradeSimulatedDevice(turns: TurnResult[]): DeterministicGrade {
     const tool = Array.isArray(messages) ? messages.at(-1) : null;
     if (!call?.function || tool?.role !== "tool") break;
     const name = call.function.name;
-    if (("id" in call && (!call.id || tool.tool_call_id !== call.id))
-      || (!("id" in call) && tool.tool_name !== name)) break;
+    if (!matchesToolFeedback(call, tool)) break;
     const previous = { ...device };
     const result = runSimulatedDeviceTool(device, name, call.function.arguments);
     if (tool.content !== JSON.stringify(result)) {
