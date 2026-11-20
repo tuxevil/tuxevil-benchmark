@@ -1,5 +1,5 @@
 import { inferencePhaseRate, type InferencePhaseRate } from "@/lib/providers/inference-phase-rates";
-import type { BenchmarkParameters } from "@/lib/contracts";
+import { supportsExplicitThinking, type BenchmarkParameters } from "@/lib/contracts";
 
 import { appendOpenAIToolDeltas, type ChatTool, type OpenAIChatMessage, type OpenAIToolCall, type OpenAIToolDelta } from "@/lib/providers/chat-tools";
 
@@ -200,7 +200,10 @@ export async function streamOpenAICompatibleChat({
   if (parameters.seed !== undefined) body.seed = parameters.seed;
 
   const reasoningEffort = parameters.reasoningEffort ?? "off";
-  if (reasoningEffort !== "default") {
+  if (reasoningEffort === "on") {
+    if (!supportsExplicitThinking(provider)) throw new Error(`Thinking ON is unavailable for ${providerName}.`);
+    body.chat_template_kwargs = { enable_thinking: true };
+  } else if (reasoningEffort !== "default") {
     if (provider === "llamacpp" && reasoningEffort === "off") {
       body.reasoning_effort = "none";
     } else {

@@ -29,7 +29,7 @@ export const securityAttackTypeSchema = z.enum([
 export type TestCategory = z.infer<typeof testCategorySchema>;
 export type SecurityAttackType = z.infer<typeof securityAttackTypeSchema>;
 
-export const reasoningEffortSchema = z.enum(["off", "default", "low", "medium", "high", "max"]);
+export const reasoningEffortSchema = z.enum(["off", "on", "default", "low", "medium", "high", "max"]);
 export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>;
 
 export const benchmarkParametersSchema = z.object({
@@ -75,6 +75,10 @@ export type EvaluatorEntry = {
 
 export const modelProviderSchema = z.enum(["ollama", "freetoken", "llamacpp", "strata"]);
 export type ModelProvider = z.infer<typeof modelProviderSchema>;
+
+export function supportsExplicitThinking(provider: ModelProvider) {
+  return provider === "ollama" || provider === "llamacpp";
+}
 export const MODEL_PROVIDERS = ["ollama", "freetoken", "llamacpp", "strata"] as const;
 
 export const createRunSchema = z

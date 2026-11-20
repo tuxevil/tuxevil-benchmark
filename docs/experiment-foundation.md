@@ -477,9 +477,15 @@ regrading, and persisted grades are reused when the Runner polls.
 
 ### Ollama thinking controls
 
-The Ollama adapter sends `think: false` for an explicit `off` request.
-It sends named effort levels as requested and omits `think` for
-`default` or absent settings. Per-turn diagnostic events expose
+The Ollama adapter sends `think: true` for explicit `on` and
+`think: false` for explicit `off`. It sends named effort levels as
+requested and omits `think` for `default` or absent settings.
+The llama.cpp adapter translates `on` to
+`chat_template_kwargs.enable_thinking: true` and retains
+`reasoning_effort: "none"` for `off`. The model template and server
+configuration determine whether these requests take effect. FreeToken and
+Strata keep their provider-specific named efforts and do not accept the
+new binary `on` mode. Per-turn diagnostic events expose
 `requestedThinking`, `ttftMs` for the first emitted content, reasoning or
 tool call, and `firstVisibleTokenMs` for the first answer content. The
 visible measurement is null for a response consisting only of reasoning

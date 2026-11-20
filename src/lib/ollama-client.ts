@@ -32,7 +32,7 @@ export type OllamaChatResult = Telemetry & {
   firstVisibleTokenMs: number | null;
   prefillRate: InferencePhaseRate | null;
   decodeRate: InferencePhaseRate | null;
-  requestedThinking: false | "low" | "medium" | "high" | "max" | null;
+  requestedThinking: boolean | "low" | "medium" | "high" | "max" | null;
   finishReason: string | null;
   truncated: boolean;
 };
@@ -58,7 +58,7 @@ export async function streamOllamaChat({
 }): Promise<OllamaChatResult> {
   const startedAt = performance.now();
   const effort = parameters.reasoningEffort;
-  const think = effort === "off" ? false : effort === "default" ? undefined : effort;
+  const think = effort === "on" ? true : effort === "off" ? false : effort === "default" ? undefined : effort;
   const streamed = await requestChat({ endpoint, model, messages, tools, parameters, signal, onToken, apiKey, think });
 
   const evalDurationMs = durationMs(streamed.finalChunk.eval_duration);

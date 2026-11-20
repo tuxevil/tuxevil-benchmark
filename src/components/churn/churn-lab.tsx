@@ -1,5 +1,6 @@
 "use client";
 
+import { reasoningEffortSchema } from "@/lib/contracts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ExecutionTargetPanel } from "@/components/churn/execution-target-panel";
 import { ExperimentRunnerPanel } from "@/components/churn/experiment-runner-panel";
@@ -1109,7 +1110,11 @@ function VariantEditor({
       </label>
       <label>
         Reasoning mode
-        <input className="input" value={reasoningMode} onChange={(e) => onReasoningChange(e.target.value)} placeholder="off / low / high / think" />
+        <select className="input" value={reasoningMode} onChange={(e) => onReasoningChange(e.target.value)}>
+          {reasoningEffortSchema.options.map((mode) => (
+            <option key={mode} value={mode}>{mode === "on" ? "On (Ollama / llama.cpp)" : mode}</option>
+          ))}
+        </select>
       </label>
     </div>
   );

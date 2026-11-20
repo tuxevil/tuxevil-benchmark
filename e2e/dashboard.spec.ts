@@ -305,6 +305,10 @@ test("Churn Lab renders the experiment workbench", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Execution Environment" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Experiment Builder" })).toBeVisible();
   await expect(page.getByText("Quant / weights")).toBeVisible();
+  const reasoningModes = page.getByRole("combobox", { name: "Reasoning mode", exact: true });
+  await expect(reasoningModes).toHaveCount(2);
+  await reasoningModes.last().selectOption("on");
+  await expect(reasoningModes.last()).toHaveValue("on");
   await expect(page.getByText("Observation Import")).toBeVisible();
   await expect(page.getByText("Paired Comparison")).toBeVisible();
 });
