@@ -1,3 +1,4 @@
+import { BFCL_MEMORY_CASE, BFCL_MEMORY_MAX_ACTIONS, BFCL_MEMORY_RECALL_TURN, createBfclMemory } from "@/lib/bfcl-v4-memory-kv";
 import { BFCL_MULTITURN_MAX_ACTIONS, createBfclFileSystem, findBfclMultiturnCase } from "@/lib/bfcl-v3-multiturn";
 import { createSimulatedDevice, runSimulatedDeviceTool, STATEFUL_CASE, STATEFUL_MAX_ACTIONS } from "@/lib/stateful-tool-sandbox";
 import { findBfclV3Case } from "@/lib/bfcl-v3-pilot";
@@ -277,11 +278,15 @@ async function executeModel(runId: string, resultId: string) {
   const fixture = findNativeToolFixture(run.scenarioId);
   const stateful = run.scenarioId === STATEFUL_CASE.scenarioId;
   const bfclMultiturn = findBfclMultiturnCase(run.scenarioId);
-  const staticTools = stateful ? STATEFUL_CASE.tools : fixture ? [fixture.tool] : findBfclV3Case(run.scenarioId)?.tools;
+  const memoryCase = run.scenarioId === BFCL_MEMORY_CASE.scenarioId;
+  let memory = memoryCase ? createBfclMemory() : null;
+  const scriptedTools = Boolean(bfclMultiturn || memoryCase);
+  const staticTools = memoryCase ? BFCL_MEMORY_CASE.tools
+    : stateful ? STATEFUL_CASE.tools : fixture ? [fixture.tool] : findBfclV3Case(run.scenarioId)?.tools;
   const device = stateful ? createSimulatedDevice() : null;
-  const toolHandler = bfclMultiturn ? createBfclFileSystem(bfclMultiturn).invoke
+  const statefulHandler = bfclMultiturn ? createBfclFileSystem(bfclMultiturn).invoke
     : device ? (name: string, args: unknown) => runSimulatedDeviceTool(device, name, args) : null;
-  const maxActions = bfclMultiturn ? BFCL_MULTITURN_MAX_ACTIONS : STATEFUL_MAX_ACTIONS;
+  const maxActions = memoryCase ? BFCL_MEMORY_MAX_ACTIONS : bfclMultiturn ? BFCL_MULTITURN_MAX_ACTIONS : STATEFUL_MAX_ACTIONS;
   const conversation: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
     ...(run.systemPrompt ? [{ role: "system" as const, content: run.systemPrompt }] : []),
   ];
@@ -297,6 +302,13 @@ async function executeModel(runId: string, resultId: string) {
       const activeRun = benchmarkStore.getStoredRun(runId);
       if (!activeRun) return;
 
+      if (memory && index === BFCL_MEMORY_RECALL_TURN) {
+        const snapshot = memory.snapshot();
+        memory = createBfclMemory(snapshot);
+        ollamaHistory.splice(run.systemPrompt ? 1 : 0);
+        openAIHistory.splice(run.systemPrompt ? 1 : 0);
+      }
+      const toolHandler = memory?.invoke ?? statefulHandler;
       const tools = bfclMultiturn?.turnTools[index] ?? staticTools;
       const userTurn = { role: "user" as const, content: userMessage };
       conversation.push(userTurn);
@@ -465,7 +477,7 @@ async function executeModel(runId: string, resultId: string) {
       };
 
       let response = await infer(toolHandler ? ollamaHistory.slice() : conversation, toolHandler ? openAIHistory.slice() : conversation);
-      await recordTurn(response, ++stepOrder, bfclMultiturn ? ollamaHistory.slice() : undefined);
+      await recordTurn(response, ++stepOrder, scriptedTools ? ollamaHistory.slice() : undefined);
       if (fixture && !response.truncated && checkFixtureCall(fixture, response.toolCalls) === "VALID") {
         if (!(await waitUntilRunnable(runId))) return;
         const content = JSON.stringify(fixture.result);
@@ -491,7 +503,7 @@ async function executeModel(runId: string, resultId: string) {
         let actions = 0;
         while (!response.truncated && response.toolCalls.length > 0) {
           const calls = response.toolCalls;
-          if (actions + calls.length > maxActions || (!bfclMultiturn && calls.length !== 1)
+          if (actions + calls.length > maxActions || (!scriptedTools && calls.length !== 1)
             || calls.some((call) => typeof call?.function?.name !== "string" || !call.function.name)
             || ("protocolDiagnostics" in response && (response.toolCalls.some((call) => !call.id)
               || new Set(response.toolCalls.map((call) => call.id)).size !== calls.length))) break;
@@ -515,12 +527,12 @@ async function executeModel(runId: string, resultId: string) {
           response = await infer(ollamaHistory.slice(), openAIHistory.slice());
           await recordTurn(response, ++stepOrder, ollamaHistory.slice());
         }
-        if (bfclMultiturn && response.truncated) break;
+        if (scriptedTools && response.truncated) break;
         if (response.toolCalls.length === 0) {
           const assistant = { role: "assistant" as const, content: response.responseText };
           ollamaHistory.push(assistant);
           openAIHistory.push(assistant);
-        } else if (bfclMultiturn) {
+        } else if (scriptedTools) {
           // An unfinished call batch cannot be added to the provider history.
           break;
         }
