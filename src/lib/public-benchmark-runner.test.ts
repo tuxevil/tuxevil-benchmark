@@ -1,3 +1,4 @@
+import { STATEFUL_CASE, STATEFUL_SYSTEM } from "@/lib/stateful-tool-sandbox";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -34,6 +35,20 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
     chatRequests.push(body);
     if (body.model === "error") {
       response.writeHead(400).end();
+      return;
+    }
+    if (body.messages[0].content === STATEFUL_SYSTEM) {
+      const steps = body.messages.filter((message: { role: string }) => message.role === "tool").length;
+      const correct = body.model === "correct";
+      const calls = correct
+        ? [
+          { name: "set_wifi", arguments: { enabled: "false" } },
+          { name: "set_wifi", arguments: { enabled: false } },
+          { name: "read_device_settings", arguments: {} },
+        ]
+        : [{ name: "set_wifi", arguments: { enabled: false } }];
+      const message = steps < calls.length ? { tool_calls: [{ function: calls[steps] }] } : { content: "Pronto." };
+      response.end(JSON.stringify({ message, done: true, done_reason: body.model === "truncated" ? "length" : "stop" }));
       return;
     }
     if (body.tools?.length) {
@@ -321,6 +336,27 @@ it("runs a selected public case via the Ollama queue and persists scored and tec
         benchmark: { sourceCaseId: "pix-payment", suite: { language: "pt-BR", id: "practical-pt-br" } },
       });
     }, { timeout: 5_000 });
+    const sandbox = await startExperimentExecution(experiment.id, {
+      scenarioIds: [STATEFUL_CASE.scenarioId], successPolicy: "DETERMINISTIC",
+    });
+    await vi.waitFor(async () => {
+      const report = await reconcileExperimentExecution(experiment.id, sandbox.execution.id);
+      expect(report.publicBenchmarkResults).toHaveLength(4);
+      const items = variants.map((variant) =>
+        report.publicBenchmarkResults!.find((item) => item.variantId === variant.id)!.observations[0]);
+      expect(items.map((item) => item.metadata.outcome)).toEqual(["PASS", "WRONG_ANSWER", "TRUNCATED", "PROVIDER_ERROR"]);
+      expect(items[0].metadata.deterministicGrade).toMatchObject({
+        reason: "STATE_GOAL_CONFIRMED",
+        details: { initialState: { wifiEnabled: true, bluetoothEnabled: true },
+          finalState: { wifiEnabled: false, bluetoothEnabled: true }, actions: 3, invalidActions: 1 },
+      });
+      expect(items[1].metadata.deterministicGrade).toMatchObject({
+        reason: "STATE_GOAL_UNCONFIRMED", details: { stateGoalReached: true, confirmed: false },
+      });
+    }, { timeout: 5_000 });
+    const statefulRun = sandbox.runs.find((item) => item.variantId === variants[0].id)!;
+    const statefulStored = await loadPersistedState(statefulRun.testRunId);
+    expect(statefulStored?.runs[0].run.results[0].turns).toHaveLength(4);
   } finally {
     server.close();
     vi.unstubAllEnvs();

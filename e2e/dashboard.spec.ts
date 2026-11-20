@@ -434,7 +434,11 @@ test("lists public benchmark provenance and protects opt-in scenarios", async ({
 
   const catalog = await request.get("/api/experiments/benchmarks");
   expect(catalog.ok()).toBeTruthy();
-  const { benchmarks: [suite, nativeTools, bfcl, mgsm, ifeval, ifstruct, math500, ptBr] } = await catalog.json();
+  const { benchmarks: [suite, nativeTools, bfcl, mgsm, ifeval, ifstruct, math500, ptBr, stateful] } = await catalog.json();
+  expect(stateful).toMatchObject({
+    id: "toolsandbox-local-adapted", modality: "stateful-tools", officiallyComparable: false,
+  });
+  expect(stateful.cases).toHaveLength(1);
   expect(ptBr).toMatchObject({
     id: "practical-pt-br", language: "pt-BR", officiallyComparable: false,
     dataset: { split: "synthetic", license: "MIT", caseCount: 6 },

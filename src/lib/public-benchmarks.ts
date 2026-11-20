@@ -1,3 +1,4 @@
+import { STATEFUL_CASE, STATEFUL_SUITE, STATEFUL_SYSTEM, STATEFUL_VERSION } from "@/lib/stateful-tool-sandbox";
 import { MATH500_CASES, MATH500_PROMPT, MATH500_SUITE, MATH500_VERSION } from "@/lib/math500-pilot";
 import { IFSTRUCT_CASES, IFSTRUCT_SUITE, IFSTRUCT_VERSION } from "@/lib/ifstruct-pilot";
 import { IFEVAL_CASES, IFEVAL_SUITE, IFEVAL_VERSION } from "@/lib/ifeval-pilot";
@@ -288,6 +289,27 @@ export const PUBLIC_BENCHMARKS = [{
   cases: ptBrCases.map(({ scenarioId, sourceCaseId, caseVersion, contentSha256 }) => ({
     scenarioId, sourceCaseId, caseVersion, contentSha256,
   })),
+}, {
+  id: STATEFUL_SUITE,
+  version: STATEFUL_VERSION,
+  language: "es",
+  modality: "stateful-tools",
+  officiallyComparable: false,
+  dataset: {
+    project: "tuxevil Benchmark (ToolSandbox-inspired)",
+    revision: STATEFUL_VERSION,
+    url: "https://github.com/apple-aiml-research/ToolSandbox/tree/c8571d7854316d2e1c5f288e59fe1e34e53f6dd1",
+    split: "synthetic",
+    license: "MIT",
+    caseCount: 1,
+  },
+  grader: { type: "SIMULATED_DEVICE_STATE", version: 1 },
+  systemPrompt: STATEFUL_SYSTEM,
+  caseIdsSha256: caseHash([STATEFUL_CASE.sourceCaseId]),
+  cases: [{
+    scenarioId: STATEFUL_CASE.scenarioId, sourceCaseId: STATEFUL_CASE.sourceCaseId,
+    caseVersion: 1, contentSha256: STATEFUL_CASE.contentSha256,
+  }],
 }] as const;
 
 export const PUBLIC_BENCHMARK_SCENARIOS: Array<Omit<Scenario, "createdAt" | "updatedAt">> = [
@@ -299,6 +321,7 @@ export const PUBLIC_BENCHMARK_SCENARIOS: Array<Omit<Scenario, "createdAt" | "upd
   ...IFSTRUCT_CASES.map(({ scenario }) => scenario),
   ...MATH500_CASES.map(({ scenario }) => scenario),
   ...ptBrCases.map(({ scenario }) => scenario),
+  STATEFUL_CASE.scenario,
 ];
 
 export function isPublicBenchmarkSuite(key?: string | null) {

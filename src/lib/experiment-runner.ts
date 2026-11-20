@@ -1,3 +1,4 @@
+import { STATEFUL_CASE } from "@/lib/stateful-tool-sandbox";
 import { findMath500Case, gradeMath500 } from "@/lib/math500-pilot";
 import { findIfstructCase, gradeIfstruct } from "@/lib/ifstruct-pilot";
 import { findIfevalCase, summarizeIfeval } from "@/lib/ifeval-pilot";
@@ -467,7 +468,7 @@ export async function startExperimentExecution(
     throw new Error("Public benchmarks require a dedicated standard execution with deterministic scoring and no judge.");
   }
   if (parsed.successPolicy === "DETERMINISTIC") {
-    const ungraded = scenarios.filter((scenario) => scenario && !scenario.grader && !findBfclV3Case(scenario.id) && !findIfevalCase(scenario.id) && !findIfstructCase(scenario.id) && !findMath500Case(scenario.id));
+    const ungraded = scenarios.filter((scenario) => scenario && !scenario.grader && !findBfclV3Case(scenario.id) && !findIfevalCase(scenario.id) && !findIfstructCase(scenario.id) && !findMath500Case(scenario.id) && scenario.id !== STATEFUL_CASE.scenarioId);
     if (ungraded.length > 0) {
       throw new Error(
         `Deterministic success policy requires a grader on every selected scenario. Missing: ${ungraded.map((scenario) => scenario?.name ?? "unknown").join(", ")}.`,

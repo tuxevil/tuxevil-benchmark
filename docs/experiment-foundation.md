@@ -521,3 +521,23 @@ Brazilian payment terminology and a reais-to-centavos conversion.
 The grader checks exact text or typed JSON. Case results describe the
 fixed synthetic suite and should not be interpreted as a general
 Portuguese-language capability score.
+
+### Local stateful tools pilot
+
+Select **ToolSandbox local (adapted)** in Churn Lab. The original
+Spanish fixture is inspired by ToolSandbox's Wi-Fi scenario and starts
+each sample with a fresh fictitious device. The model can query the
+device or set its Wi-Fi flag with a boolean argument. A malformed
+argument produces a simulated error and gives the model a chance to
+recover. The four-action budget bounds each trajectory.
+
+Each continuation persists the tool result alongside the model's native
+call. The verifier replays those paired actions from the initial state and
+checks that Wi-Fi ended off, Bluetooth remained on, and the model read the
+changed state after its last write. Claimed success in the final text
+does not substitute for a verified change. The report includes initial and
+final state, confirmation, action count and invalid actions.
+
+The simulator operates on an in-memory object. It uses no device APIs,
+contacts, accounts or external tools. It is an adapted synthetic protocol
+with its own IDs and scores, independent of the upstream Python benchmark.
