@@ -5,12 +5,14 @@ import { appendOpenAIToolDeltas, type ChatTool, type OpenAIChatMessage, type Ope
 
 type OpenAIUsage = {
   prompt_tokens?: number;
+  prompt_tokens_details?: { cached_tokens?: number };
   completion_tokens?: number;
   completion_tokens_details?: { reasoning_tokens?: number };
   total_tokens?: number;
 };
 
 type LlamaCppTimings = {
+  cache_n?: number;
   prompt_n?: number;
   prompt_ms?: number;
   prompt_per_second?: number;
@@ -128,6 +130,8 @@ export type OpenAIChatResult = {
   truncated: boolean;
   ttftMs: number | null;
   firstVisibleTokenMs: number | null;
+  cachedPromptTokens: number | null;
+  cacheHitRatio: number | null;
   prefillRate: InferencePhaseRate | null;
   decodeRate: InferencePhaseRate | null;
   reasoningTokens: number | null;
@@ -398,8 +402,14 @@ export async function streamOpenAICompatibleChat({
   const reportedReasoningTokens = usage?.completion_tokens_details?.reasoning_tokens;
   const reasoningTokens = typeof reportedReasoningTokens === "number"
     && Number.isSafeInteger(reportedReasoningTokens) && reportedReasoningTokens >= 0 ? reportedReasoningTokens : null;
-  const inputTokens = usage?.prompt_tokens ?? timings?.prompt_n ?? null;
+  const rawCachedTokens = timings?.cache_n ?? usage?.prompt_tokens_details?.cached_tokens;
+  const cachedPromptTokens = typeof rawCachedTokens === "number"
+    && Number.isSafeInteger(rawCachedTokens) && rawCachedTokens >= 0 ? rawCachedTokens : null;
+  const inputTokens = usage?.prompt_tokens ?? (timings?.prompt_n != null ? timings.prompt_n + (cachedPromptTokens ?? 0) : null);
   const outputTokens = usage?.completion_tokens ?? timings?.predicted_n ?? null;
+  const cacheHitRatio = cachedPromptTokens !== null && inputTokens !== null && inputTokens > 0
+    ? Number(Math.min(1, cachedPromptTokens / inputTokens).toFixed(4))
+    : null;
 
   const truncated = finishReason === "length" || (outputTokens !== null && outputTokens >= parameters.numPredict);
 
@@ -453,6 +463,8 @@ export async function streamOpenAICompatibleChat({
     truncated,
     ttftMs: firstTokenAt === null ? null : Math.round(firstTokenAt - startedAt),
     firstVisibleTokenMs: visibleAt === null ? null : Math.round(visibleAt - startedAt),
+    cachedPromptTokens,
+    cacheHitRatio,
     reasoningTokens,
     prefillRate,
     decodeRate,

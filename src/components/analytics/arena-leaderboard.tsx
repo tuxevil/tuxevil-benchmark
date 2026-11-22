@@ -33,6 +33,7 @@ type SortField =
   | "securityResilienceScore"
   | "avgTokPerSec"
   | "avgTtftMs"
+  | "avgCacheHitRatio"
   | "avgOutputTokens"
   | "avgDurationMs";
 
@@ -73,6 +74,14 @@ export function ArenaLeaderboard({
     }
     return sortAsc ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
   });
+
+  const rankByIdentity = new Map<string, number>();
+  [...models]
+    .filter((m) => m.rankingEligible)
+    .sort((a, b) => b.arenaIndex - a.arenaIndex)
+    .forEach((m, index) => {
+      rankByIdentity.set(m.identityKey ?? m.modelName, index + 1);
+    });
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -129,14 +138,27 @@ export function ArenaLeaderboard({
       {/* TOOLBAR */}
       <div className="leaderboard-toolbar">
         <div className="toolbar-search">
-          <span className="search-icon">🔍</span>
+          <span className="search-icon" aria-hidden="true">⌕</span>
           <input
             type="text"
-            placeholder="Search model..."
+            data-shortcut-search="true"
+            placeholder="Filter model..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="search-input"
           />
+          {searchTerm ? (
+            <button
+              type="button"
+              className="search-clear-btn"
+              onClick={() => setSearchTerm("")}
+              aria-label="Clear search"
+            >
+              ×
+            </button>
+          ) : (
+            <kbd className="search-kbd-hint" aria-hidden="true">/</kbd>
+          )}
         </div>
 
         <div className="toolbar-filters">
@@ -307,11 +329,14 @@ export function ArenaLeaderboard({
                 <th onClick={() => handleSort("securityResilienceScore")} className="sortable-th text-center">
                   Security absoluta
                 </th>
-                <th onClick={() => handleSort("avgTokPerSec")} className="sortable-th text-center">
-                  Speed
+                <th onClick={() => handleSort("avgTokPerSec")} className="sortable-th text-center" title="Decode tok/s promedio (y Prefill tok/s cuando el motor lo reporta)">
+                  Decode / Prefill
                 </th>
-                <th onClick={() => handleSort("avgTtftMs")} className="sortable-th text-center">
+                <th onClick={() => handleSort("avgTtftMs")} className="sortable-th text-center" title="TTFT primer token (thinking) y TTFT primer token visible">
                   TTFT
+                </th>
+                <th onClick={() => handleSort("avgCacheHitRatio")} className="sortable-th text-center" title="Porcentaje promedio de tokens de prompt reutilizados del KV/prompt cache">
+                  Cache Hit
                 </th>
                 <th onClick={() => handleSort("avgOutputTokens")} className="sortable-th text-center">
                   Out Toks
@@ -319,15 +344,20 @@ export function ArenaLeaderboard({
                 <th onClick={() => handleSort("avgDurationMs")} className="sortable-th text-center">
                   Latency
                 </th>
-                <th className="text-center" title="Promedio de los picos registrados por prueba para toda la GPU">
-                  VRAM pico prom.
+                <th className="text-center" title="Promedio de los picos registrados por prueba (VRAM GPU y RAM cuando hay telemetría)">
+                  VRAM / RAM pico
+                </th>
+                <th className="text-center" title="Energía promedio por petición y por tarea útil (prioriza consumo real wall/enchufe si existe; si no, GPU)">
+                  Energía (Wh)
                 </th>
                 <th style={{ textAlign: "center" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {sortedModels.map((m) => {
-                const isChecked = selectedRadarModels.includes(m.identityKey ?? m.modelName);
+                const rowKey = m.identityKey ?? m.modelName;
+                const isChecked = selectedRadarModels.includes(rowKey);
+                const rank = rankByIdentity.get(rowKey) ?? null;
 
                 return (
                    <tr title={m.configurationLabel} key={m.identityKey ?? m.modelName + (m.provider ? `::${m.provider}` : "") + (m.reasoningEffort ? `::${m.reasoningEffort}` : "")} className={isChecked ? "row-selected" : ""}>
@@ -340,8 +370,16 @@ export function ArenaLeaderboard({
                        />
                      </td>
                      <td className="model-cell">
-                       <strong className="model-name-text">{m.modelName}</strong>
-                       <span className="param-pill">{m.paramSizeLabel} Params</span>{m.configurationLabel && <small className="muted" style={{display:"block",marginTop:4}}>{m.configurationLabel}</small>}
+                       <div className="model-cell-head">
+                         {rank !== null && (
+                           <span className={`rank-tag${rank <= 3 ? ` rank-top-${rank}` : ""}`}>
+                             #{String(rank).padStart(2, "0")}
+                           </span>
+                         )}
+                         <strong className="model-name-text">{m.modelName}</strong>
+                         <span className="param-pill">{m.paramSizeLabel}</span>
+                       </div>
+                       {m.configurationLabel && <small className="muted" style={{display:"block",marginTop:3}}>{m.configurationLabel}</small>}
                        {m.provider && m.provider !== "ollama" && (
                          <span
                            className="badge"
@@ -378,7 +416,12 @@ export function ArenaLeaderboard({
                        {getEligibilityBadge(m)}
                      </td>
                     <td style={{ textAlign: "center" }}>
-                      <span className="arena-score-badge">{m.arenaIndex}</span>
+                      <div className="score-cell-stack">
+                        <span className="arena-score-badge">{m.arenaIndex}</span>
+                        <span className="metric-bar-track" aria-hidden="true">
+                          <span className="metric-bar-fill arena" style={{ width: `${Math.min(100, Math.max(0, m.arenaIndex))}%` }} />
+                        </span>
+                      </div>
                     </td>
                     <td>{renderStars(m.avgQualityStars)}</td>
                     <td style={{ textAlign: "center" }} className="num-cell">
@@ -395,11 +438,33 @@ export function ArenaLeaderboard({
                       <span className="micro-pill speed">
                         {m.avgTokPerSec != null ? `${m.avgTokPerSec} tok/s` : "—"}
                       </span>
+                      {m.avgPrefillTokPerSec != null && (
+                        <small className="muted" style={{ display: "block", marginTop: 2 }}>
+                          Prefill: {m.avgPrefillTokPerSec} tok/s
+                        </small>
+                      )}
                     </td>
                     <td style={{ textAlign: "center" }}>
                       <span className="micro-pill time">
                         {m.avgTtftMs != null ? `${m.avgTtftMs} ms` : "—"}
                       </span>
+                      {m.avgFirstVisibleTokenMs != null && (
+                        <small className="muted" style={{ display: "block", marginTop: 2 }} title="Tiempo hasta el primer token visible (excluyendo thinking)">
+                          Vis: {m.avgFirstVisibleTokenMs} ms
+                        </small>
+                      )}
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      {m.avgCacheHitRatio != null ? (
+                        <>
+                          <span className="micro-pill">{Math.round(m.avgCacheHitRatio * 100)}%</span>
+                          <small className="muted" style={{ display: "block", marginTop: 2 }}>
+                            {m.cacheMeasuredCount ?? 0} med.
+                          </small>
+                        </>
+                      ) : (
+                        <span className="muted-text">—</span>
+                      )}
                     </td>
                     <td style={{ textAlign: "center" }}>
                       <span className="micro-pill tok">
@@ -414,7 +479,50 @@ export function ArenaLeaderboard({
                     <td className="text-center">
                       {m.avgVramPeakBytes == null ? "Sin datos" : `${(m.avgVramPeakBytes / 1024 ** 3).toFixed(2)} GiB`}
                       <br />
-                      <small>{m.vramMeasuredCount ?? 0}/{m.totalRuns + m.failedEvals} medidas</small>
+                      <small>{m.vramMeasuredCount ?? 0}/{m.totalRuns + m.failedEvals} VRAM</small>
+                      {m.avgRamPeakBytes != null && (
+                        <small className="muted" style={{ display: "block" }}>
+                          RAM: {(m.avgRamPeakBytes / 1024 ** 3).toFixed(2)} GiB ({m.ramMeasuredCount ?? 0})
+                        </small>
+                      )}
+                    </td>
+                    <td
+                      className="text-center"
+                      title={
+                        m.avgWallWattHours != null
+                          ? `Consumo real de enchufe (wall). Wh/tarea útil: ${m.wallWhPerUsefulTask?.toFixed(4) ?? "—"}. Tokens visibles/Wh: ${m.usefulVisibleTokensPerWallWh ?? "—"}.`
+                          : m.avgGpuWattHours != null
+                            ? `Consumo solo de GPU (no incluye CPU/host). Wh/tarea útil: ${m.gpuWhPerUsefulTask?.toFixed(4) ?? "—"}.`
+                            : "Sin mediciones de energía con cobertura suficiente (>=90%)."
+                      }
+                    >
+                      {m.avgWallWattHours != null ? (
+                        <>
+                          <strong>{m.avgWallWattHours.toFixed(4)} Wh</strong>
+                          <small className="muted" style={{ display: "block" }}>
+                            wall · {m.wallEnergyMeasuredCount ?? 0} med.
+                          </small>
+                          {m.wallWhPerUsefulTask != null && (
+                            <small className="muted" style={{ display: "block" }}>
+                              {m.wallWhPerUsefulTask.toFixed(4)} Wh/útil
+                            </small>
+                          )}
+                        </>
+                      ) : m.avgGpuWattHours != null ? (
+                        <>
+                          <strong>{m.avgGpuWattHours.toFixed(4)} Wh</strong>
+                          <small className="muted" style={{ display: "block" }}>
+                            GPU · {m.gpuEnergyMeasuredCount ?? 0} med.
+                          </small>
+                          {m.gpuWhPerUsefulTask != null && (
+                            <small className="muted" style={{ display: "block" }}>
+                              {m.gpuWhPerUsefulTask.toFixed(4)} Wh/útil
+                            </small>
+                          )}
+                        </>
+                      ) : (
+                        <span className="muted-text">Sin datos</span>
+                      )}
                     </td>
                     <td style={{ textAlign: "center" }}>
                       {onSelectModelProfile ? (

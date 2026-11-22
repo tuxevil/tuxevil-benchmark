@@ -3,6 +3,7 @@ import type { ResourceMeasurement } from "@/lib/resource-telemetry";
 
 import { useEffect, useMemo, useState } from "react";
 import styles from "./performance-lab.module.css";
+import { SolarAndSuitesPanel } from "./solar-and-suites-panel";
 
 type ExperimentSummary = {
   id: string;
@@ -547,6 +548,7 @@ export function PerformanceLab() {
           </tbody></table></div>
         </section>
       )}
+      <SolarAndSuitesPanel />
     </section>
   );
 }

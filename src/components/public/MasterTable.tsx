@@ -107,14 +107,25 @@ export function MasterTable({
   const sortArrow = (field: SortField) =>
     sortField === field ? (sortAsc ? " ▲" : " ▼") : "";
 
+  const maxTokPerSec = useMemo(
+    () => Math.max(1, ...models.map((m) => (m.avg_tok_per_sec > 0 ? m.avg_tok_per_sec : 0))),
+    [models],
+  );
+  const hasActiveFilters = Boolean(searchTerm.trim() || category !== "ALL" || size !== "ALL");
+  const rankMap = useMemo(() => {
+    const ranked = [...models]
+      .filter((m) => m.ranking_eligible !== false)
+      .sort((a, b) => b.arena_score - a.arena_score);
+    return new Map(ranked.map((m, idx) => [m.id, idx + 1]));
+  }, [models]);
+
   return (
     <section className="panel leaderboard-panel">
       <div className="panel-header">
         <div>
-          <h2>🏆 Master Leaderboard</h2>
+          <h2><span className="mono accent" aria-hidden="true">01 // </span>Master Leaderboard</h2>
           <p>
-            Tick up to {maxSelection} models <span className="mono">[x]</span> to link the
-            analytics charts below. Judge attribution shown per model.
+            Tick up to {maxSelection} models <span className="mono">[x]</span> to link charts below.
           </p>
         </div>
         <span className="model-count-pill">
@@ -129,11 +140,24 @@ export function MasterTable({
           </span>
           <input
             type="text"
-            placeholder="Search model..."
+            data-shortcut-search="true"
+            placeholder="Filter model..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             aria-label="Search models"
           />
+          {searchTerm ? (
+            <button
+              type="button"
+              className="search-clear-btn"
+              onClick={() => setSearchTerm("")}
+              aria-label="Clear search"
+            >
+              ×
+            </button>
+          ) : (
+            <kbd className="search-kbd-hint" aria-hidden="true">/</kbd>
+          )}
         </div>
 
         <div className="toolbar-filters">
@@ -164,6 +188,20 @@ export function MasterTable({
               </button>
             ))}
           </div>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="filter-btn filter-reset-btn"
+              onClick={() => {
+                setSearchTerm("");
+                setCategory("ALL");
+                setSize("ALL");
+              }}
+            >
+              Reset
+            </button>
+          )}
         </div>
       </div>
 
@@ -215,6 +253,8 @@ export function MasterTable({
                 const isChecked = selected.includes(m.id);
                 const selectionFull = selected.length >= maxSelection;
                 const disabled = selectionFull && !isChecked;
+                const rank = rankMap.get(m.id) ?? null;
+                const speedPct = m.avg_tok_per_sec > 0 ? Math.min(100, Math.round((m.avg_tok_per_sec / maxTokPerSec) * 100)) : 0;
                 return (
                   <tr key={m.id} className={isChecked ? "row-selected" : ""}>
                     <td className="center">
@@ -233,15 +273,27 @@ export function MasterTable({
                     </td>
                     <td>
                       <div className="model-cell">
+                        {rank !== null && (
+                          <span className={`rank-tag${rank <= 3 ? ` rank-top-${rank}` : ""}`}>
+                            #{String(rank).padStart(2, "0")}
+                          </span>
+                        )}
                         <strong className="model-name-text">{m.model_name}</strong>{m.configuration_label && <span className="model-config">{m.configuration_label}</span>}
                         <span className="param-pill">{m.parameter_size}</span>
                         <span className="judge-pill" title={`Evaluated by ${m.evaluator_model}`}>
-                          ⚖️ Judge: {m.evaluator_model}
+                          Judge: {m.evaluator_model}
                         </span>
                       </div>
                     </td>
                     <td className="center">
-                      <span className="arena-score-badge">{m.ranking_eligible === false ? "Cobertura incompleta" : m.arena_score}</span>
+                      <div className="score-cell-stack">
+                        <span className="arena-score-badge">{m.ranking_eligible === false ? "Cobertura incompleta" : m.arena_score}</span>
+                        {m.ranking_eligible !== false && (
+                          <span className="metric-bar-track" aria-hidden="true">
+                            <span className="metric-bar-fill arena" style={{ width: `${Math.min(100, Math.max(0, m.arena_score))}%` }} />
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td>{renderStars(m.avg_stars)}</td>
                     <td className="center num-cell">{m.grammar_score < 0 ? "—" : m.grammar_score.toFixed(1)}</td>
@@ -252,9 +304,16 @@ export function MasterTable({
                       <span className="resilience-num">{m.security_resilience_score < 0 ? "—" : `${m.security_resilience_score}%`}</span>
                     </td>
                     <td className="center">
-                      <span className="micro-pill speed">
-                        {m.avg_tok_per_sec > 0 ? `${m.avg_tok_per_sec} tok/s` : "—"}
-                      </span>
+                      <div className="score-cell-stack">
+                        <span className="micro-pill speed">
+                          {m.avg_tok_per_sec > 0 ? `${m.avg_tok_per_sec} tok/s` : "—"}
+                        </span>
+                        {speedPct > 0 && (
+                          <span className="metric-bar-track" aria-hidden="true">
+                            <span className="metric-bar-fill speed" style={{ width: `${speedPct}%` }} />
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="center">
                       <span className="micro-pill time">

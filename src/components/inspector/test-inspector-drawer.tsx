@@ -286,6 +286,21 @@ export function TestInspectorDrawer({ run, result, onClose }: TestInspectorDrawe
               <div className="drawer-box">
                 <span className="box-label">INFERENCE PARAMETERS</span>
                 <p>{formatInferenceParameters(run?.parameters)}</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "8px", fontSize: "0.78rem" }}>
+                  <span className="micro-pill time">TTFT: {displayResult.ttftMs != null ? `${displayResult.ttftMs} ms` : "—"}</span>
+                  {displayResult.firstVisibleTokenMs != null && (
+                    <span className="micro-pill time">TTFT visible: {displayResult.firstVisibleTokenMs} ms</span>
+                  )}
+                  <span className="micro-pill speed">Decode: {displayResult.decodeTokPerSec ?? displayResult.tokPerSec ?? "—"} tok/s</span>
+                  {displayResult.prefillTokPerSec != null && (
+                    <span className="micro-pill speed">Prefill: {displayResult.prefillTokPerSec} tok/s</span>
+                  )}
+                  {displayResult.cacheHitRatio != null && (
+                    <span className="micro-pill">
+                      Cache Hit: {Math.round(displayResult.cacheHitRatio * 100)}% ({displayResult.cachedPromptTokens ?? 0}/{displayResult.inputTokens ?? "?"} tok)
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="drawer-box">
                 <span className="box-label">SYSTEM PROMPT</span>

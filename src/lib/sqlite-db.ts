@@ -343,6 +343,21 @@ function initSqliteTables(db: Database.Database) {
   if (!turnCols.some((column) => column.name === "request_body")) {
     migrationDb.exec("ALTER TABLE model_result_turns ADD COLUMN request_body TEXT");
   }
+  if (!turnCols.some((column) => column.name === "first_visible_token_ms")) {
+    migrationDb.exec("ALTER TABLE model_result_turns ADD COLUMN first_visible_token_ms INTEGER");
+  }
+  if (!turnCols.some((column) => column.name === "cached_prompt_tokens")) {
+    migrationDb.exec("ALTER TABLE model_result_turns ADD COLUMN cached_prompt_tokens INTEGER");
+  }
+  if (!turnCols.some((column) => column.name === "cache_hit_ratio")) {
+    migrationDb.exec("ALTER TABLE model_result_turns ADD COLUMN cache_hit_ratio REAL");
+  }
+  if (!turnCols.some((column) => column.name === "prefill_tok_per_sec")) {
+    migrationDb.exec("ALTER TABLE model_result_turns ADD COLUMN prefill_tok_per_sec REAL");
+  }
+  if (!turnCols.some((column) => column.name === "decode_tok_per_sec")) {
+    migrationDb.exec("ALTER TABLE model_result_turns ADD COLUMN decode_tok_per_sec REAL");
+  }
 
   const resultColumns = migrationDb.prepare("PRAGMA table_info(model_results)").all() as SqlRow[];
   if (!resultColumns.some((column) => column.name === "sample_index")) {
@@ -353,6 +368,21 @@ function initSqliteTables(db: Database.Database) {
   }
   if (!resultColumns.some((column) => column.name === "truncated")) {
     migrationDb.exec("ALTER TABLE model_results ADD COLUMN truncated INTEGER");
+  }
+  if (!resultColumns.some((column) => column.name === "first_visible_token_ms")) {
+    migrationDb.exec("ALTER TABLE model_results ADD COLUMN first_visible_token_ms INTEGER");
+  }
+  if (!resultColumns.some((column) => column.name === "cached_prompt_tokens")) {
+    migrationDb.exec("ALTER TABLE model_results ADD COLUMN cached_prompt_tokens INTEGER");
+  }
+  if (!resultColumns.some((column) => column.name === "cache_hit_ratio")) {
+    migrationDb.exec("ALTER TABLE model_results ADD COLUMN cache_hit_ratio REAL");
+  }
+  if (!resultColumns.some((column) => column.name === "prefill_tok_per_sec")) {
+    migrationDb.exec("ALTER TABLE model_results ADD COLUMN prefill_tok_per_sec REAL");
+  }
+  if (!resultColumns.some((column) => column.name === "decode_tok_per_sec")) {
+    migrationDb.exec("ALTER TABLE model_results ADD COLUMN decode_tok_per_sec REAL");
   }
 
   const settingsColumns = migrationDb.prepare("PRAGMA table_info(app_settings)").all() as SqlRow[];
@@ -834,8 +864,13 @@ export function sqlitePersistRun(
 
     for (const result of run.results) {
       db.prepare(`
-        INSERT INTO model_results (id, test_run_id, model_name, sample_index, status, eval_status, response_text, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, error_message, human_status, human_notes, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO model_results (
+          id, test_run_id, model_name, sample_index, status, eval_status, response_text,
+          input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms,
+          first_visible_token_ms, cached_prompt_tokens, cache_hit_ratio, prefill_tok_per_sec, decode_tok_per_sec,
+          error_message, human_status, human_notes, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           model_name = excluded.model_name,
           sample_index = excluded.sample_index,
@@ -847,6 +882,11 @@ export function sqlitePersistRun(
           ttft_ms = excluded.ttft_ms,
           tok_per_sec = excluded.tok_per_sec,
           total_duration_ms = excluded.total_duration_ms,
+          first_visible_token_ms = excluded.first_visible_token_ms,
+          cached_prompt_tokens = excluded.cached_prompt_tokens,
+          cache_hit_ratio = excluded.cache_hit_ratio,
+          prefill_tok_per_sec = excluded.prefill_tok_per_sec,
+          decode_tok_per_sec = excluded.decode_tok_per_sec,
           error_message = excluded.error_message,
           human_status = excluded.human_status,
           human_notes = excluded.human_notes
@@ -863,6 +903,11 @@ export function sqlitePersistRun(
         result.ttftMs,
         result.tokPerSec,
         result.totalDurationMs,
+        result.firstVisibleTokenMs ?? null,
+        result.cachedPromptTokens ?? null,
+        result.cacheHitRatio ?? null,
+        result.prefillTokPerSec ?? null,
+        result.decodeTokPerSec ?? null,
         result.errorMessage,
         result.humanStatus,
         result.humanNotes,
@@ -875,9 +920,10 @@ export function sqlitePersistRun(
           INSERT INTO model_result_turns (
             id, model_result_id, step_order, user_message, response_text, thinking,
             input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms,
+            first_visible_token_ms, cached_prompt_tokens, cache_hit_ratio, prefill_tok_per_sec, decode_tok_per_sec,
             finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body, tool_calls
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const turn of result.turns) {
           insertTurn.run(
@@ -892,6 +938,11 @@ export function sqlitePersistRun(
             turn.ttftMs,
             turn.tokPerSec,
             turn.totalDurationMs,
+            turn.firstVisibleTokenMs ?? null,
+            turn.cachedPromptTokens ?? null,
+            turn.cacheHitRatio ?? null,
+            turn.prefillTokPerSec ?? null,
+            turn.decodeTokPerSec ?? null,
             turn.finishReason ?? null,
             turn.truncated ? 1 : 0,
             turn.wireDiagnostics ? JSON.stringify(turn.wireDiagnostics) : null,
@@ -1006,6 +1057,11 @@ export function sqliteLoadState(targetRunId?: string) {
       inputTokens: row.input_tokens !== null ? Number(row.input_tokens) : null,
       outputTokens: row.output_tokens !== null ? Number(row.output_tokens) : null,
       ttftMs: row.ttft_ms !== null ? Number(row.ttft_ms) : null,
+      firstVisibleTokenMs: row.first_visible_token_ms !== null && row.first_visible_token_ms !== undefined ? Number(row.first_visible_token_ms) : null,
+      cachedPromptTokens: row.cached_prompt_tokens !== null && row.cached_prompt_tokens !== undefined ? Number(row.cached_prompt_tokens) : null,
+      cacheHitRatio: row.cache_hit_ratio !== null && row.cache_hit_ratio !== undefined ? Number(row.cache_hit_ratio) : null,
+      prefillTokPerSec: row.prefill_tok_per_sec !== null && row.prefill_tok_per_sec !== undefined ? Number(row.prefill_tok_per_sec) : null,
+      decodeTokPerSec: row.decode_tok_per_sec !== null && row.decode_tok_per_sec !== undefined ? Number(row.decode_tok_per_sec) : null,
       tokPerSec: row.tok_per_sec !== null ? Number(row.tok_per_sec) : null,
       totalDurationMs: row.total_duration_ms !== null ? Number(row.total_duration_ms) : null,
       wireDiagnostics: row.wire_diagnostics ? JSON.parse(String(row.wire_diagnostics)) : null,
@@ -1062,6 +1118,11 @@ export function sqliteLoadState(targetRunId?: string) {
         inputTokens: row.input_tokens !== null ? Number(row.input_tokens) : null,
         outputTokens: row.output_tokens !== null ? Number(row.output_tokens) : null,
         ttftMs: row.ttft_ms !== null ? Number(row.ttft_ms) : null,
+        firstVisibleTokenMs: row.first_visible_token_ms !== null && row.first_visible_token_ms !== undefined ? Number(row.first_visible_token_ms) : null,
+        cachedPromptTokens: row.cached_prompt_tokens !== null && row.cached_prompt_tokens !== undefined ? Number(row.cached_prompt_tokens) : null,
+        cacheHitRatio: row.cache_hit_ratio !== null && row.cache_hit_ratio !== undefined ? Number(row.cache_hit_ratio) : null,
+        prefillTokPerSec: row.prefill_tok_per_sec !== null && row.prefill_tok_per_sec !== undefined ? Number(row.prefill_tok_per_sec) : null,
+        decodeTokPerSec: row.decode_tok_per_sec !== null && row.decode_tok_per_sec !== undefined ? Number(row.decode_tok_per_sec) : null,
         tokPerSec: row.tok_per_sec !== null ? Number(row.tok_per_sec) : null,
         totalDurationMs: row.total_duration_ms !== null ? Number(row.total_duration_ms) : null,
         turns,

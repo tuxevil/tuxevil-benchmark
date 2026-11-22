@@ -49,19 +49,19 @@ export function TopbarNav({
           <div className="brand-mark">{PROJECT_BRAND.mark}</div>
           <div className="brand-title-group">
             <span className="brand-title">{PROJECT_BRAND.displayName}</span>
-            <span className="brand-badge">v2.0</span>
+            <span className="brand-badge">v3 · HUD</span>
           </div>
         </Link>
       </div>
 
-      <nav className="topbar-menu">
-        <Link href="/admin/backups" className={`topbar-item ${activeTab === "backups" ? "active" : ""}`}><span className="nav-icon">▣</span><span className="nav-label">Respaldos</span></Link>
+      <nav className="topbar-menu" aria-label="Admin navigation">
         <Link
           href="/admin"
           className={`topbar-item ${isAnalyticsActive ? "active" : ""}`}
           onClick={() => handleNav("analytics")}
+          title="Leaderboard (g l)"
         >
-          <span className="nav-icon">📊</span>
+          <span className="nav-icon" aria-hidden="true">◈</span>
           <span className="nav-label">Leaderboard</span>
         </Link>
 
@@ -69,8 +69,9 @@ export function TopbarNav({
           href="/admin/suites"
           className={`topbar-item ${isSuitesActive ? "active" : ""}`}
           onClick={() => handleNav("suites")}
+          title="Test Suites (g s)"
         >
-          <span className="nav-icon">🧪</span>
+          <span className="nav-icon" aria-hidden="true">◩</span>
           <span className="nav-label">Test Suites</span>
         </Link>
 
@@ -78,8 +79,9 @@ export function TopbarNav({
           href="/admin/churn"
           className={`topbar-item ${isChurnActive ? "active" : ""}`}
           onClick={() => handleNav("churn")}
+          title="Churn Lab (g c)"
         >
-          <span className="nav-icon">🧬</span>
+          <span className="nav-icon" aria-hidden="true">⌬</span>
           <span className="nav-label">Churn Lab</span>
         </Link>
 
@@ -87,8 +89,9 @@ export function TopbarNav({
           href="/admin/performance"
           className={`topbar-item ${isPerformanceActive ? "active" : ""}`}
           onClick={() => handleNav("performance")}
+          title="Performance & Solar (g p)"
         >
-          <span className="nav-icon">⏱️</span>
+          <span className="nav-icon" aria-hidden="true">◎</span>
           <span className="nav-label">Performance</span>
         </Link>
 
@@ -96,23 +99,43 @@ export function TopbarNav({
           href="/admin/monitor"
           className={`topbar-item ${isMonitorActive ? "active" : ""}`}
           onClick={() => handleNav("monitor")}
+          title="Monitor (g m)"
         >
-          <span className="nav-icon">⚡</span>
+          <span className="nav-icon" aria-hidden="true">⚡</span>
           <span className="nav-label">Monitor</span>
           {isRunActive && <span className="nav-status-pulse" title="Live execution..." />}
+        </Link>
+
+        <Link
+          href="/admin/backups"
+          className={`topbar-item ${activeTab === "backups" ? "active" : ""}`}
+          title="Respaldos (g b)"
+        >
+          <span className="nav-icon" aria-hidden="true">▣</span>
+          <span className="nav-label">Respaldos</span>
         </Link>
 
         <Link
           href="/admin/settings"
           className={`topbar-item ${isSettingsActive ? "active" : ""}`}
           onClick={() => handleNav("settings")}
+          title="Settings (g ,)"
         >
-          <span className="nav-icon">⚙️</span>
+          <span className="nav-icon" aria-hidden="true">⚙</span>
           <span className="nav-label">Settings</span>
         </Link>
       </nav>
 
       <div className="topbar-right">
+        <button
+          type="button"
+          className="topbar-kbd-btn"
+          onClick={() => window.dispatchEvent(new Event("txb:toggle-shortcuts"))}
+          title="Keyboard shortcuts (?)"
+          aria-label="Keyboard shortcuts"
+        >
+          [?]
+        </button>
         {/* Theme Switcher Controls */}
         <div className="theme-switcher-pill" suppressHydrationWarning>
           <button

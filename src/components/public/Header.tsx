@@ -33,91 +33,90 @@ export function Header({ snapshot }: HeaderProps) {
             {PROJECT_BRAND.mark}
           </span>
           <div>
+            <div className="hero-kicker mono">LOCAL SLM TELEMETRY // ADVERSARIAL &amp; QUALITY ARENA</div>
             <h1 className="hero-title">
               {PROJECT_BRAND.displayName} <span className="hero-sub">— Public Leaderboard</span>
             </h1>
-            <p className="hero-tagline">
-              Local small language models benchmarked under adversarial scenarios, judged by a
-              frontier LLM. Results update automatically as the benchmark progresses.
-            </p>
           </div>
         </div>
-        <span className="sync-badge" title={`Snapshot generated at ${snapshot.generated_at}`}>
-          ● Live · Last update: {formatTimestamp(snapshot.generated_at)}
-        </span>
-      </div>
-
-      <div className="hero-actions">
-        <a
-          className="btn-export btn-repo"
-          href={PROJECT_BRAND.repositoryUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          GitHub Repo ↗
-        </a>
+        <div className="hero-status-cluster">
+          <span className="sync-badge" title={`Snapshot generated at ${snapshot.generated_at}`}>
+            <span className="live-dot" aria-hidden="true" />
+            LIVE · {formatTimestamp(snapshot.generated_at)}
+          </span>
+          <a
+            className="btn-export btn-repo"
+            href={PROJECT_BRAND.repositoryUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub ↗
+          </a>
+        </div>
       </div>
 
       <div className="rig-card" title="Benchmark execution environment">
-        <span className="rig-icon" aria-hidden="true">
-          🖥️
+        <span className="rig-prefix mono" aria-hidden="true">
+          RIG //
         </span>
         <div className="rig-info">
-          <span className="rig-label">Hardware Rig</span>
-          <span className="rig-value">
-            {rig.cpu} / {rig.ram}
-            {rig.gpu ? ` / ${rig.gpu}` : ""}
+          <span className="rig-value mono">
+            {rig.cpu} <span className="rig-sep">·</span> {rig.ram}
+            {rig.gpu ? (
+              <>
+                <span className="rig-sep">·</span> {rig.gpu}
+              </>
+            ) : null}
           </span>
           <span className="rig-provider">{rig.provider}</span>
         </div>
       </div>
 
       <div className="kpi-grid">
-        <div className="kpi-card">
+        <div className="kpi-card kpi-card-indigo">
           <div className="kpi-header">
             <span className="kpi-title">Evaluated Models</span>
-            <span className="kpi-badge indigo">📊 Models</span>
+            <span className="kpi-badge indigo">ARENA</span>
           </div>
           <div className="kpi-value-row">
-            <span className="kpi-value">{stats.total_models}</span>
-            <span className="kpi-subtext">total models in arena</span>
+            <span className="kpi-value mono">{stats.total_models}</span>
+            <span className="kpi-subtext">{stats.total_benchmarks} runs</span>
           </div>
         </div>
 
-        <div className="kpi-card">
+        <div className="kpi-card kpi-card-green">
           <div className="kpi-header">
             <span className="kpi-title">Top Overall Model</span>
-            <span className="kpi-badge green">🏆 Arena</span>
+            <span className="kpi-badge green">#01 RANK</span>
           </div>
           <div className="kpi-value-row kpi-model">
             <span className="kpi-model-name">{stats.overall_leader}</span>
-            <span className="kpi-subtext">
-              arena {leader ? `${leader.arena_score}/100` : "—"}
+            <span className="kpi-subtext mono">
+              idx {leader ? `${leader.arena_score}/100` : "—"}
             </span>
           </div>
         </div>
 
-        <div className="kpi-card">
+        <div className="kpi-card kpi-card-red">
           <div className="kpi-header">
             <span className="kpi-title">Security Champion</span>
-            <span className="kpi-badge red">🛡️ Red/Purple</span>
+            <span className="kpi-badge red">RED / PURPLE</span>
           </div>
           <div className="kpi-value-row kpi-model">
             <span className="kpi-model-name">{stats.security_leader}</span>
-            <span className="kpi-subtext">
-              resilience{" "}
-              {securityChampion ? `${securityChampion.security_resilience_score}%` : "—"}
+            <span className="kpi-subtext mono">
+              {securityChampion ? `${securityChampion.security_resilience_score}%` : "—"} resilience
             </span>
           </div>
         </div>
 
-        <div className="kpi-card">
+        <div className="kpi-card kpi-card-cyan">
           <div className="kpi-header">
             <span className="kpi-title">System Throughput</span>
-            <span className="kpi-badge cyan">⚡ Telemetry</span>
+            <span className="kpi-badge cyan">TOK/S</span>
           </div>
           <div className="kpi-value-row">
-            <span className="kpi-value speed">{stats.avg_speed_tok_sec}</span>
+            <span className="kpi-value speed mono">{stats.avg_speed_tok_sec}</span>
             <span className="kpi-subtext">global avg tok/s</span>
           </div>
         </div>

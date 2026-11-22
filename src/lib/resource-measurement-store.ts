@@ -55,6 +55,81 @@ export async function loadRunManifests(): Promise<Record<string, import('./run-i
  return result;
 }
 
+export type ResultResourceSummary = {
+  vramPeakBytes: number | null;
+  ramPeakBytes: number | null;
+  gpuWattHours: number | null;
+  wallWattHours: number | null;
+  wallIncrementalWattHours: number | null;
+};
+
+function nonNegativeNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+export async function loadResourceSummaries(): Promise<Map<string, ResultResourceSummary>> {
+  type Row = {
+    model_result_id: string;
+    vram_peak: unknown;
+    ram_peak: unknown;
+    gpu_joules: unknown;
+    wall_joules: unknown;
+    wall_inc_joules: unknown;
+  };
+  const sql = getExperimentPostgresClient();
+  let rows: Row[];
+  if (sql) {
+    if (!(await sql`SELECT to_regclass('result_resource_measurements') AS name`)[0].name) return new Map();
+    rows = await sql`
+      SELECT
+        model_result_id,
+        payload_json->'vramPeakBytes' AS vram_peak,
+        payload_json->'ramPeakBytes' AS ram_peak,
+        payload_json->'joules' AS gpu_joules,
+        payload_json->'wallJoules' AS wall_joules,
+        payload_json->'wallIncrementalJoules' AS wall_inc_joules
+      FROM result_resource_measurements
+    `;
+  } else {
+    const db = getSqliteDb();
+    if (!db.prepare("SELECT name FROM sqlite_master WHERE name='result_resource_measurements'").get()) return new Map();
+    rows = db.prepare(`
+      SELECT
+        model_result_id,
+        json_extract(payload_json, '$.vramPeakBytes') AS vram_peak,
+        json_extract(payload_json, '$.ramPeakBytes') AS ram_peak,
+        json_extract(payload_json, '$.joules') AS gpu_joules,
+        json_extract(payload_json, '$.wallJoules') AS wall_joules,
+        json_extract(payload_json, '$.wallIncrementalJoules') AS wall_inc_joules
+      FROM result_resource_measurements
+    `).all() as Row[];
+  }
+  const map = new Map<string, ResultResourceSummary>();
+  for (const row of rows) {
+    const vramPeakBytes = nonNegativeNumber(row.vram_peak);
+    const ramPeakBytes = nonNegativeNumber(row.ram_peak);
+    const gpuJoules = nonNegativeNumber(row.gpu_joules);
+    const wallJoules = nonNegativeNumber(row.wall_joules);
+    const wallIncJoules = nonNegativeNumber(row.wall_inc_joules);
+    if (
+      vramPeakBytes !== null ||
+      ramPeakBytes !== null ||
+      gpuJoules !== null ||
+      wallJoules !== null ||
+      wallIncJoules !== null
+    ) {
+      map.set(row.model_result_id, {
+        vramPeakBytes,
+        ramPeakBytes,
+        gpuWattHours: gpuJoules !== null ? Number((gpuJoules / 3600).toFixed(6)) : null,
+        wallWattHours: wallJoules !== null ? Number((wallJoules / 3600).toFixed(6)) : null,
+        wallIncrementalWattHours: wallIncJoules !== null ? Number((wallIncJoules / 3600).toFixed(6)) : null,
+      });
+    }
+  }
+  return map;
+}
+
 export async function loadVramPeaks(): Promise<Map<string, number>> {
   type Row = { model_result_id: string; peak: unknown };
   const sql = getExperimentPostgresClient();

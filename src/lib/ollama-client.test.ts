@@ -47,8 +47,36 @@ describe("streamOllamaChat", () => {
     expect(result.evalDurationMs).toBe(2_000);
     expect(result.totalDurationMs).toBe(2_500);
     expect(result.tokPerSec).toBe(10);
+    expect(result.cachedPromptTokens).toBe(2);
+    expect(result.cacheHitRatio).toBe(0.1667);
     expect(result.prefillRate).toEqual({ tokensPerSecond: 20, source: "engine_duration" });
     expect(result.decodeRate).toEqual({ tokensPerSecond: 10, source: "engine_duration" });
+  });
+
+  it("leaves cachedPromptTokens and cacheHitRatio null when Ollama does not report cache telemetry", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          [
+            JSON.stringify({ message: { content: "Hi" } }),
+            JSON.stringify({ done: true, prompt_eval_count: 10, eval_count: 4, eval_duration: 1_000_000_000 }),
+          ].join("\n"),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    const result = await streamOllamaChat({
+      endpoint: "http://localhost:11434",
+      model: "llama3.2",
+      messages: [{ role: "user", content: "Hi" }],
+      parameters: { temperature: 0, numCtx: 4096, topP: 1, repeatPenalty: 1, numPredict: 64 },
+      signal: new AbortController().signal,
+    });
+
+    expect(result.cachedPromptTokens).toBeNull();
+    expect(result.cacheHitRatio).toBeNull();
   });
 
   it("separates thinking from the final response content", async () => {

@@ -30,6 +30,8 @@ export type OllamaChatResult = Telemetry & {
   thinking: string;
   evalDurationMs: number | null;
   firstVisibleTokenMs: number | null;
+  cachedPromptTokens: number | null;
+  cacheHitRatio: number | null;
   prefillRate: InferencePhaseRate | null;
   decodeRate: InferencePhaseRate | null;
   requestedThinking: boolean | "low" | "medium" | "high" | "max" | null;
@@ -68,6 +70,17 @@ export async function streamOllamaChat({
   const truncated = finishReason === "length" || (outputTokens !== null && outputTokens >= parameters.numPredict);
 
   const { prompt_eval_count, prompt_eval_cached_count, prompt_eval_duration, eval_duration } = streamed.finalChunk;
+  const inputTokens = prompt_eval_count ?? null;
+  const cachedPromptTokens =
+    typeof prompt_eval_cached_count === "number" &&
+    Number.isSafeInteger(prompt_eval_cached_count) &&
+    prompt_eval_cached_count >= 0
+      ? prompt_eval_cached_count
+      : null;
+  const cacheHitRatio =
+    cachedPromptTokens !== null && inputTokens !== null && inputTokens > 0
+      ? Number(Math.min(1, cachedPromptTokens / inputTokens).toFixed(4))
+      : null;
   const prefillTokens = prompt_eval_count === undefined ? null : prompt_eval_count - (prompt_eval_cached_count ?? 0);
   return {
     responseText: streamed.responseText,
@@ -80,8 +93,10 @@ export async function streamOllamaChat({
     ttftMs: streamed.firstTokenAt === null ? null : Math.round(streamed.firstTokenAt - startedAt),
     firstVisibleTokenMs: streamed.firstVisibleTokenAt === null
       ? null : Math.round(streamed.firstVisibleTokenAt - startedAt),
+    cachedPromptTokens,
+    cacheHitRatio,
     requestedThinking: think ?? null,
-    inputTokens: streamed.finalChunk.prompt_eval_count ?? null,
+    inputTokens,
     outputTokens,
     tokPerSec:
       outputTokens !== null && evalDurationMs !== null && evalDurationMs > 0

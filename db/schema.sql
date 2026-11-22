@@ -108,6 +108,11 @@ CREATE TABLE IF NOT EXISTS model_results (
 
 ALTER TABLE model_results ADD COLUMN IF NOT EXISTS finish_reason TEXT;
 ALTER TABLE model_results ADD COLUMN IF NOT EXISTS truncated BOOLEAN;
+ALTER TABLE model_results ADD COLUMN IF NOT EXISTS first_visible_token_ms INTEGER;
+ALTER TABLE model_results ADD COLUMN IF NOT EXISTS cached_prompt_tokens INTEGER;
+ALTER TABLE model_results ADD COLUMN IF NOT EXISTS cache_hit_ratio DOUBLE PRECISION;
+ALTER TABLE model_results ADD COLUMN IF NOT EXISTS prefill_tok_per_sec DOUBLE PRECISION;
+ALTER TABLE model_results ADD COLUMN IF NOT EXISTS decode_tok_per_sec DOUBLE PRECISION;
 
 ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS category VARCHAR(16) NOT NULL DEFAULT 'GENERAL';
 ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS attack_type VARCHAR(32);
@@ -137,6 +142,11 @@ CREATE TABLE IF NOT EXISTS model_result_turns (
 
 ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS finish_reason TEXT;
 ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS truncated BOOLEAN;
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS first_visible_token_ms INTEGER;
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS cached_prompt_tokens INTEGER;
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS cache_hit_ratio DOUBLE PRECISION;
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS prefill_tok_per_sec DOUBLE PRECISION;
+ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS decode_tok_per_sec DOUBLE PRECISION;
 ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS wire_diagnostics JSONB;
 ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS protocol_diagnostics JSONB;
 ALTER TABLE model_result_turns ADD COLUMN IF NOT EXISTS request_body JSONB;
