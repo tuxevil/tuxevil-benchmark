@@ -6580,7 +6580,7 @@ select:focus,
    CYBER-TERMINAL HUD FACELIFT (v3.1 · UNIFIED ADMIN CONSOLE)
    ========================================================================== */
 
-:root,
+:root:not([data-theme="light"]),
 [data-theme="dark"] {
   --bg-base: #0c1017;
   --bg-radial-1: rgb(99 102 241 / 14%);
@@ -6602,7 +6602,7 @@ select:focus,
   --shadow: 0 24px 70px rgb(0 0 0 / 45%);
 }
 
-:root body,
+:root:not([data-theme="light"]) body,
 [data-theme="dark"] body {
   background-color: var(--bg-base);
   background-image:
