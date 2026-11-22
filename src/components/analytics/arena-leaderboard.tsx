@@ -316,43 +316,43 @@ export function ArenaLeaderboard({
                   Model {sortField === "modelName" ? (sortAsc ? "▲" : "▼") : ""}
                 </th>
                 <th onClick={() => handleSort("arenaIndex")} className="sortable-th text-center">
-                  Arena Score {sortField === "arenaIndex" ? (sortAsc ? "▲" : "▼") : ""}
+                  Arena {sortField === "arenaIndex" ? (sortAsc ? "▲" : "▼") : ""}
                 </th>
                 <th onClick={() => handleSort("avgQualityStars")} className="sortable-th">
-                  Rating (★)
+                  Rating
                 </th>
-                <th onClick={() => handleSort("avgGrammar")} className="sortable-th text-center">
-                  Grammar
+                <th onClick={() => handleSort("avgGrammar")} className="sortable-th text-center" title="Grammar">
+                  Gram.
                 </th>
-                <th onClick={() => handleSort("avgCompliance")} className="sortable-th text-center">
-                  Compliance
+                <th onClick={() => handleSort("avgCompliance")} className="sortable-th text-center" title="Compliance">
+                  Comp.
                 </th>
-                <th onClick={() => handleSort("avgAccuracy")} className="sortable-th text-center">
-                  Accuracy
+                <th onClick={() => handleSort("avgAccuracy")} className="sortable-th text-center" title="Accuracy">
+                  Acc.
                 </th>
-                <th onClick={() => handleSort("securityResilienceScore")} className="sortable-th text-center">
-                  Security absoluta
+                <th onClick={() => handleSort("securityResilienceScore")} className="sortable-th text-center" title="Seguridad absoluta por escenario">
+                  Security
                 </th>
                 <th onClick={() => handleSort("avgTokPerSec")} className="sortable-th text-center" title="Decode tok/s promedio (y Prefill tok/s cuando el motor lo reporta)">
-                  Decode / Prefill
+                  Decode
                 </th>
                 <th onClick={() => handleSort("avgTtftMs")} className="sortable-th text-center" title="TTFT primer token (thinking) y TTFT primer token visible">
                   TTFT
                 </th>
                 <th onClick={() => handleSort("avgCacheHitRatio")} className="sortable-th text-center" title="Porcentaje promedio de tokens de prompt reutilizados del KV/prompt cache">
-                  Cache Hit
+                  Cache
                 </th>
-                <th onClick={() => handleSort("avgOutputTokens")} className="sortable-th text-center">
-                  Out Toks
+                <th onClick={() => handleSort("avgOutputTokens")} className="sortable-th text-center" title="Output Tokens promedio">
+                  Out
                 </th>
-                <th onClick={() => handleSort("avgDurationMs")} className="sortable-th text-center">
-                  Latency
+                <th onClick={() => handleSort("avgDurationMs")} className="sortable-th text-center" title="Latencia promedio">
+                  Lat.
                 </th>
                 <th className="text-center" title="Promedio de los picos registrados por prueba (VRAM GPU y RAM cuando hay telemetría)">
-                  VRAM / RAM pico
+                  VRAM / RAM
                 </th>
                 <th className="text-center" title="Energía promedio por petición y por tarea útil (prioriza consumo real wall/enchufe si existe; si no, GPU)">
-                  Energía (Wh)
+                  Wh
                 </th>
                 <th style={{ textAlign: "center" }}>Actions</th>
               </tr>
