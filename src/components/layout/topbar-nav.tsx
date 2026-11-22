@@ -61,7 +61,7 @@ export function TopbarNav({
           onClick={() => handleNav("analytics")}
           title="Leaderboard (g l)"
         >
-          <span className="nav-icon" aria-hidden="true">◈</span>
+          <span className="nav-code" aria-hidden="true">01</span>
           <span className="nav-label">Leaderboard</span>
         </Link>
 
@@ -71,7 +71,7 @@ export function TopbarNav({
           onClick={() => handleNav("suites")}
           title="Test Suites (g s)"
         >
-          <span className="nav-icon" aria-hidden="true">◩</span>
+          <span className="nav-code" aria-hidden="true">02</span>
           <span className="nav-label">Test Suites</span>
         </Link>
 
@@ -81,7 +81,7 @@ export function TopbarNav({
           onClick={() => handleNav("churn")}
           title="Churn Lab (g c)"
         >
-          <span className="nav-icon" aria-hidden="true">⌬</span>
+          <span className="nav-code" aria-hidden="true">03</span>
           <span className="nav-label">Churn Lab</span>
         </Link>
 
@@ -91,7 +91,7 @@ export function TopbarNav({
           onClick={() => handleNav("performance")}
           title="Performance & Solar (g p)"
         >
-          <span className="nav-icon" aria-hidden="true">◎</span>
+          <span className="nav-code" aria-hidden="true">04</span>
           <span className="nav-label">Performance</span>
         </Link>
 
@@ -101,7 +101,7 @@ export function TopbarNav({
           onClick={() => handleNav("monitor")}
           title="Monitor (g m)"
         >
-          <span className="nav-icon" aria-hidden="true">⚡</span>
+          <span className="nav-code" aria-hidden="true">05</span>
           <span className="nav-label">Monitor</span>
           {isRunActive && <span className="nav-status-pulse" title="Live execution..." />}
         </Link>
@@ -111,7 +111,7 @@ export function TopbarNav({
           className={`topbar-item ${activeTab === "backups" ? "active" : ""}`}
           title="Respaldos (g b)"
         >
-          <span className="nav-icon" aria-hidden="true">▣</span>
+          <span className="nav-code" aria-hidden="true">06</span>
           <span className="nav-label">Respaldos</span>
         </Link>
 
@@ -121,7 +121,7 @@ export function TopbarNav({
           onClick={() => handleNav("settings")}
           title="Settings (g ,)"
         >
-          <span className="nav-icon" aria-hidden="true">⚙</span>
+          <span className="nav-code" aria-hidden="true">07</span>
           <span className="nav-label">Settings</span>
         </Link>
       </nav>

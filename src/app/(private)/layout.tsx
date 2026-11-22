@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 const themeInitScript = `
   (function() {
     try {
-      var saved = localStorage.getItem('${PROJECT_BRAND.themeStorageKey}') || localStorage.getItem('${LEGACY_THEME_STORAGE_KEY}') || 'system';
+      var saved = localStorage.getItem('${PROJECT_BRAND.themeStorageKey}') || localStorage.getItem('${LEGACY_THEME_STORAGE_KEY}') || 'dark';
       var active = saved;
       if (saved === 'system') {
         active = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';

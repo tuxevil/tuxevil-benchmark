@@ -75,6 +75,10 @@ export function ArenaLeaderboard({
     return sortAsc ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
   });
 
+  const maxTokPerSec = Math.max(
+    1,
+    ...models.map((m) => (m.avgTokPerSec != null && m.avgTokPerSec > 0 ? m.avgTokPerSec : 0)),
+  );
   const rankByIdentity = new Map<string, number>();
   [...models]
     .filter((m) => m.rankingEligible)
@@ -358,6 +362,9 @@ export function ArenaLeaderboard({
                 const rowKey = m.identityKey ?? m.modelName;
                 const isChecked = selectedRadarModels.includes(rowKey);
                 const rank = rankByIdentity.get(rowKey) ?? null;
+                const speedPct = m.avgTokPerSec != null && m.avgTokPerSec > 0
+                  ? Math.min(100, Math.round((m.avgTokPerSec / maxTokPerSec) * 100))
+                  : 0;
 
                 return (
                    <tr title={m.configurationLabel} key={m.identityKey ?? m.modelName + (m.provider ? `::${m.provider}` : "") + (m.reasoningEffort ? `::${m.reasoningEffort}` : "")} className={isChecked ? "row-selected" : ""}>
@@ -377,43 +384,20 @@ export function ArenaLeaderboard({
                            </span>
                          )}
                          <strong className="model-name-text">{m.modelName}</strong>
-                         <span className="param-pill">{m.paramSizeLabel}</span>
                        </div>
-                       {m.configurationLabel && <small className="muted" style={{display:"block",marginTop:3}}>{m.configurationLabel}</small>}
-                       {m.provider && m.provider !== "ollama" && (
-                         <span
-                           className="badge"
-                           style={{
-                             fontSize: "0.68rem",
-                             padding: "2px 6px",
-                             borderRadius: "4px",
-                             marginLeft: "4px",
-                             fontWeight: 600,
-                             textTransform: "uppercase",
-                             background: m.provider === "freetoken" ? "rgba(234,179,8,0.15)" : "rgba(139,92,246,0.15)",
-                             color: m.provider === "freetoken" ? "#ca8a04" : "#7c3aed",
-                             border: `1px solid ${m.provider === "freetoken" ? "rgba(234,179,8,0.4)" : "rgba(139,92,246,0.4)"}`,
-                           }}
-                         >
-                           {m.provider === "strata" ? "Strata" : m.provider === "freetoken" ? "⚡ FreeToken" : "🦙 llama.cpp"}
-                         </span>
-                       )}
-                       {m.reasoningEffort && (
-                         <span
-                           className="badge info"
-                           style={{
-                             fontSize: "0.68rem",
-                             padding: "2px 6px",
-                             borderRadius: "4px",
-                             marginLeft: "4px",
-                             fontWeight: 600,
-                             textTransform: "uppercase",
-                           }}
-                         >
-                           🧠 CoT: {m.reasoningEffort}
-                         </span>
-                       )}
-                       {getEligibilityBadge(m)}
+                       <div className="model-meta-row">
+                         {m.configurationLabel && <span className="model-chip config">{m.configurationLabel}</span>}
+                         <span className="model-chip size">{m.paramSizeLabel}</span>
+                         {m.provider && m.provider !== "ollama" && (
+                           <span className={`model-chip provider-${m.provider}`}>
+                             {m.provider === "strata" ? "Strata" : m.provider === "freetoken" ? "FreeToken" : "llama.cpp"}
+                           </span>
+                         )}
+                         {m.reasoningEffort && (
+                           <span className="model-chip cot">CoT: {m.reasoningEffort}</span>
+                         )}
+                         {getEligibilityBadge(m)}
+                       </div>
                      </td>
                     <td style={{ textAlign: "center" }}>
                       <div className="score-cell-stack">
@@ -435,22 +419,29 @@ export function ArenaLeaderboard({
                     </td>
                     <td style={{ textAlign: "center" }}>{getSecurityBadge(m)}</td>
                     <td style={{ textAlign: "center" }}>
-                      <span className="micro-pill speed">
-                        {m.avgTokPerSec != null ? `${m.avgTokPerSec} tok/s` : "—"}
-                      </span>
+                      <div className="score-cell-stack">
+                        <span className="micro-pill speed">
+                          {m.avgTokPerSec != null ? `${m.avgTokPerSec} tok/s` : "—"}
+                        </span>
+                        {speedPct > 0 && (
+                          <span className="metric-bar-track" aria-hidden="true">
+                            <span className="metric-bar-fill speed" style={{ width: `${speedPct}%` }} />
+                          </span>
+                        )}
+                      </div>
                       {m.avgPrefillTokPerSec != null && (
-                        <small className="muted" style={{ display: "block", marginTop: 2 }}>
-                          Prefill: {m.avgPrefillTokPerSec} tok/s
+                        <small className="muted cell-sub">
+                          Pre: {m.avgPrefillTokPerSec}
                         </small>
                       )}
                     </td>
                     <td style={{ textAlign: "center" }}>
                       <span className="micro-pill time">
-                        {m.avgTtftMs != null ? `${m.avgTtftMs} ms` : "—"}
+                        {m.avgTtftMs != null ? `${Math.round(m.avgTtftMs)} ms` : "—"}
                       </span>
                       {m.avgFirstVisibleTokenMs != null && (
-                        <small className="muted" style={{ display: "block", marginTop: 2 }} title="Tiempo hasta el primer token visible (excluyendo thinking)">
-                          Vis: {m.avgFirstVisibleTokenMs} ms
+                        <small className="muted cell-sub" title="Tiempo hasta el primer token visible (excluyendo thinking)">
+                          Vis: {Math.round(m.avgFirstVisibleTokenMs)} ms
                         </small>
                       )}
                     </td>
@@ -458,7 +449,7 @@ export function ArenaLeaderboard({
                       {m.avgCacheHitRatio != null ? (
                         <>
                           <span className="micro-pill">{Math.round(m.avgCacheHitRatio * 100)}%</span>
-                          <small className="muted" style={{ display: "block", marginTop: 2 }}>
+                          <small className="muted cell-sub">
                             {m.cacheMeasuredCount ?? 0} med.
                           </small>
                         </>
@@ -476,18 +467,21 @@ export function ArenaLeaderboard({
                         {m.avgDurationMs != null ? `${(m.avgDurationMs / 1000).toFixed(1)} s` : "—"}
                       </span>
                     </td>
-                    <td className="text-center">
-                      {m.avgVramPeakBytes == null ? "Sin datos" : `${(m.avgVramPeakBytes / 1024 ** 3).toFixed(2)} GiB`}
-                      <br />
-                      <small>{m.vramMeasuredCount ?? 0}/{m.totalRuns + m.failedEvals} VRAM</small>
+                    <td className="text-center cell-compact">
+                      <span className="cell-primary mono">
+                        {m.avgVramPeakBytes == null ? "—" : `${(m.avgVramPeakBytes / 1024 ** 3).toFixed(2)} GiB`}
+                      </span>
+                      <small className="muted cell-sub">
+                        {m.vramMeasuredCount ?? 0}/{m.totalRuns + m.failedEvals} VRAM
+                      </small>
                       {m.avgRamPeakBytes != null && (
-                        <small className="muted" style={{ display: "block" }}>
-                          RAM: {(m.avgRamPeakBytes / 1024 ** 3).toFixed(2)} GiB ({m.ramMeasuredCount ?? 0})
+                        <small className="muted cell-sub">
+                          RAM {(m.avgRamPeakBytes / 1024 ** 3).toFixed(2)} GiB
                         </small>
                       )}
                     </td>
                     <td
-                      className="text-center"
+                      className="text-center cell-compact"
                       title={
                         m.avgWallWattHours != null
                           ? `Consumo real de enchufe (wall). Wh/tarea útil: ${m.wallWhPerUsefulTask?.toFixed(4) ?? "—"}. Tokens visibles/Wh: ${m.usefulVisibleTokensPerWallWh ?? "—"}.`
@@ -498,30 +492,20 @@ export function ArenaLeaderboard({
                     >
                       {m.avgWallWattHours != null ? (
                         <>
-                          <strong>{m.avgWallWattHours.toFixed(4)} Wh</strong>
-                          <small className="muted" style={{ display: "block" }}>
-                            wall · {m.wallEnergyMeasuredCount ?? 0} med.
+                          <span className="cell-primary energy-wall mono">{m.avgWallWattHours.toFixed(3)} Wh</span>
+                          <small className="muted cell-sub">
+                            WALL · {m.wallEnergyMeasuredCount ?? 0} med.
                           </small>
-                          {m.wallWhPerUsefulTask != null && (
-                            <small className="muted" style={{ display: "block" }}>
-                              {m.wallWhPerUsefulTask.toFixed(4)} Wh/útil
-                            </small>
-                          )}
                         </>
                       ) : m.avgGpuWattHours != null ? (
                         <>
-                          <strong>{m.avgGpuWattHours.toFixed(4)} Wh</strong>
-                          <small className="muted" style={{ display: "block" }}>
+                          <span className="cell-primary energy-gpu mono">{m.avgGpuWattHours.toFixed(3)} Wh</span>
+                          <small className="muted cell-sub">
                             GPU · {m.gpuEnergyMeasuredCount ?? 0} med.
                           </small>
-                          {m.gpuWhPerUsefulTask != null && (
-                            <small className="muted" style={{ display: "block" }}>
-                              {m.gpuWhPerUsefulTask.toFixed(4)} Wh/útil
-                            </small>
-                          )}
                         </>
                       ) : (
-                        <span className="muted-text">Sin datos</span>
+                        <span className="muted-text">—</span>
                       )}
                     </td>
                     <td style={{ textAlign: "center" }}>
