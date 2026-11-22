@@ -6821,6 +6821,22 @@ select:focus,
   border: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(8px);
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong, var(--line)) transparent;
+}
+
+.shell {
+  padding-bottom: 92px;
 }
 
 .leaderboard-toolbar {
@@ -6905,21 +6921,21 @@ select:focus,
 
 .master-leaderboard-table th {
   font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 0.66rem;
-  letter-spacing: 0.08em;
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 10px 8px !important;
+  padding: 10px 6px !important;
   white-space: nowrap;
 }
 
 .master-leaderboard-table td {
-  padding: 12px 8px !important;
+  padding: 11px 6px !important;
   vertical-align: middle;
 }
 
 .master-leaderboard-table .model-cell {
-  min-width: 220px;
-  max-width: 300px;
+  min-width: 190px;
+  max-width: 245px;
 }
 
 .model-cell-head {
