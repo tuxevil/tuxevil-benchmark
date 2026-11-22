@@ -23,12 +23,12 @@ function getThemeSnapshot(): Theme {
   return (
     (localStorage.getItem(PROJECT_BRAND.themeStorageKey) as Theme) ||
     (localStorage.getItem(LEGACY_THEME_STORAGE_KEY) as Theme) ||
-    "system"
+    "dark"
   );
 }
 
 function getServerThemeSnapshot(): Theme {
-  return "system";
+  return "dark";
 }
 
 function subscribeSystemTheme(callback: () => void) {

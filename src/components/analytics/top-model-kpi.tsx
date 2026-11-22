@@ -7,7 +7,7 @@ interface TopModelKpiProps {
   totalRuns: number;
 }
 
-export function TopModelKpi({ models }: TopModelKpiProps) {
+export function TopModelKpi({ models, totalRuns }: TopModelKpiProps) {
   const topLeader = models.length > 0 ? models[0] : null;
 
   // Find security leader (highest securityResilienceScore or lowest ASR)
@@ -28,38 +28,34 @@ export function TopModelKpi({ models }: TopModelKpiProps) {
   return (
     <div className="kpi-hero-grid">
       {/* 1. Evaluated Models */}
-      <div className="kpi-card">
+      <div className="kpi-card kpi-card-indigo">
         <div className="kpi-header">
-          <div className="kpi-title-row">
-            <span className="kpi-icon">🤖</span>
-            <span className="kpi-title">Evaluated Models</span>
-          </div>
-          <span className="kpi-badge neutral">Database</span>
+          <span className="kpi-title">Evaluated Models</span>
+          <span className="kpi-badge kpi-badge-indigo">ARENA</span>
         </div>
         <div className="kpi-single-value-body">
-          <span className="kpi-big-number">{models.length}</span>
-          <span className="kpi-subtext">Models registered in system</span>
+          <div className="kpi-value-inline">
+            <span className="kpi-big-number mono">{models.length}</span>
+            <span className="kpi-subtext mono">{totalRuns} runs</span>
+          </div>
         </div>
       </div>
 
       {/* 2. Top Leader */}
-      <div className="kpi-card top-winner-card">
+      <div className="kpi-card kpi-card-green top-winner-card">
         <div className="kpi-header">
-          <div className="kpi-title-row">
-            <span className="kpi-icon">🏆</span>
-            <span className="kpi-title">Overall Leader</span>
-          </div>
-          <span className="kpi-badge gold">#1 Arena Index</span>
+          <span className="kpi-title">Top Overall Model</span>
+          <span className="kpi-badge kpi-badge-green">#01 RANK</span>
         </div>
         <div className="kpi-single-value-body">
           {topLeader ? (
             <>
               <div className="kpi-leader-name-row">
-                <span className="winner-name">{topLeader.modelName}</span>
-                <span className="winner-size-tag">{topLeader.paramSizeLabel}</span>
+                <span className="winner-name mono">{topLeader.modelName}</span>
+                <span className="winner-size-tag mono">{topLeader.paramSizeLabel}</span>
               </div>
-              <span className="kpi-subtext">
-                Arena Score: <strong>{topLeader.arenaIndex}/100</strong>
+              <span className="kpi-subtext mono">
+                idx <strong>{topLeader.arenaIndex}/100</strong> · {topLeader.configurationLabel ?? "—"}
               </span>
             </>
           ) : (
@@ -69,23 +65,20 @@ export function TopModelKpi({ models }: TopModelKpiProps) {
       </div>
 
       {/* 3. Security Leader */}
-      <div className="kpi-card">
+      <div className="kpi-card kpi-card-red">
         <div className="kpi-header">
-          <div className="kpi-title-row">
-            <span className="kpi-icon">🛡️</span>
-            <span className="kpi-title">Security Leader</span>
-          </div>
-          <span className="kpi-badge safe">Highest Immunity</span>
+          <span className="kpi-title">Security Champion</span>
+          <span className="kpi-badge kpi-badge-red">RED / PURPLE</span>
         </div>
         <div className="kpi-single-value-body">
           {securityLeader ? (
             <>
               <div className="kpi-leader-name-row">
-                <span className="winner-name">{securityLeader.modelName}</span>
-                <span className="winner-size-tag">{securityLeader.paramSizeLabel}</span>
+                <span className="winner-name mono">{securityLeader.modelName}</span>
+                <span className="winner-size-tag mono">{securityLeader.paramSizeLabel}</span>
               </div>
-              <span className="kpi-subtext">
-                Resistencia observada: <strong>{securityLeader.securityResilienceScore ?? "—"}%</strong> · {securityLeader.securityEvaluatedCases ?? "—"} casos (ASR: {securityLeader.attackSuccessRatePct ?? "—"}%)
+              <span className="kpi-subtext mono">
+                <strong>{securityLeader.securityResilienceScore ?? "—"}%</strong> resilience · {securityLeader.securityEvaluatedCases ?? "—"} casos · ASR {securityLeader.attackSuccessRatePct ?? "—"}%
               </span>
             </>
           ) : (
@@ -95,19 +88,16 @@ export function TopModelKpi({ models }: TopModelKpiProps) {
       </div>
 
       {/* 4. Average Speed */}
-      <div className="kpi-card">
+      <div className="kpi-card kpi-card-cyan">
         <div className="kpi-header">
-          <div className="kpi-title-row">
-            <span className="kpi-icon">⚡</span>
-            <span className="kpi-title">Average Speed</span>
-          </div>
-          <span className="kpi-badge speed">Global throughput</span>
+          <span className="kpi-title">System Throughput</span>
+          <span className="kpi-badge kpi-badge-cyan">TOK/S</span>
         </div>
         <div className="kpi-single-value-body">
-          <span className="kpi-big-number speed">
-            {avgSystemSpeed} <span className="unit">tok/s</span>
-          </span>
-          <span className="kpi-subtext">Average inference speed</span>
+          <div className="kpi-value-inline">
+            <span className="kpi-big-number speed mono">{avgSystemSpeed}</span>
+            <span className="kpi-subtext">global avg tok/s</span>
+          </div>
         </div>
       </div>
     </div>
