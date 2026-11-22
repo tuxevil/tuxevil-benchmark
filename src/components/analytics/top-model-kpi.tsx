@@ -44,7 +44,7 @@ export function TopModelKpi({ models, totalRuns }: TopModelKpiProps) {
       {/* 2. Top Leader */}
       <div className="kpi-card kpi-card-green top-winner-card">
         <div className="kpi-header">
-          <span className="kpi-title">Top Overall Model</span>
+          <span className="kpi-title">Overall Leader</span>
           <span className="kpi-badge kpi-badge-green">#01 RANK</span>
         </div>
         <div className="kpi-single-value-body">
