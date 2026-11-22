@@ -197,6 +197,11 @@ export type TurnResult = Telemetry & {
   userMessage: string;
   responseText: string;
   thinking: string | null;
+  firstVisibleTokenMs?: number | null;
+  cachedPromptTokens?: number | null;
+  cacheHitRatio?: number | null;
+  prefillTokPerSec?: number | null;
+  decodeTokPerSec?: number | null;
   finishReason?: string | null;
   truncated?: boolean;
   /** Raw SSE wire capture and parsed counters. Only populated when debugWireCapture=true. */
@@ -246,6 +251,11 @@ export type ModelResult = Telemetry & {
   humanStatus: HumanStatus;
   humanNotes: string;
   errorMessage: string | null;
+  firstVisibleTokenMs?: number | null;
+  cachedPromptTokens?: number | null;
+  cacheHitRatio?: number | null;
+  prefillTokPerSec?: number | null;
+  decodeTokPerSec?: number | null;
   finishReason?: string | null;
   truncated?: boolean;
 };
@@ -396,6 +406,11 @@ export type LeaderboardModelRow = {
   failedEvals: number;
   avgTokPerSec: number | null;
   avgTtftMs: number | null;
+  avgFirstVisibleTokenMs?: number | null;
+  avgPrefillTokPerSec?: number | null;
+  avgDecodeTokPerSec?: number | null;
+  avgCacheHitRatio?: number | null;
+  cacheMeasuredCount?: number;
   avgQualityStars: number | null;
   avgGrammar: number | null;
   avgCompliance: number | null;
@@ -404,6 +419,15 @@ export type LeaderboardModelRow = {
   avgDurationMs: number | null;
   avgVramPeakBytes?: number | null;
   vramMeasuredCount?: number;
+  avgRamPeakBytes?: number | null;
+  ramMeasuredCount?: number;
+  avgGpuWattHours?: number | null;
+  gpuEnergyMeasuredCount?: number;
+  gpuWhPerUsefulTask?: number | null;
+  avgWallWattHours?: number | null;
+  wallEnergyMeasuredCount?: number;
+  wallWhPerUsefulTask?: number | null;
+  usefulVisibleTokensPerWallWh?: number | null;
   attackSuccessRatePct: number | null;
   securityResilienceScore: number | null;
   securityRelativeScore?: number | null;

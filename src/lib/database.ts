@@ -1,6 +1,6 @@
 import { parsePersistedParameters } from "@/lib/persisted-parameters";
 import { resultIdentity } from "./run-identity";
-import { loadRunManifests, loadVramPeaks } from "./resource-measurement-store";
+import { loadResourceSummaries, loadRunManifests } from "./resource-measurement-store";
 import { publicBenchmarkCase } from "@/lib/public-benchmarks";
 import postgres, { type TransactionSql } from "postgres";
 import { ensurePostgresCompatibility } from "@/lib/postgres-compatibility";
@@ -413,6 +413,10 @@ export async function aggregateLeaderboard(options?: {
     failedEvals: number;
     tokPerSecList: number[];
     ttftMsList: number[];
+    firstVisibleTokenMsList: number[];
+    prefillTokPerSecList: number[];
+    decodeTokPerSecList: number[];
+    cacheHitRatioList: number[];
     qualityStarsList: number[];
     grammarRatingList: number[];
     complianceRatingList: number[];
@@ -420,6 +424,14 @@ export async function aggregateLeaderboard(options?: {
     outputTokensList: number[];
     durationMsList: number[];
     vramPeaks: number[];
+    ramPeaks: number[];
+    gpuWattHoursList: number[];
+    gpuUsefulEnergyWh: number;
+    gpuUsefulTasks: number;
+    wallWattHoursList: number[];
+    wallUsefulEnergyWh: number;
+    wallUsefulTasks: number;
+    wallUsefulVisibleTokens: number;
     securityAttacksTotal: number;
     securityFailuresTotal: number;
     // Per attack type tracking
@@ -431,7 +443,7 @@ export async function aggregateLeaderboard(options?: {
     indirectFailures: number;
   };
 
-  const vramPeaks = options?.includeVram ? await loadVramPeaks() : null;
+  const resourceSummaries = options?.includeVram ? await loadResourceSummaries() : null;
   const byModel = new Map<string, ModelRawBucket>();
   const perScenario = new Map<string, Map<string, ScenarioModelStat>>();
   const allTokPerSec: number[] = [];
@@ -482,6 +494,10 @@ export async function aggregateLeaderboard(options?: {
           failedEvals: 0,
           tokPerSecList: [],
           ttftMsList: [],
+          firstVisibleTokenMsList: [],
+          prefillTokPerSecList: [],
+          decodeTokPerSecList: [],
+          cacheHitRatioList: [],
           qualityStarsList: [],
           grammarRatingList: [],
           complianceRatingList: [],
@@ -489,6 +505,14 @@ export async function aggregateLeaderboard(options?: {
           outputTokensList: [],
           durationMsList: [],
           vramPeaks: [],
+          ramPeaks: [],
+          gpuWattHoursList: [],
+          gpuUsefulEnergyWh: 0,
+          gpuUsefulTasks: 0,
+          wallWattHoursList: [],
+          wallUsefulEnergyWh: 0,
+          wallUsefulTasks: 0,
+          wallUsefulVisibleTokens: 0,
           securityAttacksTotal: 0,
           securityFailuresTotal: 0,
           overrideAttacks: 0,
@@ -501,8 +525,9 @@ export async function aggregateLeaderboard(options?: {
         byModel.set(modelKey, bucket);
       }
 
-      const vramPeak = vramPeaks?.get(res.id);
-      if (vramPeak !== undefined) bucket.vramPeaks.push(vramPeak);
+      const resource = resourceSummaries?.get(res.id);
+      if (resource?.vramPeakBytes != null) bucket.vramPeaks.push(resource.vramPeakBytes);
+      if (resource?.ramPeakBytes != null) bucket.ramPeaks.push(resource.ramPeakBytes);
 
       if (res.evalStatus === "FAILED") {
         bucket.failedEvals += 1;
@@ -515,8 +540,32 @@ export async function aggregateLeaderboard(options?: {
         allTokPerSec.push(res.tokPerSec);
       }
       if (res.ttftMs != null) bucket.ttftMsList.push(res.ttftMs);
+      if (res.firstVisibleTokenMs != null) bucket.firstVisibleTokenMsList.push(res.firstVisibleTokenMs);
+      if (res.prefillTokPerSec != null) bucket.prefillTokPerSecList.push(res.prefillTokPerSec);
+      if (res.decodeTokPerSec != null) bucket.decodeTokPerSecList.push(res.decodeTokPerSec);
+      if (res.cacheHitRatio != null) bucket.cacheHitRatioList.push(res.cacheHitRatio);
       if (res.outputTokens != null) bucket.outputTokensList.push(res.outputTokens);
       if (res.totalDurationMs != null) bucket.durationMsList.push(res.totalDurationMs);
+
+      const isUsefulTask =
+        entry.run.category === "SECURITY"
+          ? securityOutcome(res.evaluation, res.evalStatus) === true
+          : (res.evaluation?.scoreStars ?? 0) >= 4;
+      const approxVisibleTokens = res.responseText ? Math.max(1, Math.round(res.responseText.trim().length / 4)) : 0;
+
+      if (resource?.gpuWattHours != null) {
+        bucket.gpuWattHoursList.push(resource.gpuWattHours);
+        bucket.gpuUsefulEnergyWh += resource.gpuWattHours;
+        if (isUsefulTask) bucket.gpuUsefulTasks += 1;
+      }
+      if (resource?.wallWattHours != null) {
+        bucket.wallWattHoursList.push(resource.wallWattHours);
+        bucket.wallUsefulEnergyWh += resource.wallWattHours;
+        if (isUsefulTask) {
+          bucket.wallUsefulTasks += 1;
+          bucket.wallUsefulVisibleTokens += approxVisibleTokens;
+        }
+      }
       if (res.evaluation?.scoreStars != null) {
         bucket.qualityStarsList.push(res.evaluation.scoreStars);
         allQualityStars.push(res.evaluation.scoreStars);
@@ -591,6 +640,11 @@ export async function aggregateLeaderboard(options?: {
     failedEvals: number;
     avgTokPerSec: number | null;
     avgTtftMs: number | null;
+    avgFirstVisibleTokenMs: number | null;
+    avgPrefillTokPerSec: number | null;
+    avgDecodeTokPerSec: number | null;
+    avgCacheHitRatio: number | null;
+    cacheMeasuredCount: number;
     avgQualityStars: number | null;
     avgGrammar: number | null;
     avgCompliance: number | null;
@@ -599,6 +653,15 @@ export async function aggregateLeaderboard(options?: {
     avgDurationMs: number | null;
     avgVramPeakBytes: number | null;
     vramMeasuredCount: number;
+    avgRamPeakBytes: number | null;
+    ramMeasuredCount: number;
+    avgGpuWattHours: number | null;
+    gpuEnergyMeasuredCount: number;
+    gpuWhPerUsefulTask: number | null;
+    avgWallWattHours: number | null;
+    wallEnergyMeasuredCount: number;
+    wallWhPerUsefulTask: number | null;
+    usefulVisibleTokensPerWallWh: number | null;
     asrPercent: number | null;
     securityResilienceScore: number | null;
     securityRelativeScore: number | null;
@@ -617,6 +680,33 @@ export async function aggregateLeaderboard(options?: {
       maxAvgSpeed = avgTok;
     }
     const avgTtft = average(bucket.ttftMsList);
+    const avgFirstVisibleTokenMs = average(bucket.firstVisibleTokenMsList);
+    const avgPrefillTokPerSec = average(bucket.prefillTokPerSecList);
+    const avgDecodeTokPerSec = average(bucket.decodeTokPerSecList);
+    const avgCacheHitRatio =
+      bucket.cacheHitRatioList.length > 0
+        ? Number((bucket.cacheHitRatioList.reduce((a, b) => a + b, 0) / bucket.cacheHitRatioList.length).toFixed(4))
+        : null;
+    const avgGpuWattHours =
+      bucket.gpuWattHoursList.length > 0
+        ? Number((bucket.gpuWattHoursList.reduce((a, b) => a + b, 0) / bucket.gpuWattHoursList.length).toFixed(6))
+        : null;
+    const avgWallWattHours =
+      bucket.wallWattHoursList.length > 0
+        ? Number((bucket.wallWattHoursList.reduce((a, b) => a + b, 0) / bucket.wallWattHoursList.length).toFixed(6))
+        : null;
+    const gpuWhPerUsefulTask =
+      bucket.gpuUsefulTasks > 0
+        ? Number((bucket.gpuUsefulEnergyWh / bucket.gpuUsefulTasks).toFixed(6))
+        : null;
+    const wallWhPerUsefulTask =
+      bucket.wallUsefulTasks > 0
+        ? Number((bucket.wallUsefulEnergyWh / bucket.wallUsefulTasks).toFixed(6))
+        : null;
+    const usefulVisibleTokensPerWallWh =
+      bucket.wallUsefulEnergyWh > 0 && bucket.wallUsefulVisibleTokens > 0
+        ? Number((bucket.wallUsefulVisibleTokens / bucket.wallUsefulEnergyWh).toFixed(1))
+        : null;
     const avgQuality = average(bucket.qualityStarsList);
     const avgGrammar = average(bucket.grammarRatingList);
     const avgCompliance = average(bucket.complianceRatingList);
@@ -662,6 +752,11 @@ export async function aggregateLeaderboard(options?: {
       failedEvals: bucket.failedEvals,
       avgTokPerSec: avgTok,
       avgTtftMs: avgTtft,
+      avgFirstVisibleTokenMs,
+      avgPrefillTokPerSec,
+      avgDecodeTokPerSec,
+      avgCacheHitRatio,
+      cacheMeasuredCount: bucket.cacheHitRatioList.length,
       avgQualityStars: avgQuality,
       avgGrammar,
       avgCompliance,
@@ -670,6 +765,15 @@ export async function aggregateLeaderboard(options?: {
       avgDurationMs,
       avgVramPeakBytes: average(bucket.vramPeaks),
       vramMeasuredCount: bucket.vramPeaks.length,
+      avgRamPeakBytes: average(bucket.ramPeaks),
+      ramMeasuredCount: bucket.ramPeaks.length,
+      avgGpuWattHours,
+      gpuEnergyMeasuredCount: bucket.gpuWattHoursList.length,
+      gpuWhPerUsefulTask,
+      avgWallWattHours,
+      wallEnergyMeasuredCount: bucket.wallWattHoursList.length,
+      wallWhPerUsefulTask,
+      usefulVisibleTokensPerWallWh,
       asrPercent: asr,
       securityResilienceScore: securityResilience,
       securityRelativeScore: securityDimension.score,
@@ -714,6 +818,11 @@ export async function aggregateLeaderboard(options?: {
       failedEvals: m.failedEvals,
       avgTokPerSec: m.avgTokPerSec,
       avgTtftMs: m.avgTtftMs,
+      avgFirstVisibleTokenMs: m.avgFirstVisibleTokenMs,
+      avgPrefillTokPerSec: m.avgPrefillTokPerSec,
+      avgDecodeTokPerSec: m.avgDecodeTokPerSec,
+      avgCacheHitRatio: m.avgCacheHitRatio,
+      cacheMeasuredCount: m.cacheMeasuredCount,
       avgQualityStars: m.avgQualityStars,
       avgGrammar: m.avgGrammar,
       avgCompliance: m.avgCompliance,
@@ -722,6 +831,15 @@ export async function aggregateLeaderboard(options?: {
       avgDurationMs: m.avgDurationMs,
       avgVramPeakBytes: m.avgVramPeakBytes,
       vramMeasuredCount: m.vramMeasuredCount,
+      avgRamPeakBytes: m.avgRamPeakBytes,
+      ramMeasuredCount: m.ramMeasuredCount,
+      avgGpuWattHours: m.avgGpuWattHours,
+      gpuEnergyMeasuredCount: m.gpuEnergyMeasuredCount,
+      gpuWhPerUsefulTask: m.gpuWhPerUsefulTask,
+      avgWallWattHours: m.avgWallWattHours,
+      wallEnergyMeasuredCount: m.wallEnergyMeasuredCount,
+      wallWhPerUsefulTask: m.wallWhPerUsefulTask,
+      usefulVisibleTokensPerWallWh: m.usefulVisibleTokensPerWallWh,
       attackSuccessRatePct: m.asrPercent,
       securityResilienceScore: m.securityResilienceScore,
       securityRelativeScore: m.securityRelativeScore,
@@ -1125,11 +1243,11 @@ export async function loadPersistedState(runId?: string): Promise<DatabaseState 
         ? transaction`SELECT id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, execution_target_id, user_messages, selected_models, parameters, evaluator_config, created_at, updated_at, started_at, finished_at, error_message FROM test_runs WHERE id = ${runId}`
         : transaction`SELECT id, category, attack_type, status, paused, control_version, scenario_id, samples_per_model, system_prompt, ollama_url, provider, provider_url, execution_target_id, user_messages, selected_models, parameters, evaluator_config, created_at, updated_at, started_at, finished_at, error_message FROM test_runs ORDER BY created_at DESC`,
       runId
-        ? transaction`SELECT id, test_run_id, model_name, sample_index, status, eval_status, response_text, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, error_message, human_status, human_notes FROM model_results WHERE test_run_id = ${runId}`
-        : transaction`SELECT id, test_run_id, model_name, sample_index, status, eval_status, response_text, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, error_message, human_status, human_notes FROM model_results`,
+        ? transaction`SELECT id, test_run_id, model_name, sample_index, status, eval_status, response_text, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, first_visible_token_ms, cached_prompt_tokens, cache_hit_ratio, prefill_tok_per_sec, decode_tok_per_sec, error_message, human_status, human_notes FROM model_results WHERE test_run_id = ${runId}`
+        : transaction`SELECT id, test_run_id, model_name, sample_index, status, eval_status, response_text, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, first_visible_token_ms, cached_prompt_tokens, cache_hit_ratio, prefill_tok_per_sec, decode_tok_per_sec, error_message, human_status, human_notes FROM model_results`,
       runId
-        ? transaction`SELECT id, model_result_id, step_order, user_message, response_text, thinking, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body, tool_calls FROM model_result_turns WHERE model_result_id IN (SELECT id FROM model_results WHERE test_run_id = ${runId}) ORDER BY step_order ASC`
-        : transaction`SELECT id, model_result_id, step_order, user_message, response_text, thinking, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body, tool_calls FROM model_result_turns ORDER BY step_order ASC`,
+        ? transaction`SELECT id, model_result_id, step_order, user_message, response_text, thinking, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, first_visible_token_ms, cached_prompt_tokens, cache_hit_ratio, prefill_tok_per_sec, decode_tok_per_sec, finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body, tool_calls FROM model_result_turns WHERE model_result_id IN (SELECT id FROM model_results WHERE test_run_id = ${runId}) ORDER BY step_order ASC`
+        : transaction`SELECT id, model_result_id, step_order, user_message, response_text, thinking, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, first_visible_token_ms, cached_prompt_tokens, cache_hit_ratio, prefill_tok_per_sec, decode_tok_per_sec, finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body, tool_calls FROM model_result_turns ORDER BY step_order ASC`,
       runId
         ? transaction`SELECT model_result_id, evaluator_model, grammar_rating, compliance_rating, accuracy_rating, score_stars, grammar_analysis, compliance_analysis, accuracy_analysis, feedback_text, security_score, injection_successful, system_leakage_detected, vulnerability_analysis, evaluator_raw_json FROM evaluations WHERE model_result_id IN (SELECT id FROM model_results WHERE test_run_id = ${runId})`
         : transaction`SELECT model_result_id, evaluator_model, grammar_rating, compliance_rating, accuracy_rating, score_stars, grammar_analysis, compliance_analysis, accuracy_analysis, feedback_text, security_score, injection_successful, system_leakage_detected, vulnerability_analysis, evaluator_raw_json FROM evaluations`,
@@ -1538,8 +1656,18 @@ async function persistRun(run: TestRun, config: RunPersistenceConfig) {
     `;
     for (const result of run.results) {
       await transaction`
-        INSERT INTO model_results (id, test_run_id, model_name, sample_index, status, eval_status, response_text, input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms, error_message, human_status, human_notes)
-        VALUES (${result.id}, ${run.id}, ${result.modelName}, ${result.sampleIndex}, ${result.status}, ${result.evalStatus}, ${result.responseText}, ${result.inputTokens}, ${result.outputTokens}, ${result.ttftMs}, ${result.tokPerSec}, ${result.totalDurationMs}, ${result.errorMessage}, ${result.humanStatus}, ${result.humanNotes})
+        INSERT INTO model_results (
+          id, test_run_id, model_name, sample_index, status, eval_status, response_text,
+          input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms,
+          first_visible_token_ms, cached_prompt_tokens, cache_hit_ratio, prefill_tok_per_sec, decode_tok_per_sec,
+          error_message, human_status, human_notes
+        )
+        VALUES (
+          ${result.id}, ${run.id}, ${result.modelName}, ${result.sampleIndex}, ${result.status}, ${result.evalStatus}, ${result.responseText},
+          ${result.inputTokens}, ${result.outputTokens}, ${result.ttftMs}, ${result.tokPerSec}, ${result.totalDurationMs},
+          ${result.firstVisibleTokenMs ?? null}, ${result.cachedPromptTokens ?? null}, ${result.cacheHitRatio ?? null}, ${result.prefillTokPerSec ?? null}, ${result.decodeTokPerSec ?? null},
+          ${result.errorMessage}, ${result.humanStatus}, ${result.humanNotes}
+        )
         ON CONFLICT (id) DO UPDATE SET
           model_name = EXCLUDED.model_name,
           sample_index = EXCLUDED.sample_index,
@@ -1551,6 +1679,11 @@ async function persistRun(run: TestRun, config: RunPersistenceConfig) {
           ttft_ms = EXCLUDED.ttft_ms,
           tok_per_sec = EXCLUDED.tok_per_sec,
           total_duration_ms = EXCLUDED.total_duration_ms,
+          first_visible_token_ms = EXCLUDED.first_visible_token_ms,
+          cached_prompt_tokens = EXCLUDED.cached_prompt_tokens,
+          cache_hit_ratio = EXCLUDED.cache_hit_ratio,
+          prefill_tok_per_sec = EXCLUDED.prefill_tok_per_sec,
+          decode_tok_per_sec = EXCLUDED.decode_tok_per_sec,
           error_message = EXCLUDED.error_message,
           human_status = CASE WHEN EXCLUDED.human_status = 'UNREVIEWED' THEN model_results.human_status ELSE EXCLUDED.human_status END,
           human_notes = CASE WHEN EXCLUDED.human_status = 'UNREVIEWED' THEN model_results.human_notes ELSE EXCLUDED.human_notes END
@@ -1568,11 +1701,13 @@ async function persistTurn(transaction: TransactionSql, resultId: string, turn: 
     INSERT INTO model_result_turns (
       id, model_result_id, step_order, user_message, response_text, thinking,
       input_tokens, output_tokens, ttft_ms, tok_per_sec, total_duration_ms,
+      first_visible_token_ms, cached_prompt_tokens, cache_hit_ratio, prefill_tok_per_sec, decode_tok_per_sec,
       finish_reason, truncated, wire_diagnostics, protocol_diagnostics, request_body, tool_calls
     )
     VALUES (
       ${turn.id}, ${resultId}, ${turn.stepOrder}, ${turn.userMessage}, ${turn.responseText}, ${turn.thinking ?? ""},
       ${turn.inputTokens}, ${turn.outputTokens}, ${turn.ttftMs}, ${turn.tokPerSec}, ${turn.totalDurationMs},
+      ${turn.firstVisibleTokenMs ?? null}, ${turn.cachedPromptTokens ?? null}, ${turn.cacheHitRatio ?? null}, ${turn.prefillTokPerSec ?? null}, ${turn.decodeTokPerSec ?? null},
       ${turn.finishReason ?? null}, ${turn.truncated ?? false},
       ${turn.wireDiagnostics ? JSON.stringify(turn.wireDiagnostics) : null}::jsonb,
       ${turn.protocolDiagnostics ? JSON.stringify(turn.protocolDiagnostics) : null}::jsonb,
@@ -1614,6 +1749,11 @@ function groupTurns(rows: Array<Record<string, unknown>>) {
       inputTokens: numberOrNull(row.input_tokens),
       outputTokens: numberOrNull(row.output_tokens),
       ttftMs: numberOrNull(row.ttft_ms),
+      firstVisibleTokenMs: numberOrNull(row.first_visible_token_ms),
+      cachedPromptTokens: numberOrNull(row.cached_prompt_tokens),
+      cacheHitRatio: numberOrNull(row.cache_hit_ratio),
+      prefillTokPerSec: numberOrNull(row.prefill_tok_per_sec),
+      decodeTokPerSec: numberOrNull(row.decode_tok_per_sec),
       tokPerSec: numberOrNull(row.tok_per_sec),
       totalDurationMs: numberOrNull(row.total_duration_ms),
       finishReason: row.finish_reason ? String(row.finish_reason) : null,
@@ -1693,6 +1833,11 @@ function restoreResult(row: Record<string, unknown>, turns: TurnResult[], evalua
     humanNotes: String(row.human_notes ?? ""),
     errorMessage: row.error_message ? String(row.error_message) : null,
     ttftMs: numberOrNull(row.ttft_ms),
+    firstVisibleTokenMs: numberOrNull(row.first_visible_token_ms),
+    cachedPromptTokens: numberOrNull(row.cached_prompt_tokens),
+    cacheHitRatio: numberOrNull(row.cache_hit_ratio),
+    prefillTokPerSec: numberOrNull(row.prefill_tok_per_sec),
+    decodeTokPerSec: numberOrNull(row.decode_tok_per_sec),
     inputTokens: numberOrNull(row.input_tokens),
     outputTokens: numberOrNull(row.output_tokens),
     tokPerSec: numberOrNull(row.tok_per_sec),

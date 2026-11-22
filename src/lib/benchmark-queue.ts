@@ -270,6 +270,10 @@ async function executeModel(runId: string, resultId: string) {
 
   const turnTelemetry = [] as Array<{
     ttftMs: number | null;
+    firstVisibleTokenMs: number | null;
+    cachedPromptTokens: number | null;
+    prefillTokPerSec: number | null;
+    decodeTokPerSec: number | null;
     outputTokens: number | null;
     inputTokens: number | null;
     totalDurationMs: number | null;
@@ -437,6 +441,8 @@ async function executeModel(runId: string, resultId: string) {
           turn: stepOrder,
           ttftMs: response.ttftMs,
           firstVisibleTokenMs: response.firstVisibleTokenMs,
+          cachedPromptTokens: response.cachedPromptTokens,
+          cacheHitRatio: response.cacheHitRatio,
           prefillRate: response.prefillRate,
           decodeRate: response.decodeRate,
           ...("requestedThinking" in response && { requestedThinking: response.requestedThinking }),
@@ -450,6 +456,10 @@ async function executeModel(runId: string, resultId: string) {
 
         turnTelemetry.push({
           ttftMs: response.ttftMs,
+          firstVisibleTokenMs: response.firstVisibleTokenMs,
+          cachedPromptTokens: response.cachedPromptTokens,
+          prefillTokPerSec: response.prefillRate?.tokensPerSecond ?? null,
+          decodeTokPerSec: response.decodeRate?.tokensPerSecond ?? null,
           outputTokens: response.outputTokens,
           inputTokens: response.inputTokens,
           totalDurationMs: response.totalDurationMs,
@@ -464,6 +474,11 @@ async function executeModel(runId: string, resultId: string) {
           userMessage,
           responseText: response.responseText,
           thinking: turnThinking,
+          firstVisibleTokenMs: response.firstVisibleTokenMs,
+          cachedPromptTokens: response.cachedPromptTokens,
+          cacheHitRatio: response.cacheHitRatio,
+          prefillTokPerSec: response.prefillRate?.tokensPerSecond ?? null,
+          decodeTokPerSec: response.decodeRate?.tokensPerSecond ?? null,
           finishReason: response.finishReason,
           truncated: response.truncated,
           ttftMs: response.ttftMs,
@@ -721,6 +736,10 @@ async function executeModel(runId: string, resultId: string) {
 
 function aggregateTelemetry(turns: Array<{
   ttftMs: number | null;
+  firstVisibleTokenMs: number | null;
+  cachedPromptTokens: number | null;
+  prefillTokPerSec: number | null;
+  decodeTokPerSec: number | null;
   outputTokens: number | null;
   inputTokens: number | null;
   totalDurationMs: number | null;
@@ -728,20 +747,37 @@ function aggregateTelemetry(turns: Array<{
 }>) {
   const outputTokens = sumNullable(turns.map((turn) => turn.outputTokens));
   const inputTokens = sumNullable(turns.map((turn) => turn.inputTokens));
+  const cachedPromptTokens = sumNullable(turns.map((turn) => turn.cachedPromptTokens));
   const totalDurationMs = sumNullable(turns.map((turn) => turn.totalDurationMs));
   const evalDurationMs = sumNullable(turns.map((turn) => turn.evalDurationMs));
+  const prefillTokPerSec = avgNullable(turns.map((turn) => turn.prefillTokPerSec));
+  const decodeTokPerSec = avgNullable(turns.map((turn) => turn.decodeTokPerSec));
   const firstTurn = turns[0];
 
   return {
     inputTokens,
     outputTokens,
     ttftMs: firstTurn?.ttftMs ?? null,
+    firstVisibleTokenMs: firstTurn?.firstVisibleTokenMs ?? null,
+    cachedPromptTokens,
+    cacheHitRatio:
+      cachedPromptTokens !== null && inputTokens !== null && inputTokens > 0
+        ? Number(Math.min(1, cachedPromptTokens / inputTokens).toFixed(4))
+        : null,
+    prefillTokPerSec,
+    decodeTokPerSec,
     totalDurationMs,
     tokPerSec:
       outputTokens !== null && evalDurationMs !== null && evalDurationMs > 0
         ? Number((outputTokens / (evalDurationMs / 1_000)).toFixed(2))
         : null,
   };
+}
+
+function avgNullable(values: Array<number | null>) {
+  const valid = values.filter((value): value is number => value !== null && Number.isFinite(value));
+  if (valid.length === 0) return null;
+  return Number((valid.reduce((total, value) => total + value, 0) / valid.length).toFixed(2));
 }
 
 function sumNullable(values: Array<number | null>) {

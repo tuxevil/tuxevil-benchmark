@@ -1,4 +1,5 @@
 import { ResultsChat } from "@/components/results-chat";
+import { KeyboardShortcuts } from "@/components/layout/keyboard-shortcuts";
 import type { Metadata } from "next";
 import { ThemeProvider } from "@/components/theme-provider";
 import { PROJECT_BRAND } from "@/lib/brand";
@@ -31,7 +32,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <meta name={PROJECT_BRAND.commitMetaName} content={process.env.NEXT_PUBLIC_COMMIT_SHA ?? "unknown"} />
       </head>
       <body suppressHydrationWarning>
-        <ThemeProvider>{children}<ResultsChat isPrivate /></ThemeProvider>
+        <ThemeProvider>{children}<KeyboardShortcuts scope="admin" /><ResultsChat isPrivate /></ThemeProvider>
       </body>
     </html>
   );

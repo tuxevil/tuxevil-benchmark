@@ -6575,3 +6575,356 @@ select:focus,
 .backups-result pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-raised); padding: 16px; border-radius: 8px; max-height: 480px; overflow: auto; line-height: 1.6; }
 .backups-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 @media (max-width: 760px) { .backups-page { margin-top: 24px; padding: 0 16px 40px; } .backups-actions-grid { grid-template-columns: 1fr; } .backups-card { padding: 20px; } .backups-section-heading { align-items: flex-start; flex-wrap: wrap; } }
+
+/* ==========================================================================
+   CYBER-TERMINAL HUD FACELIFT (v3 · ADMIN CONSOLE)
+   ========================================================================== */
+
+:root body,
+[data-theme="dark"] body {
+  background-image:
+    radial-gradient(circle at 92% 2%, var(--bg-radial-1), transparent 28rem),
+    radial-gradient(circle at 3% 65%, var(--bg-radial-2), transparent 34rem),
+    linear-gradient(rgb(148 163 184 / 3.5%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(148 163 184 / 3.5%) 1px, transparent 1px);
+  background-size: auto, auto, 32px 32px, 32px 32px;
+}
+
+.arena-score-badge,
+.micro-pill,
+.num-cell,
+.rank-tag,
+.txb-mini-kpi-val,
+.performance-table td {
+  font-variant-numeric: tabular-nums;
+}
+
+.topbar-nav {
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
+}
+
+.topbar-menu {
+  overflow-x: auto;
+  scrollbar-width: none;
+  max-width: 100%;
+}
+
+.topbar-menu::-webkit-scrollbar {
+  display: none;
+}
+
+.topbar-item {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.01em;
+  padding: 7px 12px;
+  border-radius: 7px;
+  white-space: nowrap;
+}
+
+.topbar-item.active {
+  box-shadow: inset 0 -2px 0 var(--accent), 0 0 14px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.topbar-kbd-btn {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 5px 9px;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.topbar-kbd-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.search-clear-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.search-clear-btn:hover {
+  color: var(--ink);
+  background: var(--surface-raised);
+}
+
+.search-kbd-hint {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.68rem;
+  color: var(--muted);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+}
+
+.model-cell-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rank-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--muted);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+}
+
+.rank-tag.rank-top-1 {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.rank-tag.rank-top-2 {
+  color: #082f49;
+  background: #22d3ee;
+  border-color: #22d3ee;
+}
+
+.rank-tag.rank-top-3 {
+  color: #2e1065;
+  background: #a78bfa;
+  border-color: #a78bfa;
+}
+
+.score-cell-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 60px;
+}
+
+.metric-bar-track {
+  display: block;
+  width: 56px;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 75%, transparent);
+  overflow: hidden;
+}
+
+.metric-bar-fill.arena {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #22d3ee, var(--accent));
+}
+
+/* Solar & Advanced Suites Cyber Panel */
+.txb-cyber-panel {
+  border-top: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.txb-sensor-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: var(--surface-raised);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+  color: var(--ink);
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+  animation: pulse 1.8s infinite;
+}
+
+.txb-mini-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.txb-mini-kpi {
+  padding: 14px 16px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.txb-mini-kpi-label {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.txb-mini-kpi-val {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.txb-mini-kpi-val.accent-lime { color: var(--accent); }
+.txb-mini-kpi-val.accent-cyan { color: #22d3ee; }
+
+.txb-mini-kpi small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  overflow-wrap: anywhere;
+}
+
+/* Keyboard Shortcuts HUD Modal */
+.txb-hud-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(6 9 14 / 78%);
+  backdrop-filter: blur(8px);
+}
+
+.txb-hud-modal {
+  width: 100%;
+  max-width: 640px;
+  padding: 20px 22px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.txb-hud-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.txb-hud-kicker {
+  display: block;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+
+.txb-hud-header h3 {
+  margin: 2px 0 0;
+  font-size: 1rem;
+}
+
+.txb-hud-close {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+  padding: 5px 10px;
+}
+
+.txb-hud-close:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.txb-hud-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.txb-hud-group-title {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  color: #22d3ee;
+  margin-bottom: 10px;
+}
+
+.txb-hud-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px dashed color-mix(in srgb, var(--line) 75%, transparent);
+  font-size: 0.8rem;
+}
+
+.txb-kbd-seq {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.txb-kbd-seq kbd {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  color: var(--accent);
+}
+
+@media (max-width: 900px) {
+  .topbar-nav {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+
+  .topbar-menu {
+    order: 3;
+    width: 100%;
+    padding-bottom: 2px;
+  }
+
+  .txb-mini-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .txb-hud-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .drawer-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}

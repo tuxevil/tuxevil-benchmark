@@ -1076,3 +1076,70 @@ it.each(["llamacpp", "freetoken", "strata"] as const)("handles explicit Thinking
     fetchMock.mockRestore();
   }
 });
+
+it("extracts cachedPromptTokens and cacheHitRatio from llama.cpp timings.cache_n", async () => {
+  const sse = [
+    'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}],"timings":{"cache_n":800,"prompt_n":200,"prompt_ms":50,"prompt_per_second":4000,"predicted_n":10,"predicted_ms":100,"predicted_per_second":100}}',
+    "data: [DONE]",
+  ].join("\n\n");
+  vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response(sse)));
+  try {
+    const result = await streamOpenAICompatibleChat({
+      endpoint: "http://localhost:8080/v1",
+      model: "fixture",
+      provider: "llamacpp",
+      messages: [{ role: "user", content: "Test" }],
+      parameters: { temperature: 0, numCtx: 4096, topP: 1, repeatPenalty: 1, numPredict: 64 },
+      signal: new AbortController().signal,
+    });
+    expect(result.inputTokens).toBe(1000);
+    expect(result.cachedPromptTokens).toBe(800);
+    expect(result.cacheHitRatio).toBe(0.8);
+    expect(result.prefillRate).toEqual({ tokensPerSecond: 4000, source: "engine_reported" });
+    expect(result.decodeRate).toEqual({ tokensPerSecond: 100, source: "engine_reported" });
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it("extracts cachedPromptTokens from OpenAI usage.prompt_tokens_details.cached_tokens and preserves null when absent", async () => {
+  const sseWithCache = [
+    'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":400,"prompt_tokens_details":{"cached_tokens":300},"completion_tokens":20}}',
+    "data: [DONE]",
+  ].join("\n\n");
+  vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response(sseWithCache)));
+  try {
+    const withCache = await streamOpenAICompatibleChat({
+      endpoint: "http://localhost:8080/v1",
+      model: "fixture",
+      provider: "freetoken",
+      messages: [{ role: "user", content: "Test" }],
+      parameters: { temperature: 0, numCtx: 4096, topP: 1, repeatPenalty: 1, numPredict: 64 },
+      signal: new AbortController().signal,
+    });
+    expect(withCache.cachedPromptTokens).toBe(300);
+    expect(withCache.cacheHitRatio).toBe(0.75);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+
+  const sseWithoutCache = [
+    'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":400,"completion_tokens":20}}',
+    "data: [DONE]",
+  ].join("\n\n");
+  vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response(sseWithoutCache)));
+  try {
+    const withoutCache = await streamOpenAICompatibleChat({
+      endpoint: "http://localhost:8080/v1",
+      model: "fixture",
+      provider: "freetoken",
+      messages: [{ role: "user", content: "Test" }],
+      parameters: { temperature: 0, numCtx: 4096, topP: 1, repeatPenalty: 1, numPredict: 64 },
+      signal: new AbortController().signal,
+    });
+    expect(withoutCache.cachedPromptTokens).toBeNull();
+    expect(withoutCache.cacheHitRatio).toBeNull();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

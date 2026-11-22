@@ -1,4 +1,5 @@
 import { ResultsChat } from "@/components/results-chat";
+import { KeyboardShortcuts } from "@/components/layout/keyboard-shortcuts";
 import type { Metadata } from "next";
 import { PROJECT_BRAND } from "@/lib/brand";
 import "./globals.css";
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" data-theme="dark" suppressHydrationWarning>
-      <body>{children}<ResultsChat /></body>
+      <body>{children}<KeyboardShortcuts scope="public" /><ResultsChat /></body>
     </html>
   );
 }

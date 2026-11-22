@@ -53,6 +53,17 @@ Los respaldos nuevos incluyen `result_resource_measurements`. Los respaldos anti
 siguen siendo restaurables. Los registros del laboratorio de experimentos se conservan
 como módulo separado; los respaldos de resultados no son un respaldo completo del laboratorio.
 
+## Potencia real de enchufe / host (`scope: "wall"`) y muestreo a 1 Hz
+
+Para reflejar el impacto real sobre baterías solares sin mezclar el consumo de GPU con el del equipo completo, el colector soporta un canal paralelo `scope: "wall"`:
+
+- Variables opcionales en `scripts/mqtt-resource-bridge.py` y `scripts/resource-collector.py`:
+  - `RESOURCE_HA_URL` + `RESOURCE_HA_TOKEN` + `RESOURCE_HA_WALL_ENTITY` (por defecto `sensor.servidor_potencia_local`) y `RESOURCE_HA_POLL_SECONDS` (por defecto `1`).
+  - Alternativamente `RESOURCE_MQTT_WALL_TOPIC` para recibir la potencia del enchufe por MQTT.
+  - `RESOURCE_WALL_IDLE_WATTS` (opcional) para calcular `wallIncrementalWattHours` además de `wallWattHours` total.
+- En el worker, `BENCHMARK_RESOURCE_POLL_MS` (por defecto `1000`, rango `250..5000`) controla la cadencia de consulta.
+- `summarizeResources()` integra GPU y `wall` en canales completamente independientes (nunca se suman). `summarizeBatchResources()` agrega energía a nivel de lote/suite continua para cubrir pruebas rápidas de pocos segundos sin extrapolar huecos.
+
 ## Temperatura y thermal throttling
 
 Por prueba se guardan temperatura media/máxima y límite térmico reportado cuando existe.

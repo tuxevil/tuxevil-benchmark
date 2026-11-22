@@ -22,6 +22,22 @@ class TelemetryTests(unittest.TestCase):
         self.assertIsNone(bridge.normalize(cache, now+100)['thermalThrottlingActive'])
     def test_missing_process_is_unknown(self):
         self.assertIsNone(bridge.normalize({}, 1800000000)['ramBytes'])
+    def test_ha_wall_sensor_parsed_and_normalized_separately_from_gpu(self):
+        now = 1800000000
+        stamp = datetime.fromtimestamp(now, timezone.utc).isoformat()
+        parsed = bridge.parse_ha_wall_state({'state': '192.5', 'last_updated': stamp}, 'sensor.servidor_potencia_local', 1)
+        self.assertIsNotNone(parsed)
+        cache = {
+            bridge.GPU_TOPIC: {'actualizado': stamp, 'power_watts': 75, 'memory_used_mb': 4096},
+            bridge.HA_WALL_KEY: parsed,
+        }
+        result = bridge.normalize(cache, now)
+        self.assertEqual(result['watts'], 75)
+        self.assertEqual(result['wallWatts'], 192.5)
+        self.assertEqual(result['wallEntityId'], 'sensor.servidor_potencia_local')
+        self.assertEqual(result['wallSource'], 'Home Assistant: sensor.servidor_potencia_local')
+        self.assertIsNone(bridge.normalize(cache, now + 120)['wallWatts'])
+        self.assertIsNone(bridge.parse_ha_wall_state({'state': 'unavailable', 'last_updated': stamp}))
     def test_disconnect_is_not_infinite_read(self):
         class Socket:
             def recv(self, _): return b''

@@ -8,12 +8,16 @@ import { gradePublicBenchmarkResult } from "@/lib/public-benchmark-grading";
 import { PUBLIC_BENCHMARK_SCENARIOS, publicBenchmarkCase } from "@/lib/public-benchmarks";
 import { resourceSummary, startResourceMeasurement, type ResourceMeasurement } from "@/lib/resource-telemetry";
 
+import { buildDeterministicLongContext } from "@/lib/long-context-cache-suite";
+
 export const capacityConfigSchema = z.object({
   provider: z.enum(["ollama", "llamacpp"]),
   endpoint: httpUrlSchema.refine((endpoint) => !validateProviderEndpoint(endpoint, "Benchmark"), "Use a permitted local inference endpoint."),
   model: z.string().trim().min(1).max(255),
   artifactSha256: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
   rounds: z.number().int().min(1).max(6).default(3),
+  workloadMode: z.enum(["gsm8k-lite", "long-context"]).default("gsm8k-lite"),
+  longContextTokens: z.number().int().min(512).max(16_384).default(4096),
   timeoutMs: z.number().int().min(1000).max(120_000).default(120_000),
   parameters: benchmarkParametersSchema.extend({
     reasoningEffort: reasoningEffortSchema.default("off"),
@@ -80,18 +84,37 @@ export async function runCapacityBenchmark(
         let peakClientInFlight = 0;
         const jobs = Array.from({ length: concurrency }, async (_, offset) => {
           const requestIndex = start + offset;
-          const { scenario, benchmark } = workload[requestIndex % workload.length];
           const seed = parameters.seed + requestIndex;
-          const metadata = { requestIndex, seed, sourceCaseId: benchmark.sourceCaseId, contentSha256: benchmark.contentSha256 };
+          const isLongContext = config.workloadMode === "long-context";
+          const longFixture = isLongContext
+            ? buildDeterministicLongContext(config.longContextTokens, requestIndex % requestsPerRound)
+            : null;
+          const { scenario, benchmark } = workload[requestIndex % workload.length];
+          const metadata = isLongContext
+            ? {
+                requestIndex,
+                seed,
+                sourceCaseId: `long-context-${config.longContextTokens}-${requestIndex % requestsPerRound}`,
+                contentSha256: longFixture!.needlePrimary,
+              }
+            : { requestIndex, seed, sourceCaseId: benchmark.sourceCaseId, contentSha256: benchmark.contentSha256 };
           const sent = performance.now();
           inFlight++;
           peakClientInFlight = Math.max(inFlight, peakClientInFlight);
           let response: Awaited<ReturnType<typeof infer>>;
           try {
-            response = await infer([
-              { role: "system", content: scenario.systemPrompt },
-              { role: "user", content: scenario.userMessages[0] },
-            ], { ...parameters, seed });
+            response = await infer(
+              isLongContext
+                ? [
+                    { role: "system", content: longFixture!.systemPrompt },
+                    { role: "user", content: `${longFixture!.contextBlock}\n\n${longFixture!.coldQuestion}` },
+                  ]
+                : [
+                    { role: "system", content: scenario.systemPrompt },
+                    { role: "user", content: scenario.userMessages[0] },
+                  ],
+              { ...parameters, seed },
+            );
           } catch (error) {
             const outcome = gradePublicBenchmarkResult({
               status: "FAILED", responseText: null,
@@ -106,9 +129,14 @@ export async function runCapacityBenchmark(
             inFlight--;
           }
           const durationMs = performance.now() - sent;
-          const { outcome } = gradePublicBenchmarkResult({
-            status: "COMPLETED", errorMessage: null, ...response,
-          }, scenario.grader);
+          const { outcome } = isLongContext
+            ? gradePublicBenchmarkResult(
+                { status: "COMPLETED", errorMessage: null, ...response },
+                { type: "CONTAINS_ALL", version: 1, required: [longFixture!.needlePrimary], forbidden: [], caseSensitive: false },
+              )
+            : gradePublicBenchmarkResult({
+                status: "COMPLETED", errorMessage: null, ...response,
+              }, scenario.grader);
           return {
             ...metadata, outcome, durationMs,
             ttftMs: response.ttftMs, firstVisibleTokenMs: response.firstVisibleTokenMs,
@@ -140,6 +168,10 @@ export async function runCapacityBenchmark(
     const source = group[0].resources.source, scope = group[0].resources.scope;
     const joules = group.every(({ resources }) => resources.joules !== null && resources.source === source && resources.scope === scope)
       ? group.reduce((sum, { resources }) => sum + resources.joules!, 0) : null;
+    const wallJoules = group.every(({ resources }) => resources.wallJoules != null)
+      ? group.reduce((sum, { resources }) => sum + resources.wallJoules!, 0) : null;
+    const vramValues = group.map(({ resources }) => resources.vramPeakBytes).filter((v): v is number => v != null);
+    const ramValues = group.map(({ resources }) => resources.ramPeakBytes).filter((v): v is number => v != null);
     const totalTokens = results.every(({ outputTokens }) => outputTokens !== null)
       ? results.reduce((sum, { outputTokens }) => sum + outputTokens!, 0) : null;
     return {
@@ -154,8 +186,12 @@ export async function runCapacityBenchmark(
       latencyMs: summarizePerformanceDistribution(results.map(({ durationMs }) => durationMs), results.length),
       ttftMs: summarizePerformanceDistribution(results.map(({ ttftMs }) => ttftMs), results.length),
       firstVisibleTokenMs: summarizePerformanceDistribution(results.map(({ firstVisibleTokenMs }) => firstVisibleTokenMs), results.length),
+      vramPeakBytes: vramValues.length ? Math.max(...vramValues) : null,
+      ramPeakBytes: ramValues.length ? Math.max(...ramValues) : null,
       wattHours: joules === null ? null : joules / 3600,
       wattHoursPerCorrect: joules === null || !successes ? null : joules / (3600 * successes),
+      wallWattHours: wallJoules === null ? null : wallJoules / 3600,
+      wallWattHoursPerCorrect: wallJoules === null || !successes ? null : wallJoules / (3600 * successes),
     };
   });
   return { protocol: "capacity-waves-v1", benchmark: workload[0].benchmark.suite, batches, summary };
