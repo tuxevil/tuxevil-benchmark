@@ -56,8 +56,9 @@ describe("warm-contexts-suite (RECALL)", () => {
         const userTurns = body.messages.filter((m) => m.role === "user");
         const firstDoc = userTurns[0]?.content ?? "";
         const turnIdx = userTurns.length;
-        const match = firstDoc.match(new RegExp(`CLAVE_TURNO_${turnIdx}=([A-Z0-9-]+)`));
-        const answer = match ? match[1] : "UNKNOWN";
+        const prefix = `CLAVE_TURNO_${turnIdx}=`;
+        const needleLine = firstDoc.split("\n").find((line) => line.startsWith(prefix));
+        const answer = needleLine ? needleLine.slice(prefix.length).trim() : "UNKNOWN";
 
         // Detect level size from dossier header to simulate cache fitting at N=2 and evicting at N=4.
         const levelMatch = firstDoc.match(/NIVEL FLOTA=(\d+)/);
