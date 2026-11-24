@@ -43,12 +43,23 @@ describe("performance-suites-store", () => {
       report: { suiteVersion: "long-context-cache@1.0.0" },
     });
 
+    await savePerformanceSuiteRun({
+      id: crypto.randomUUID(),
+      suiteType: "warm-contexts",
+      modelName: "unsloth/gemma-4-E2B-it-GGUF",
+      provider: "llamacpp",
+      createdAt: "2026-11-22T15:10:00.000Z",
+      report: { suiteVersion: "warm-contexts-recall@1.0.0", kneeMeasuredAgents: 8 },
+    });
+
     const cap = await listPerformanceSuiteRuns("capacity");
     const lc = await listPerformanceSuiteRuns("long-context-cache");
+    const warm = await listPerformanceSuiteRuns("warm-contexts");
     const all = await listPerformanceSuiteRuns();
     expect(cap).toHaveLength(1);
     expect(lc).toHaveLength(1);
-    expect(all).toHaveLength(2);
-    expect(all[0].suiteType).toBe("long-context-cache");
+    expect(warm).toHaveLength(1);
+    expect(all).toHaveLength(3);
+    expect(all[0].suiteType).toBe("warm-contexts");
   });
 });
