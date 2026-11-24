@@ -6,7 +6,7 @@ import { compareCotEnergyPairs, computeSolarEfficiencyRows } from "@/lib/solar-e
 
 type SuiteRunRecord = {
   id: string;
-  suiteType: "capacity" | "long-context-cache" | "context-compaction";
+  suiteType: "capacity" | "long-context-cache" | "context-compaction" | "warm-contexts";
   modelName: string;
   provider: string;
   createdAt: string;
@@ -22,26 +22,31 @@ export function SolarAndSuitesPanel() {
   const [capacityWorkload, setCapacityWorkload] = useState<"gsm8k-lite" | "long-context">("gsm8k-lite");
   const [capacityRounds, setCapacityRounds] = useState(2);
   const [compactionTokens, setCompactionTokens] = useState(4096);
+  const [warmFleetLevels, setWarmFleetLevels] = useState("2,4,8");
+  const [warmSlots, setWarmSlots] = useState(2);
   const [activeSuite, setActiveSuite] = useState<string | null>(null);
   const [suiteError, setSuiteError] = useState<string | null>(null);
   const [capacityRuns, setCapacityRuns] = useState<SuiteRunRecord[]>([]);
   const [longContextRuns, setLongContextRuns] = useState<SuiteRunRecord[]>([]);
   const [compactionRuns, setCompactionRuns] = useState<SuiteRunRecord[]>([]);
+  const [warmContextRuns, setWarmContextRuns] = useState<SuiteRunRecord[]>([]);
 
   const fetchSnapshot = useCallback(async () => {
-    const [lbRes, settingsRes, capRes, lcRes, compRes] = await Promise.all([
+    const [lbRes, settingsRes, capRes, lcRes, compRes, warmRes] = await Promise.all([
       fetch("/api/leaderboard"),
       fetch("/api/settings"),
       fetch("/api/experiments/capacity"),
       fetch("/api/experiments/suites/long-context-cache"),
       fetch("/api/experiments/suites/context-compaction"),
+      fetch("/api/experiments/suites/warm-contexts"),
     ]);
     const lb = lbRes.ok ? await lbRes.json() : null;
     const settings = settingsRes.ok ? (await settingsRes.json()).settings : null;
     const cap = capRes.ok ? (await capRes.json()).runs ?? [] : null;
     const lc = lcRes.ok ? (await lcRes.json()).runs ?? [] : null;
     const comp = compRes.ok ? (await compRes.json()).runs ?? [] : null;
-    return { lb, settings, cap, lc, comp };
+    const warm = warmRes.ok ? (await warmRes.json()).runs ?? [] : null;
+    return { lb, settings, cap, lc, comp, warm };
   }, []);
 
   const applySnapshot = useCallback(
@@ -55,6 +60,7 @@ export function SolarAndSuitesPanel() {
       if (snap.cap) setCapacityRuns(snap.cap);
       if (snap.lc) setLongContextRuns(snap.lc);
       if (snap.comp) setCompactionRuns(snap.comp);
+      if (snap.warm) setWarmContextRuns(snap.warm);
     },
     [],
   );
@@ -76,7 +82,7 @@ export function SolarAndSuitesPanel() {
   const bestSolarRow = useMemo(() => solarRows.find((r) => r.whPerUsefulTask != null) ?? null, [solarRows]);
   const bestCotGain = useMemo(() => cotComparisons[0] ?? null, [cotComparisons]);
 
-  const runSuite = async (suite: "capacity" | "long-context-cache" | "context-compaction") => {
+  const runSuite = async (suite: "capacity" | "long-context-cache" | "context-compaction" | "warm-contexts") => {
     if (!modelName.trim()) {
       setSuiteError("Indica el identificador del modelo a evaluar.");
       return;
@@ -89,7 +95,9 @@ export function SolarAndSuitesPanel() {
           ? "/api/experiments/capacity"
           : suite === "long-context-cache"
             ? "/api/experiments/suites/long-context-cache"
-            : "/api/experiments/suites/context-compaction";
+            : suite === "context-compaction"
+              ? "/api/experiments/suites/context-compaction"
+              : "/api/experiments/suites/warm-contexts";
       const baseParams = {
         temperature: 0,
         numCtx: 16384,
@@ -97,14 +105,28 @@ export function SolarAndSuitesPanel() {
         repeatPenalty: 1.1,
         numPredict: 512,
         reasoningEffort,
-        seed: 42,
       };
+      const parsedFleet = warmFleetLevels
+        .split(",")
+        .map((v) => Number.parseInt(v.trim(), 10))
+        .filter((n) => Number.isInteger(n) && n >= 1 && n <= 32);
       const payload =
         suite === "capacity"
-          ? { provider, endpoint, model: modelName.trim(), rounds: capacityRounds, workloadMode: capacityWorkload, parameters: baseParams }
+          ? { provider, endpoint, model: modelName.trim(), rounds: capacityRounds, workloadMode: capacityWorkload, parameters: { ...baseParams, seed: 42 } }
           : suite === "long-context-cache"
             ? { provider, endpoint, model: modelName.trim(), tiers: [1024, 4096, 8192, 16384], includeColdLoadProbe: true, parameters: baseParams }
-            : { provider, endpoint, model: modelName.trim(), targetHistoryTokens: compactionTokens, parameters: baseParams };
+            : suite === "context-compaction"
+              ? { provider, endpoint, model: modelName.trim(), targetHistoryTokens: compactionTokens, parameters: { ...baseParams, seed: 42 } }
+              : {
+                  provider,
+                  endpoint,
+                  model: modelName.trim(),
+                  agentCounts: parsedFleet.length > 0 ? parsedFleet : [2, 4, 8],
+                  concurrencySlots: Math.max(1, Math.min(8, warmSlots)),
+                  turnsPerAgent: 3,
+                  contextTokens: compactionTokens,
+                  parameters: baseParams,
+                };
 
       const res = await fetch(url, {
         method: "POST",
@@ -290,6 +312,13 @@ export function SolarAndSuitesPanel() {
               <input className="input" type="number" min={512} max={16384} step={512} value={compactionTokens} onChange={(e) => setCompactionTokens(Number(e.target.value))} title="Tokens previos a compactación" />
             </div>
           </label>
+          <label>
+            RECALL Flota / Slots GPU
+            <div style={{ display: "flex", gap: "6px" }}>
+              <input className="input" value={warmFleetLevels} onChange={(e) => setWarmFleetLevels(e.target.value)} title="Niveles de agentes (ej. 2,4,8)" placeholder="2,4,8" />
+              <input className="input" type="number" min={1} max={8} value={warmSlots} onChange={(e) => setWarmSlots(Number(e.target.value))} title="Slots GPU simultáneos (S)" style={{ maxWidth: "74px" }} />
+            </div>
+          </label>
         </div>
 
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "12px" }}>
@@ -298,6 +327,9 @@ export function SolarAndSuitesPanel() {
           </button>
           <button type="button" className="btn-primary" disabled={Boolean(activeSuite)} onClick={() => void runSuite("capacity")}>
             {activeSuite === "capacity" ? "Ejecutando Concurrencia 1/2/4…" : "▶ Ejecutar Concurrent Throughput (1/2/4)"}
+          </button>
+          <button type="button" className="btn-primary" disabled={Boolean(activeSuite)} onClick={() => void runSuite("warm-contexts")}>
+            {activeSuite === "warm-contexts" ? "Ejecutando RECALL Warm Contexts…" : "▶ Ejecutar RECALL Warm Contexts (Flota/RAM)"}
           </button>
           <button type="button" className="btn-primary" disabled={Boolean(activeSuite)} onClick={() => void runSuite("context-compaction")}>
             {activeSuite === "context-compaction" ? "Ejecutando Context Compaction…" : "▶ Ejecutar Context Compaction Overhead"}
@@ -394,6 +426,72 @@ export function SolarAndSuitesPanel() {
                                 ? `${lvl.wallWattHoursPerCorrect.toFixed(4)} Wh_wall/ok`
                                 : lvl.wattHoursPerCorrect != null
                                   ? `${lvl.wattHoursPerCorrect.toFixed(4)} Wh_gpu/ok`
+                                  : "Wh —"}
+                            </span>
+                          ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {warmContextRuns.length > 0 && (
+          <div style={{ marginTop: "16px" }}>
+            <h3>Últimas ejecuciones: RECALL Warm Contexts (Flota N agentes / S slots + Wh solar)</h3>
+            <div className="performance-table-wrap">
+              <table className="performance-table">
+                <thead>
+                  <tr>
+                    <th>Fecha / Modelo</th>
+                    <th>Slots / Ctx</th>
+                    <th>Sostenidos / Rodilla</th>
+                    <th>Curva por flota (Cache Hit · TTFT p50/p95 · Tasks/min · Wh)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {warmContextRuns.slice(0, 5).map((r) => {
+                    const rep = r.report as {
+                      concurrencySlots?: number;
+                      contextTokens?: number;
+                      maxSustainedAgents?: number;
+                      kneeMeasuredAgents?: number | null;
+                      kneeReason?: string | null;
+                      levels?: Array<{
+                        agents: number;
+                        warmCacheHitRatio: number | null;
+                        warmTtftP50Ms: number | null;
+                        warmTtftP95Ms: number | null;
+                        tasksPerMinute: number | null;
+                        wallWattHours: number | null;
+                        gpuWattHours: number | null;
+                        passedChecks: number;
+                        totalTurns: number;
+                      }>;
+                    };
+                    return (
+                      <tr key={r.id}>
+                        <td><strong>{r.modelName}</strong><small>{new Date(r.createdAt).toLocaleString()}</small></td>
+                        <td>S={rep.concurrencySlots ?? "—"} · {rep.contextTokens ?? "—"}t</td>
+                        <td title={rep.kneeReason ?? undefined}>
+                          <strong>{rep.maxSustainedAgents ?? 0} ag.</strong>
+                          <small>{rep.kneeMeasuredAgents != null ? `rodilla N=${rep.kneeMeasuredAgents}` : "sin rodilla"}</small>
+                        </td>
+                        <td>
+                          {(rep.levels ?? []).map((lvl) => (
+                            <span key={lvl.agents} style={{ display: "inline-block", marginRight: "12px", fontSize: "0.78rem" }}>
+                              <strong>N={lvl.agents}:</strong>{" "}
+                              cache {lvl.warmCacheHitRatio != null ? `${Math.round(lvl.warmCacheHitRatio * 100)}%` : "—"} · TTFT{" "}
+                              {lvl.warmTtftP50Ms != null ? `${Math.round(lvl.warmTtftP50Ms)}/${Math.round(lvl.warmTtftP95Ms ?? lvl.warmTtftP50Ms)} ms` : "—"} ·{" "}
+                              {lvl.tasksPerMinute != null ? `${lvl.tasksPerMinute.toFixed(1)} t/m` : "—"} ·{" "}
+                              {lvl.passedChecks}/{lvl.totalTurns} ok ·{" "}
+                              {lvl.wallWattHours != null
+                                ? `${lvl.wallWattHours.toFixed(4)} Wh_wall`
+                                : lvl.gpuWattHours != null
+                                  ? `${lvl.gpuWattHours.toFixed(4)} Wh_gpu`
                                   : "Wh —"}
                             </span>
                           ))}

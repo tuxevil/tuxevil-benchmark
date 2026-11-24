@@ -26,7 +26,7 @@ export const longContextCacheConfigSchema = z.object({
   timeoutMs: z.number().int().min(1000).max(240_000).default(120_000),
   parameters: benchmarkParametersSchema.extend({
     reasoningEffort: reasoningEffortSchema.default("off"),
-    seed: z.number().int().min(0).max(2_147_483_644).default(42),
+    seed: z.number().int().min(0).max(2_147_483_644).optional(),
   }),
 }).strict();
 

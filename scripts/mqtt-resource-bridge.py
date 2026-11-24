@@ -224,4 +224,5 @@ if __name__ == '__main__':
     threading.Thread(target=subscribe, daemon=True).start()
     if HA_URL and HA_TOKEN and HA_WALL_ENTITY:
         threading.Thread(target=poll_ha_wall, daemon=True).start()
-    ThreadingHTTPServer(('127.0.0.1', int(os.environ.get('RESOURCE_COLLECTOR_PORT', '9109'))), Handler).serve_forever()
+    bind_host = os.environ.get('RESOURCE_COLLECTOR_HOST', '127.0.0.1').strip() or '127.0.0.1'
+    ThreadingHTTPServer((bind_host, int(os.environ.get('RESOURCE_COLLECTOR_PORT', '9109'))), Handler).serve_forever()

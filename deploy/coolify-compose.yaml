@@ -56,7 +56,10 @@ services:
     env_file:
       - path: /srv/tuxevil-benchmark/private/.env.telemetry
         required: false
-    network_mode: host
+    environment:
+      RESOURCE_COLLECTOR_HOST: "0.0.0.0"
+    ports: ['127.0.0.1:9109:9109']
+    networks: [private]
     command: [python3, scripts/mqtt-resource-bridge.py]
   postgres:
     image: postgres:16-alpine

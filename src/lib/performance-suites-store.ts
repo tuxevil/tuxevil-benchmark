@@ -1,7 +1,7 @@
 import { getExperimentPostgresClient } from "@/lib/experiment-db";
 import { getSqliteDb } from "@/lib/sqlite-db";
 
-export type PerformanceSuiteType = "capacity" | "long-context-cache" | "context-compaction";
+export type PerformanceSuiteType = "capacity" | "long-context-cache" | "context-compaction" | "warm-contexts";
 
 export type PersistedPerformanceSuiteRun = {
   id: string;
