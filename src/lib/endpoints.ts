@@ -7,7 +7,7 @@ export function validateProviderEndpoint(value: string, providerName = "Provider
     return `This ${providerName} host is not in ALLOWED_OLLAMA_HOSTS.`;
   }
 
-  if (!allowedHosts && !isTrustedLocalHost(url.hostname)) {
+  if (!allowedHosts && !isTrustedLocalHost(url.hostname) && !(providerName === "telemetry" && url.hostname.toLowerCase() === "telemetry")) {
     return `Use a local/private ${providerName} host or configure ALLOWED_OLLAMA_HOSTS explicitly.`;
   }
 
