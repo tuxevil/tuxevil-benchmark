@@ -1,0 +1,30 @@
+# Resultados de la Batería Determinista v2: CoT ON vs CoT OFF
+
+Última actualización: 2026-11-27T17:57:15.371Z
+
+| Modelo / Cuantización | CoT | MMLU-Pro (CI 95%) | MATH-500 Hard (CI 95%) | Seguridad HarmBench (CI 95%) | Decode | Prefill | TTFT Engine | TTFT Visible | Tok/Tarea | Seg/Tarea | VRAM GPU | RAM CPU | Bucles |
+|---|:---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **E2B Q4_K_M (4-bit)** | 🧠 **ON** | 64.3% <br><small>[52.6%, 74.5%]</small> | 69.4% <br><small>[55.5%, 80.5%]</small> | 52.5% <br><small>[37.5%, 67.1%]</small> | **152.1 tok/s** | - | - | - | - | - | - | - | - |
+| **E2B Q4_K_M (4-bit)** | ⚡ OFF | 65.7% <br><small>[54%, 75.8%]</small> | 4.1% <br><small>[1.1%, 13.7%]</small> | 82.5% <br><small>[68%, 91.3%]</small> | **144.1 tok/s** | - | - | - | - | - | - | - | - |
+| **E2B UD-Q4_K_XL (4-bit Dynamic)** | 🧠 **ON** | 67.1% <br><small>[55.5%, 77%]</small> | 65.3% <br><small>[51.3%, 77.1%]</small> | 52.5% <br><small>[37.5%, 67.1%]</small> | **149.5 tok/s** | - | - | - | - | - | - | - | - |
+| **E2B UD-Q4_K_XL (4-bit Dynamic)** | ⚡ OFF | 64.3% <br><small>[52.6%, 74.5%]</small> | 0% <br><small>[0%, 7.3%]</small> | 82.5% <br><small>[68%, 91.3%]</small> | **139.9 tok/s** | - | - | - | - | - | - | - | - |
+| **E2B UD-Q4_K_XL QAT (4-bit QAT)** | 🧠 **ON** | 67.1% <br><small>[55.5%, 77%]</small> | 30.6% <br><small>[19.5%, 44.5%]</small> | 57.5% <br><small>[42.2%, 71.5%]</small> | **165 tok/s** | - | - | - | - | - | - | - | - |
+| **E2B UD-Q4_K_XL QAT (4-bit QAT)** | ⚡ OFF | 68.6% <br><small>[57%, 78.2%]</small> | 0% <br><small>[0%, 7.3%]</small> | 85% <br><small>[70.9%, 92.9%]</small> | **156.1 tok/s** | - | - | - | - | - | - | - | - |
+| **E2B Q5_K_M (5-bit)** | 🧠 **ON** | 67.1% <br><small>[55.5%, 77%]</small> | 65.3% <br><small>[51.3%, 77.1%]</small> | 55% <br><small>[39.8%, 69.3%]</small> | **148 tok/s** | - | - | - | - | - | - | - | - |
+| **E2B Q5_K_M (5-bit)** | ⚡ OFF | 67.1% <br><small>[55.5%, 77%]</small> | 2% <br><small>[0.4%, 10.7%]</small> | 82.5% <br><small>[68%, 91.3%]</small> | **138.4 tok/s** | - | - | - | - | - | - | - | - |
+| **E2B Q6_K (6-bit)** | 🧠 **ON** | 65.7% <br><small>[54%, 75.8%]</small> | 69.4% <br><small>[55.5%, 80.5%]</small> | 55% <br><small>[39.8%, 69.3%]</small> | **134.2 tok/s** | - | - | - | - | - | - | - | - |
+| **E2B Q6_K (6-bit)** | ⚡ OFF | 61.4% <br><small>[49.7%, 72%]</small> | 2% <br><small>[0.4%, 10.7%]</small> | 82.5% <br><small>[68%, 91.3%]</small> | **127.3 tok/s** | - | - | - | - | - | - | - | - |
+| **E2B Q8_0 (8-bit)** | 🧠 **ON** | 65.7% <br><small>[54%, 75.8%]</small> | 57.1% <br><small>[43.3%, 70%]</small> | 55% <br><small>[39.8%, 69.3%]</small> | **137 tok/s** | - | - | - | - | - | - | - | - |
+| **E2B Q8_0 (8-bit)** | ⚡ OFF | 68.6% <br><small>[57%, 78.2%]</small> | 2% <br><small>[0.4%, 10.7%]</small> | 80% <br><small>[65.2%, 89.5%]</small> | **129.2 tok/s** | - | - | - | - | - | - | - | - |
+| **E2B UD-Q2_K_XL (2-bit)** | 🧠 **ON** | 47.1% <br><small>[35.9%, 58.7%]</small> | 2% <br><small>[0.4%, 10.7%]</small> | 52.5% <br><small>[37.5%, 67.1%]</small> | **129.9 tok/s** | - | - | - | - | - | - | - | - |
+| **E4B Q4_K_M (4B 4-bit)** | 🧠 **ON** | 74.3% <br><small>[63%, 83.1%]</small> | 73.5% <br><small>[59.7%, 83.8%]</small> | 60% <br><small>[44.6%, 73.7%]</small> | **100 tok/s** | 1245.1 tok/s | 22 ms | 8.73 s | 1,315 | 12.67s | 2.82 GiB | 2.16 GiB | 0 |
+| **E4B Q4_K_M (4B 4-bit)** | ⚡ OFF | 74.3% <br><small>[63%, 83.1%]</small> | 6.1% <br><small>[2.1%, 16.5%]</small> | 92.5% <br><small>[80.1%, 97.4%]</small> | **95.1 tok/s** | 1243.1 tok/s | 1319 ms | 1.43 s | 719 | 8.38s | 2.82 GiB | 2.16 GiB | 2 |
+| **E4B UD-Q4_K_XL (4B 4-bit Dynamic)** | 🧠 **ON** | 75.7% <br><small>[64.5%, 84.2%]</small> | 79.6% <br><small>[66.4%, 88.5%]</small> | 57.5% <br><small>[42.2%, 71.5%]</small> | **98.4 tok/s** | 1212.1 tok/s | 816 ms | 9.67 s | 1,321 | 13.73s | 2.96 GiB | 2.23 GiB | 0 |
+| **E4B UD-Q4_K_XL (4B 4-bit Dynamic)** | ⚡ OFF | 78.6% <br><small>[67.6%, 86.6%]</small> | 10.2% <br><small>[4.4%, 21.8%]</small> | 92.5% <br><small>[80.1%, 97.4%]</small> | **93.4 tok/s** | 1259.4 tok/s | 20 ms | 130 ms | 745 | 7.44s | 2.96 GiB | 2.23 GiB | 3 |
+| **E4B UD-Q4_K_XL QAT (4B 4-bit QAT)** | 🧠 **ON** | 75.7% <br><small>[64.5%, 84.2%]</small> | 73.5% <br><small>[59.7%, 83.8%]</small> | 55% <br><small>[39.8%, 69.3%]</small> | **113.7 tok/s** | 1328.1 tok/s | 174 ms | 8.34 s | 1,375 | 11.87s | 2.43 GiB | 1.83 GiB | 0 |
+| **E4B UD-Q4_K_XL QAT (4B 4-bit QAT)** | ⚡ OFF | 82.9% <br><small>[72.4%, 89.9%]</small> | 14.3% <br><small>[7.1%, 26.7%]</small> | 85% <br><small>[70.9%, 92.9%]</small> | **107.1 tok/s** | 1389 tok/s | 22 ms | 127 ms | 739 | 6.45s | 2.43 GiB | 1.83 GiB | 4 |
+| **E4B UD-Q2_K_XL (4B 2-bit Dynamic)** | 🧠 **ON** | 61.4% <br><small>[49.7%, 72%]</small> | 44.9% <br><small>[31.9%, 58.7%]</small> | 60% <br><small>[44.6%, 73.7%]</small> | **86.7 tok/s** | 1009.5 tok/s | 151 ms | 11.24 s | 1,545 | 17.43s | 2.01 GiB | 1.83 GiB | 1 |
+| **E4B UD-Q2_K_XL (4B 2-bit Dynamic)** | ⚡ OFF | 64.3% <br><small>[52.6%, 74.5%]</small> | 30.6% <br><small>[19.5%, 44.5%]</small> | 90% <br><small>[76.9%, 96%]</small> | **80.9 tok/s** | 1070.9 tok/s | 24 ms | 150 ms | 752 | 8.66s | 2.01 GiB | 1.83 GiB | 1 |
+| **E4B UD-Q2_K_XL QAT (4B 2-bit QAT)** | 🧠 **ON** | 48.6% <br><small>[37.2%, 60%]</small> | 30.6% <br><small>[19.5%, 44.5%]</small> | 52.5% <br><small>[37.5%, 67.1%]</small> | **83.9 tok/s** | 1196.4 tok/s | 133 ms | 10.44 s | 6,206 | 70.59s | 2.15 GiB | 0.84 GiB | 25 |
+| **E4B UD-Q2_K_XL QAT (4B 2-bit QAT)** | ⚡ OFF | 45.7% <br><small>[34.6%, 57.3%]</small> | 38.8% <br><small>[26.4%, 52.8%]</small> | 90% <br><small>[76.9%, 96%]</small> | **80.7 tok/s** | 1281.3 tok/s | 21 ms | 133 ms | 829 | 9.57s | 2.15 GiB | 0.84 GiB | 9 |
+| **E2B UD-Q2_K_XL (2-bit)** | ⚡ OFF | 52.9% <br><small>[41.3%, 64.1%]</small> | 0% <br><small>[0%, 7.3%]</small> | 80% <br><small>[65.2%, 89.5%]</small> | **129.5 tok/s** | 2599.1 tok/s | 136 ms | 190 ms | 990 | 7.15s | 0.99 GiB | 1.44 GiB | 12 |

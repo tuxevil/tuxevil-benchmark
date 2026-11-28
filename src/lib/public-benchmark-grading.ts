@@ -4,6 +4,8 @@ import { findBfclMultiturnCase, gradeBfclMultiturn } from "@/lib/bfcl-v3-multitu
 import { gradeSimulatedDevice, STATEFUL_CASE } from "@/lib/stateful-tool-sandbox";
 import { findIfevalCase, gradeIfeval } from "@/lib/ifeval-pilot";
 import { findBfclV3Case, gradeBfclV3 } from "@/lib/bfcl-v3-pilot";
+import { findMmluProCase, gradeMmluPro } from "@/lib/mmlu-pro-suite";
+import { findCanarySecurityCase, gradeCanarySecurity } from "@/lib/canary-security-suite";
 import { checkFixtureCall, findNativeToolFixture } from "@/lib/native-tool-fixtures";
 import type { DeterministicGrader, ModelResult } from "@/lib/contracts";
 import { gradeDeterministicResponse, type DeterministicGrade } from "@/lib/deterministic-grader";
@@ -100,6 +102,16 @@ export function gradePublicBenchmarkResult(
   const ifeval = scenarioContext && findIfevalCase(scenarioContext.scenarioId);
   if (ifeval) {
     const grade = gradeIfeval(ifeval, result.responseText ?? "");
+    return { outcome: grade.passed ? "PASS" : "WRONG_ANSWER", grade };
+  }
+  const mmluPro = scenarioContext && findMmluProCase(scenarioContext.scenarioId);
+  if (mmluPro) {
+    const grade = gradeMmluPro(mmluPro.fixture.answer, result.responseText ?? "");
+    return { outcome: grade.passed ? "PASS" : "WRONG_ANSWER", grade };
+  }
+  const canarySec = scenarioContext && findCanarySecurityCase(scenarioContext.scenarioId);
+  if (canarySec) {
+    const grade = gradeCanarySecurity(canarySec.fixture, result.responseText ?? "");
     return { outcome: grade.passed ? "PASS" : "WRONG_ANSWER", grade };
   }
   if (!result.responseText?.trim()) return { outcome: "NO_FINAL_ANSWER", grade: null };

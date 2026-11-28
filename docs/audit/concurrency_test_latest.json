@@ -1,0 +1,473 @@
+{
+  "startedAt": "2026-11-27T23:59:50.119Z",
+  "finishedAt": "2026-11-28T00:00:32.849Z",
+  "model": "unsloth/gemma-4-E2B-it-GGUF",
+  "ggufVariant": "UD-Q4_K_XL",
+  "gpuName": "Quadro RTX 4000",
+  "vramTotalGib": 8,
+  "maxTokens": 160,
+  "originalConfig": {
+    "parallelSlots": 4,
+    "cacheTypeKv": null,
+    "requestedContextLength": 0,
+    "llamaExtraArgs": null
+  },
+  "restoredOriginal": false,
+  "energyBefore": {
+    "sampledAt": "2026-11-27T23:59:50.119Z",
+    "river2BatteryPct": {
+      "state": "95",
+      "updated": "2026-11-27T23:22:26.832081+00:00"
+    },
+    "river2SolarW": {
+      "state": "0",
+      "updated": "2026-11-27T23:09:02.442912+00:00"
+    },
+    "river2OutW": {
+      "state": "161",
+      "updated": "2026-11-27T23:59:26.832433+00:00"
+    },
+    "serverW": {
+      "state": "79.1",
+      "updated": "2026-11-27T23:59:31.650173+00:00"
+    },
+    "mustSocPct": {
+      "state": "70",
+      "updated": "2026-11-27T23:53:54.931273+00:00"
+    },
+    "mustPvW": {
+      "state": "0",
+      "updated": "2026-11-27T23:09:02.165520+00:00"
+    },
+    "mustBattW": {
+      "state": "-403",
+      "updated": "2026-11-27T23:59:49.503129+00:00"
+    },
+    "generatorFeeding": {
+      "state": "off",
+      "updated": "2026-11-27T23:08:59.150179+00:00"
+    }
+  },
+  "energyAfter": {
+    "sampledAt": "2026-11-28T00:00:32.849Z",
+    "river2BatteryPct": {
+      "state": "95",
+      "updated": "2026-11-27T23:22:26.832081+00:00"
+    },
+    "river2SolarW": {
+      "state": "0",
+      "updated": "2026-11-27T23:09:02.442912+00:00"
+    },
+    "river2OutW": {
+      "state": "258",
+      "updated": "2026-11-28T00:00:31.833178+00:00"
+    },
+    "serverW": {
+      "state": "178.5",
+      "updated": "2026-11-28T00:00:31.459466+00:00"
+    },
+    "mustSocPct": {
+      "state": "70",
+      "updated": "2026-11-27T23:53:54.931273+00:00"
+    },
+    "mustPvW": {
+      "state": "0",
+      "updated": "2026-11-27T23:09:02.165520+00:00"
+    },
+    "mustBattW": {
+      "state": "-502",
+      "updated": "2026-11-28T00:00:32.516144+00:00"
+    },
+    "generatorFeeding": {
+      "state": "off",
+      "updated": "2026-11-27T23:08:59.150179+00:00"
+    }
+  },
+  "profiles": [
+    {
+      "requestedSlots": 8,
+      "actualSlots": 8,
+      "cacheTypeKvRequested": null,
+      "cacheTypeKvActual": null,
+      "contextLength": 131072,
+      "contextPerSlotApprox": 16384,
+      "offloadedLayers": 36,
+      "totalLayers": 36,
+      "gpuWeightsMib": 1481.9,
+      "hostWeightsMib": 1804,
+      "residentMib": 3938,
+      "memoryWarning": null,
+      "loadTimeMs": 30587,
+      "reusedExistingLoad": false,
+      "vramIdleGib": 4.9,
+      "vramFreeIdleGib": 3.1,
+      "vramTotalGib": 8,
+      "skippedDuplicateCap": false,
+      "bursts": [
+        {
+          "concurrency": 1,
+          "okCount": 1,
+          "failCount": 0,
+          "wallMs": 1301,
+          "totalPromptTokens": 91,
+          "totalOutputTokens": 160,
+          "aggregateTokPerSec": 122.98,
+          "perReqDecodeAvgTokPerSec": 128.72,
+          "perReqDecodeMinTokPerSec": 128.72,
+          "ttftP50Ms": 58,
+          "ttftP95Ms": 58,
+          "ttftMaxMs": 58,
+          "vramIdleGib": 4.9,
+          "vramPeakGib": 4.9,
+          "vramFreeMinGib": 3.1,
+          "gpuMaxUtilPct": 0,
+          "gpuMaxWatts": 36.7,
+          "gpuMaxTempC": 35,
+          "requests": [
+            {
+              "index": 0,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 91,
+              "outputTokens": 160,
+              "ttftMs": 58,
+              "durationMs": 1301,
+              "decodeTokPerSec": 128.72,
+              "finishReason": "length"
+            }
+          ]
+        },
+        {
+          "concurrency": 4,
+          "okCount": 4,
+          "failCount": 0,
+          "wallMs": 2051,
+          "totalPromptTokens": 350,
+          "totalOutputTokens": 640,
+          "aggregateTokPerSec": 312.04,
+          "perReqDecodeAvgTokPerSec": 83.98,
+          "perReqDecodeMinTokPerSec": 81.22,
+          "ttftP50Ms": 110,
+          "ttftP95Ms": 141,
+          "ttftMaxMs": 144,
+          "vramIdleGib": 4.9,
+          "vramPeakGib": 4.9,
+          "vramFreeMinGib": 3.1,
+          "gpuMaxUtilPct": 0,
+          "gpuMaxWatts": 36.7,
+          "gpuMaxTempC": 35,
+          "requests": [
+            {
+              "index": 0,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 91,
+              "outputTokens": 160,
+              "ttftMs": 144,
+              "durationMs": 2012,
+              "decodeTokPerSec": 85.65,
+              "finishReason": "length"
+            },
+            {
+              "index": 1,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 85,
+              "outputTokens": 160,
+              "ttftMs": 81,
+              "durationMs": 2051,
+              "decodeTokPerSec": 81.22,
+              "finishReason": "length"
+            },
+            {
+              "index": 2,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 91,
+              "outputTokens": 160,
+              "ttftMs": 110,
+              "durationMs": 2040,
+              "decodeTokPerSec": 82.9,
+              "finishReason": "length"
+            },
+            {
+              "index": 3,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 83,
+              "outputTokens": 160,
+              "ttftMs": 141,
+              "durationMs": 1998,
+              "decodeTokPerSec": 86.16,
+              "finishReason": "length"
+            }
+          ]
+        },
+        {
+          "concurrency": 8,
+          "okCount": 8,
+          "failCount": 0,
+          "wallMs": 3021,
+          "totalPromptTokens": 704,
+          "totalOutputTokens": 1280,
+          "aggregateTokPerSec": 423.7,
+          "perReqDecodeAvgTokPerSec": 59.07,
+          "perReqDecodeMinTokPerSec": 56.44,
+          "ttftP50Ms": 180,
+          "ttftP95Ms": 300,
+          "ttftMaxMs": 302,
+          "vramIdleGib": 4.9,
+          "vramPeakGib": 4.9,
+          "vramFreeMinGib": 3.1,
+          "gpuMaxUtilPct": 0,
+          "gpuMaxWatts": 36.7,
+          "gpuMaxTempC": 35,
+          "requests": [
+            {
+              "index": 0,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 91,
+              "outputTokens": 160,
+              "ttftMs": 178,
+              "durationMs": 2882,
+              "decodeTokPerSec": 59.17,
+              "finishReason": "length"
+            },
+            {
+              "index": 1,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 85,
+              "outputTokens": 160,
+              "ttftMs": 180,
+              "durationMs": 2905,
+              "decodeTokPerSec": 58.72,
+              "finishReason": "length"
+            },
+            {
+              "index": 2,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 91,
+              "outputTokens": 160,
+              "ttftMs": 173,
+              "durationMs": 2973,
+              "decodeTokPerSec": 57.14,
+              "finishReason": "length"
+            },
+            {
+              "index": 3,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 83,
+              "outputTokens": 160,
+              "ttftMs": 175,
+              "durationMs": 2933,
+              "decodeTokPerSec": 58.01,
+              "finishReason": "length"
+            },
+            {
+              "index": 4,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 91,
+              "outputTokens": 160,
+              "ttftMs": 184,
+              "durationMs": 3019,
+              "decodeTokPerSec": 56.44,
+              "finishReason": "length"
+            },
+            {
+              "index": 5,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 91,
+              "outputTokens": 160,
+              "ttftMs": 302,
+              "durationMs": 2851,
+              "decodeTokPerSec": 62.77,
+              "finishReason": "length"
+            },
+            {
+              "index": 6,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 89,
+              "outputTokens": 160,
+              "ttftMs": 300,
+              "durationMs": 2878,
+              "decodeTokPerSec": 62.06,
+              "finishReason": "length"
+            },
+            {
+              "index": 7,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 83,
+              "outputTokens": 160,
+              "ttftMs": 181,
+              "durationMs": 2928,
+              "decodeTokPerSec": 58.25,
+              "finishReason": "length"
+            }
+          ]
+        },
+        {
+          "concurrency": 12,
+          "okCount": 12,
+          "failCount": 0,
+          "wallMs": 4900,
+          "totalPromptTokens": 1062,
+          "totalOutputTokens": 1918,
+          "aggregateTokPerSec": 391.43,
+          "perReqDecodeAvgTokPerSec": 67.78,
+          "perReqDecodeMinTokPerSec": 55.94,
+          "ttftP50Ms": 219,
+          "ttftP95Ms": 2984,
+          "ttftMaxMs": 3045,
+          "vramIdleGib": 4.9,
+          "vramPeakGib": 5.05,
+          "vramFreeMinGib": 2.95,
+          "gpuMaxUtilPct": 55,
+          "gpuMaxWatts": 98.4,
+          "gpuMaxTempC": 44,
+          "requests": [
+            {
+              "index": 0,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 92,
+              "outputTokens": 160,
+              "ttftMs": 221,
+              "durationMs": 3081,
+              "decodeTokPerSec": 55.94,
+              "finishReason": "length"
+            },
+            {
+              "index": 1,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 86,
+              "outputTokens": 160,
+              "ttftMs": 3045,
+              "durationMs": 4899,
+              "decodeTokPerSec": 86.3,
+              "finishReason": "length"
+            },
+            {
+              "index": 2,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 92,
+              "outputTokens": 160,
+              "ttftMs": 219,
+              "durationMs": 2812,
+              "decodeTokPerSec": 61.7,
+              "finishReason": "length"
+            },
+            {
+              "index": 3,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 84,
+              "outputTokens": 160,
+              "ttftMs": 210,
+              "durationMs": 2896,
+              "decodeTokPerSec": 59.57,
+              "finishReason": "length"
+            },
+            {
+              "index": 4,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 92,
+              "outputTokens": 160,
+              "ttftMs": 213,
+              "durationMs": 2903,
+              "decodeTokPerSec": 59.48,
+              "finishReason": "length"
+            },
+            {
+              "index": 5,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 92,
+              "outputTokens": 160,
+              "ttftMs": 217,
+              "durationMs": 2699,
+              "decodeTokPerSec": 64.46,
+              "finishReason": "length"
+            },
+            {
+              "index": 6,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 90,
+              "outputTokens": 160,
+              "ttftMs": 2836,
+              "durationMs": 4825,
+              "decodeTokPerSec": 80.44,
+              "finishReason": "length"
+            },
+            {
+              "index": 7,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 84,
+              "outputTokens": 160,
+              "ttftMs": 213,
+              "durationMs": 2933,
+              "decodeTokPerSec": 58.82,
+              "finishReason": "length"
+            },
+            {
+              "index": 8,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 88,
+              "outputTokens": 160,
+              "ttftMs": 2982,
+              "durationMs": 4871,
+              "decodeTokPerSec": 84.7,
+              "finishReason": "length"
+            },
+            {
+              "index": 9,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 85,
+              "outputTokens": 160,
+              "ttftMs": 2984,
+              "durationMs": 4888,
+              "decodeTokPerSec": 84.03,
+              "finishReason": "length"
+            },
+            {
+              "index": 10,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 87,
+              "outputTokens": 158,
+              "ttftMs": 223,
+              "durationMs": 2992,
+              "decodeTokPerSec": 57.06,
+              "finishReason": "stop"
+            },
+            {
+              "index": 11,
+              "ok": true,
+              "httpStatus": 200,
+              "promptTokens": 90,
+              "outputTokens": 160,
+              "ttftMs": 211,
+              "durationMs": 2842,
+              "decodeTokPerSec": 60.81,
+              "finishReason": "length"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

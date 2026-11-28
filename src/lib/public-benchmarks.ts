@@ -7,6 +7,8 @@ import { STATEFUL_CASE, STATEFUL_SUITE, STATEFUL_SYSTEM, STATEFUL_VERSION } from
 import { MATH500_CASES, MATH500_PROMPT, MATH500_SUITE, MATH500_VERSION } from "@/lib/math500-pilot";
 import { IFSTRUCT_CASES, IFSTRUCT_SUITE, IFSTRUCT_VERSION } from "@/lib/ifstruct-pilot";
 import { IFEVAL_CASES, IFEVAL_SUITE, IFEVAL_VERSION } from "@/lib/ifeval-pilot";
+import { MMLU_PRO_CASES, MMLU_PRO_SUITE, MMLU_PRO_VERSION } from "@/lib/mmlu-pro-suite";
+import { CANARY_SECURITY_CASES, CANARY_SECURITY_SUITE, CANARY_SECURITY_VERSION } from "@/lib/canary-security-suite";
 import {
   BFCL_V3_CASES, BFCL_V3_SUITE, BFCL_V3_SYSTEM_PROMPT, BFCL_V3_VERSION,
   BFCL_V3_IRRELEVANCE_CASES, BFCL_V3_IRRELEVANCE_SUITE, BFCL_V3_IRRELEVANCE_SYSTEM_PROMPT,
@@ -454,6 +456,46 @@ export const PUBLIC_BENCHMARKS = [{
   cases: TOOL_SANDBOX_STATE_CASES.map(({ scenarioId, sourceCaseId, contentSha256 }) => ({
     scenarioId, sourceCaseId, caseVersion: 1, contentSha256,
   })),
+}, {
+  id: MMLU_PRO_SUITE,
+  version: MMLU_PRO_VERSION,
+  language: "en",
+  modality: "chat",
+  officiallyComparable: true,
+  dataset: {
+    project: "TIGER-Lab MMLU-Pro",
+    revision: "b189ec765aa7ed75c8acfea42df31fdae71f97be",
+    url: "https://huggingface.co/datasets/TIGER-Lab/MMLU-Pro",
+    split: "validation",
+    license: "MIT",
+    caseCount: MMLU_PRO_CASES.length,
+  },
+  grader: { type: "MMLU_PRO_CHOICE", version: 1 },
+  systemPrompt: "You are an expert academic reasoning assistant. Answer the multiple-choice question accurately.",
+  caseIdsSha256: caseHash(MMLU_PRO_CASES.map(({ sourceCaseId }) => sourceCaseId)),
+  cases: MMLU_PRO_CASES.map(({ scenarioId, sourceCaseId, contentSha256, fixture }) => ({
+    scenarioId, sourceCaseId, category: fixture.category, caseVersion: 1, contentSha256,
+  })),
+}, {
+  id: CANARY_SECURITY_SUITE,
+  version: CANARY_SECURITY_VERSION,
+  language: "en",
+  modality: "security",
+  officiallyComparable: true,
+  dataset: {
+    project: "HarmBench & Deterministic Canaries",
+    revision: CANARY_SECURITY_VERSION,
+    url: "https://github.com/centerforaisafety/HarmBench",
+    split: "canary_leakage,harmbench_behavior,indirect_injection",
+    license: "MIT",
+    caseCount: CANARY_SECURITY_CASES.length,
+  },
+  grader: { type: "DETERMINISTIC_CANARY_SECURITY", version: 1 },
+  systemPrompt: CANARY_SECURITY_CASES[0].scenario.systemPrompt,
+  caseIdsSha256: caseHash(CANARY_SECURITY_CASES.map(({ sourceCaseId }) => sourceCaseId)),
+  cases: CANARY_SECURITY_CASES.map(({ scenarioId, sourceCaseId, contentSha256, fixture }) => ({
+    scenarioId, sourceCaseId, family: fixture.family, caseVersion: 1, contentSha256,
+  })),
 }] as const;
 
 export const PUBLIC_BENCHMARK_SCENARIOS: Array<Omit<Scenario, "createdAt" | "updatedAt">> = [
@@ -472,6 +514,8 @@ export const PUBLIC_BENCHMARK_SCENARIOS: Array<Omit<Scenario, "createdAt" | "upd
   BFCL_MEMORY_CASE.scenario,
   TOOL_SANDBOX_CASE.scenario,
   ...TOOL_SANDBOX_STATE_CASES.map(({ scenario }) => scenario),
+  ...MMLU_PRO_CASES.map(({ scenario }) => scenario),
+  ...CANARY_SECURITY_CASES.map(({ scenario }) => scenario),
 ];
 
 export function isPublicBenchmarkSuite(key?: string | null) {
